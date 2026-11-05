@@ -1,9 +1,9 @@
-import { berekenDekkingsGaten } from "../../coverageRoutes.js";
-import { SWAP_UITVOERING_ACTIES } from "../../helpers.js";
+import { berekenDekkingsGaten } from "../coverageRoutes.js";
+import { SWAP_UITVOERING_ACTIES } from "../helpers.js";
 import {
   getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixGrenzen, getPlanningMatrixRows, getServicesPerVersie,
   getSwapVerloopRegels, getSwapsData, laadDagtypeKalender,
-} from "../../storage.js";
+} from "../storage.js";
 import type { RapportLader } from "../../../shared/rapporten/types.js";
 import { vandaagInBelgie } from "./peildatumServer.js";
 import { getRapportMedewerkers } from "./personeelBron.js";

@@ -1,4 +1,4 @@
-import type { Role } from "../types.js";
+import type { Role } from "./types.js";
 import type { Onderhoud } from "../../shared/schemas/onderhoud.js";
 
 /**

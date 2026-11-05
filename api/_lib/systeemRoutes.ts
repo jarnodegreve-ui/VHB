@@ -9,20 +9,20 @@
  */
 
 import express from "express";
-import { RPC_PROBES, TABLE_PROBES } from "../schemaProbes.js";
+import { RPC_PROBES, TABLE_PROBES } from "./schemaProbes.js";
 import { ontbrekendeMigraties } from "./migratieLijst.js";
-import { sendEmail, isSmtpConfigured, mailAfzender } from "../email.js";
+import { sendEmail, isSmtpConfigured, mailAfzender } from "./email.js";
 import { bouwTestMail } from "./mailTeksten.js";
-import type { AuthenticatedRequest } from "../types.js";
-import { db, supabase } from "../db.js";
-import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { symbolicateTopFrame } from "../symbolicate.js";
-import { clientErrorRateLimit } from "../rateLimit.js";
+import type { AuthenticatedRequest } from "./types.js";
+import { db, supabase } from "./db.js";
+import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
+import { symbolicateTopFrame } from "./symbolicate.js";
+import { clientErrorRateLimit } from "./rateLimit.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, referentieVan, type FoutStatusWaarde } from "./foutgroepen.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getActivityLog, getAanwezigheid, getLoginActivity, getEntityHistory, getUsersData, logActivity, logClientError, getClientErrors, getClientErrorStatuses, setClientErrorStatus, isMissingDbFunction, getCronHeartbeats } from "../storage.js";
+import { getActivityLog, getAanwezigheid, getLoginActivity, getEntityHistory, getUsersData, logActivity, logClientError, getClientErrors, getClientErrorStatuses, setClientErrorStatus, isMissingDbFunction, getCronHeartbeats } from "./storage.js";
 
 const runSchemaCheck = async (res: express.Response) => {
   if (!db) return res.status(503).json({ ok: false, error: "Database niet geconfigureerd." });
@@ -32,13 +32,13 @@ const runSchemaCheck = async (res: express.Response) => {
   const probes: string[] = [];
 
   // Kolomlijsten gedeeld met de contracttest (src/schemaContract.test.ts):
-  // zie api/schemaProbes.ts.
+  // zie api/_lib/schemaProbes.ts.
   for (const probe of TABLE_PROBES) {
     const { error } = await db.from(probe.table).select(probe.columns).limit(0);
     if (error) probes.push(`${probe.table}: ${error.message}`);
   }
 
-  // RPC's: zie RPC_PROBES in api/schemaProbes.ts. PGRST202 = ontbreekt.
+  // RPC's: zie RPC_PROBES in api/_lib/schemaProbes.ts. PGRST202 = ontbreekt.
   for (const probe of RPC_PROBES) {
     const { error } = await db.rpc(probe.name, probe.args);
     if (error && isMissingDbFunction(error)) probes.push(`rpc ${probe.name}: ontbreekt (migratie niet gedraaid?)`);
@@ -264,7 +264,7 @@ export function mountSysteemRoutes(app: express.Express) {
       }
   });
 
-  // --- Toestel-whitelist --- → losgetrokken naar api/deviceRoutes.ts
+  // --- Toestel-whitelist --- → losgetrokken naar api/_lib/deviceRoutes.ts
   // (mountDeviceRoutes, hierboven gemount naast mountOcpiRoutes).
 
   // --- Client-foutmonitoring ---

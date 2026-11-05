@@ -1,6 +1,6 @@
 import { MAX_UPDATE_BIJLAGEN } from "../../../shared/schemas/update.js";
-import { toDatabaseUpdate, toPublicUpdate } from "../../helpers.js";
-import { db, supabaseAdmin } from "../../db.js";
+import { toDatabaseUpdate, toPublicUpdate } from "../helpers.js";
+import { db, supabaseAdmin } from "../db.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 import { bestandenVanRecord } from "./omleidingen.js";

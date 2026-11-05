@@ -1,4 +1,4 @@
-import type { MeldingRecord } from "../../types.js";
+import type { MeldingRecord } from "../types.js";
 import type { MeldingInvoer } from "../meldingen.js";
 import { requireDb } from "./basis.js";
 

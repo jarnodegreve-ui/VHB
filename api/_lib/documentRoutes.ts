@@ -9,16 +9,16 @@
 
 import express from "express";
 import crypto from "node:crypto";
-import { sendPushToUsers } from "../push.js";
-import type { AuthenticatedRequest } from "../types.js";
-import { db, supabaseAdmin } from "../db.js";
-import { authenticate, requireRole } from "../middleware.js";
+import { sendPushToUsers } from "./push.js";
+import type { AuthenticatedRequest } from "./types.js";
+import { db, supabaseAdmin } from "./db.js";
+import { authenticate, requireRole } from "./middleware.js";
 import { metPdfTitel } from "./pdfTitel.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getUsersData, logActivity, listUserDocuments, ondertekenDocumenten, markUserDocumentOpened, getUserDocument, insertUserDocument, deleteUserDocument, DOCUMENTS_BUCKET, MigratieOntbreektError, getDienstregelingen, getRitbladRijen, saveRitbladRij, deleteRitbladRij, uploadRitbladBestand, verwijderRitbladBestand, ondertekenRitblad, type RitbladRij } from "../storage.js";
+import { getUsersData, logActivity, listUserDocuments, ondertekenDocumenten, markUserDocumentOpened, getUserDocument, insertUserDocument, deleteUserDocument, DOCUMENTS_BUCKET, MigratieOntbreektError, getDienstregelingen, getRitbladRijen, saveRitbladRij, deleteRitbladRij, uploadRitbladBestand, verwijderRitbladBestand, ondertekenRitblad, type RitbladRij } from "./storage.js";
 import { viewUrl } from "./collectie.js";
-import { DAG_DMJ, brusselsDay } from "../helpers.js";
+import { DAG_DMJ, brusselsDay } from "./helpers.js";
 import { hoortBijVersie, oudsteVersie, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum } from "../../shared/dienstregeling.js";
 import { bundelsPerVersie, kiesRitblad } from "./ritbladKeuze.js";
 

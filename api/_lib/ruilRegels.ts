@@ -11,9 +11,9 @@
  */
 
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { DAG_DMJ, afwezigOp, normalizeSwapType, toLookupToken } from "../helpers.js";
+import { DAG_DMJ, afwezigOp, normalizeSwapType, toLookupToken } from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getLeaveData, getUsersData, getShiftById, swapHasReturnShift } from "../storage.js";
+import { getLeaveData, getUsersData, getShiftById, swapHasReturnShift } from "./storage.js";
 import { ISO_DAY_RE } from "./collectie.js";
 import type { BordVast } from "./codeDienst.js";
 import { dubbeleInplanningen, laadDagStanden, onbekendeCodeFout, type Ontvangst } from "./dubbeleInplanning.js";

@@ -1,11 +1,11 @@
 import type express from "express";
-import { authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { getAppSetting, logActivity, setAppSetting } from "../storage.js";
-import type { AuthenticatedRequest } from "../types.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
+import { getAppSetting, logActivity, setAppSetting } from "./storage.js";
+import type { AuthenticatedRequest } from "./types.js";
 import { mededelingSchema } from "../../shared/schemas/mededeling.js";
 import { MEDEDELING_SETTING_KEY, parseMededeling, type Mededeling } from "../../shared/mededeling.js";
-import { DAG_DMJ } from "../helpers.js";
+import { DAG_DMJ } from "./helpers.js";
 import { valideerRecord } from "./valideer.js";
 
 /**

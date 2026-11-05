@@ -1,10 +1,10 @@
-import { dagtypeVanDag, kalenderUitDekking, type DagtypeKalender } from "../shared/dagtype.js";
-import { perDagVan } from "../shared/dagtypeKalender.js";
-import { dekkingDagtypeVanDag } from "../shared/dekkingDagtype.js";
-import { dienstenOpDag } from "../shared/dienstregeling.js";
+import { dagtypeVanDag, kalenderUitDekking, type DagtypeKalender } from "../../shared/dagtype.js";
+import { perDagVan } from "../../shared/dagtypeKalender.js";
+import { dekkingDagtypeVanDag } from "../../shared/dekkingDagtype.js";
+import { dienstenOpDag } from "../../shared/dienstregeling.js";
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
-import { computeDayGap, normalizeCode, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../shared/coverageGaps.js";
+import { computeDayGap, normalizeCode, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../../shared/coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, zoekKettingen, adviesSamenvatting, adviesVenster, adviesMaanden, controleerAdviesBereik, AdviesBereikFout, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
 import {
@@ -24,9 +24,9 @@ import {
   getUsersData,
   logActivity,
 } from "./storage.js";
-import { bordCellenVoor } from "./_lib/codeDienst.js";
-import { vrijOpBord } from "../shared/bordBezetting.js";
-import { isIsoDag } from "../shared/rapporten/periode.js";
+import { bordCellenVoor } from "./codeDienst.js";
+import { vrijOpBord } from "../../shared/bordBezetting.js";
+import { isIsoDag } from "../../shared/rapporten/periode.js";
 
 /**
  * Dekking & advies — verhuisd uit api/index.ts (verbeterronde 22-08, nr. 8;
@@ -252,7 +252,7 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
 /** Volledig advies voor één openstaande dienst — gedeeld door
  *  GET /api/coverage-advisor en de dagelijkse digest. */
 // Het datavenster per advies-datum (adviesVenster) en de grenzen van één
-// aanvraag wonen in api/advisor.ts, zonder storage en dus los te testen.
+// aanvraag wonen in api/_lib/advisor.ts, zonder storage en dus los te testen.
 
 type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; services: any[]; versies: any[]; swaps: any[]; shifts: any[]; matrixRows: any[]; codes: any[]; kalender: DagtypeKalender };
 

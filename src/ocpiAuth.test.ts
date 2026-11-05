@@ -10,7 +10,7 @@ process.env.OCPI_TOKEN_A = 'token-a-registratie';
 
 let ocpiTokenGeldig: (presented: string, reg: { cpo_token_c?: string | null; our_token_b?: string | null } | null) => boolean;
 beforeAll(async () => {
-  ({ ocpiTokenGeldig } = await import('../api/ocpi.js'));
+  ({ ocpiTokenGeldig } = await import('../api/_lib/ocpi.js'));
 });
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
 

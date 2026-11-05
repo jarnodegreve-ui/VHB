@@ -1,14 +1,14 @@
 import { lijnLabel } from "../../shared/lijnen.js";
-import { PERIODE_DMJ } from "../helpers.js";
+import { PERIODE_DMJ } from "./helpers.js";
 import crypto from "node:crypto";
-import type { AppUser, AuthenticatedRequest, IncomingUser } from "../types.js";
-import { supabaseAdmin } from "../db.js";
-import { sendWelcomeEmail } from "../email.js";
+import type { AppUser, AuthenticatedRequest, IncomingUser } from "./types.js";
+import { supabaseAdmin } from "./db.js";
+import { sendWelcomeEmail } from "./email.js";
 import { maakUitnodiging } from "./uitnodiging.js";
-import { deletePushSubscriptionsForUser, sendPushToUsers } from "../push.js";
+import { deletePushSubscriptionsForUser, sendPushToUsers } from "./push.js";
 import { recordUrl } from "./meldingen.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { invalidateUsersCache } from "../userCache.js";
+import { isMissingTableError } from "./deviceGate.js";
+import { invalidateUsersCache } from "./userCache.js";
 import { meldToestelWijziging } from "./deviceCache.js";
 import { VERWIJDERD_ACTIE } from "./bijlagenActies.js";
 import {
@@ -27,7 +27,7 @@ import {
   summarizeUpdateChanges,
   summarizeUserChanges,
   type NieuwAccount,
-} from "../storage.js";
+} from "./storage.js";
 
 /**
  * Gedeelde schrijfkern voor de "rij-voor-rij"-collecties (gebruikers,

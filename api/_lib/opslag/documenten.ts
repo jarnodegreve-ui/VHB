@@ -1,4 +1,4 @@
-import { db, supabaseAdmin } from "../../db.js";
+import { db, supabaseAdmin } from "../db.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 import { isMissingColumnError } from "./fouten.js";
 import { MigratieOntbreektError } from "./gebruikers.js";

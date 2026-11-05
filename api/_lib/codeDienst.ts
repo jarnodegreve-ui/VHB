@@ -9,8 +9,8 @@
  * `planning` en strandde daardoor voor elke EEK-rit op "de planning is
  * intussen gewijzigd", terwijl er niets gewijzigd was.
  */
-import { toLookupToken } from "../helpers.js";
-import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getServicesPerVersie, getSwapsData, getUsersData, laadDagtypeKalender } from "../storage.js";
+import { toLookupToken } from "./helpers.js";
+import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getServicesPerVersie, getSwapsData, getUsersData, laadDagtypeKalender } from "./storage.js";
 import type { DagtypeKalender } from "../../shared/dagtype.js";
 import { dienstenOpDag } from "../../shared/dienstregeling.js";
 import { berekenCelWaarheid, type CelWaarheidUser, type CelWaarheidVersie } from "./celWaarheid.js";

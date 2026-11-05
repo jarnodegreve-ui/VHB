@@ -30,8 +30,8 @@ const VOERTUIGEN = [
   { id: 'v2', busnr: 'Privé 1', kortNr: null, nummerplaat: '1-ABC-123', type: 'privevoertuig', categorie: 'privewagen', status: 'actief' },
 ];
 
-vi.mock('../api/middleware.js', async (origineel) => {
-  const echt = await origineel<typeof import('../api/middleware')>();
+vi.mock('../api/_lib/middleware.js', async (origineel) => {
+  const echt = await origineel<typeof import('../api/_lib/middleware')>();
   return {
     ...echt,
     // Alleen wie aangemeld is wisselt (header x-test-id); de rolcontrole is de echte.
@@ -42,12 +42,12 @@ vi.mock('../api/middleware.js', async (origineel) => {
     },
   };
 });
-vi.mock('../api/storage.js', async (origineel) => ({
-  ...(await origineel<typeof import('../api/storage')>()),
+vi.mock('../api/_lib/storage.js', async (origineel) => ({
+  ...(await origineel<typeof import('../api/_lib/storage')>()),
   getUsersData: async () => staat.users,
   logActivity: async () => undefined,
 }));
-vi.mock('../api/push.js', () => ({
+vi.mock('../api/_lib/push.js', () => ({
   sendPushToUsers: async (ontvangers: string[], payload: { title: string }) => {
     staat.pushes.push({ ontvangers: [...ontvangers].sort(), titel: payload.title });
   },

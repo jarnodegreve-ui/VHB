@@ -1,7 +1,7 @@
 import { DAG_DMJ, LEAVE_TYPE_LABEL, PERIODE_DMJ, brusselsDay } from "./helpers.js";
-import { bouwMail, escapeMailHtml, type MailOpbouw } from "./_lib/mailLayout.js";
+import { bouwMail, escapeMailHtml, type MailOpbouw } from "./mailLayout.js";
 import { logMail } from "./storage.js";
-import { mailSoortAan } from "./_lib/mailInstellingen.js";
+import { mailSoortAan } from "./mailInstellingen.js";
 
 /** Escape user-invoer vóór die in HTML-e-mails belandt (injectie-preventie).
  *  Eén bron: de routes importeren deze i.p.v. een eigen kopie. */

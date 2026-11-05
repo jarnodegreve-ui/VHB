@@ -78,7 +78,7 @@ export interface Diversion {
  * 'overname' = zonder tegenprestatie: de collega neemt de dienst over en de
  * aanvrager geeft er niets voor terug. Kan alleen als de collega die dag
  * vrij/bv/tk/ta staat — de server dwingt dat af (POST /api/swaps).
- * Spiegel van SwapType in api/types.ts.
+ * Spiegel van SwapType in api/_lib/types.ts.
  */
 export type SwapType = 'ruil' | 'overname';
 
@@ -251,7 +251,7 @@ export type ActivityCategory =
   | 'auth'
   | 'leave'
   | 'swaps'
-  // Systeem-acties (bv. backup-restore) — bestond al server-side (api/types.ts)
+  // Systeem-acties (bv. backup-restore) — bestond al server-side (api/_lib/types.ts)
   // maar ontbrak hier, waardoor restore-events een lege badge kregen.
   | 'system';
 

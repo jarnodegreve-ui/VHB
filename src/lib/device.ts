@@ -2,7 +2,7 @@
  * Toestel-identiteit voor de toestel-whitelist. Elk toestel (browser-install)
  * krijgt één blijvend willekeurig token in localStorage; de server koppelt
  * dat aan de gebruiker en bepaalt approved/pending/revoked. Zie
- * supabase/user_devices.sql + api/middleware.ts.
+ * supabase/user_devices.sql + api/_lib/middleware.ts.
  *
  * LET OP (iOS): Safari en de op het beginscherm geïnstalleerde PWA hebben elk
  * hun eigen localStorage-container, dus dat zijn twee aparte "toestellen" (elk

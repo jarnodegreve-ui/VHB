@@ -242,7 +242,7 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = {
 
 export const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
-/** Vervaldata-soorten — bewuste kopie van api/helpers.ts (EXPIRY_SOORT_LABEL);
+/** Vervaldata-soorten — bewuste kopie van api/_lib/helpers.ts (EXPIRY_SOORT_LABEL);
  *  de drift-test in sharedTypes.test.ts bewaakt gelijkheid.
  *  Rijbewijs is er bewust uit (Jarno 07-08): Code 95 en medische schifting
  *  volstaan. Deze map is dé bron — views leiden er hun velden uit af. */

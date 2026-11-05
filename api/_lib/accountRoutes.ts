@@ -11,20 +11,20 @@
 import express from "express";
 import crypto from "node:crypto";
 import { buildCalendar, type IcsEvent } from "../../shared/ics.js";
-import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, getUsersMetPush } from "../push.js";
-import type { AppUser, AuthenticatedRequest } from "../types.js";
-import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isDeviceGateEnabled, DEVICE_TOKEN_HEADER } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
+import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, getUsersMetPush } from "./push.js";
+import type { AppUser, AuthenticatedRequest } from "./types.js";
+import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isDeviceGateEnabled, DEVICE_TOKEN_HEADER } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
 import { beoordeelPushBestemming } from "./pushBestemming.js";
 import { getDeviceCached } from "./deviceCache.js";
-import { invalidateUsersCache } from "../userCache.js";
+import { invalidateUsersCache } from "./userCache.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { meldingenGelezenBodySchema, meldingenVerwijderBodySchema } from "../../shared/schemas/meldingen.js";
 import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../../shared/schemas/dashboardVoorkeuren.js";
 import { valideerRecord } from "./valideer.js";
-import { afwezigOp } from "../helpers.js";
+import { afwezigOp } from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getLatestAuthEventAt, getLeaveData, getPlanningData, getUsersData, logActivity, updateUserSessionMeta, bumpActiveSessions, getPlanningNotes, getMeldingen, telOngelezenMeldingen, markeerMeldingenGelezen, verwijderMeldingen, updateUserDashboardVoorkeuren, getRecentLogins } from "../storage.js";
+import { getLatestAuthEventAt, getLeaveData, getPlanningData, getUsersData, logActivity, updateUserSessionMeta, bumpActiveSessions, getPlanningNotes, getMeldingen, telOngelezenMeldingen, markeerMeldingenGelezen, verwijderMeldingen, updateUserDashboardVoorkeuren, getRecentLogins } from "./storage.js";
 import { isPlainRecord } from "./collectie.js";
 
 // === Agenda-abonnement (.ics-feed) =========================================

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TABLE_PROBES, probeColumns } from '../api/schemaProbes';
+import { TABLE_PROBES, probeColumns } from '../api/_lib/schemaProbes';
 import {
   toDatabaseUser,
   toDatabaseSwap,
@@ -7,7 +7,7 @@ import {
   toDatabaseDiversion,
   toDatabaseService,
   toDatabasePlanningCode,
-} from '../api/helpers';
+} from '../api/_lib/helpers';
 import { toDatabaseDefect, toDatabaseDefectPatch, toDatabaseVehicle, toDatabaseVehicleExpiry, toDatabaseWerkprestatie } from '../api/_lib/techniekStorage';
 import { toDatabaseDagtypeCodePatch, toDatabaseSegment, toDatabaseSegmentImport } from '../api/_lib/dienstStorage';
 import { toDatabaseDagAfsluiting, toDatabaseDagPrestatieNieuw, toDatabaseDagPrestatiePatch, toDatabaseLoonCode, toDatabaseLoonMedewerker } from '../api/_lib/loonStorage';
@@ -18,7 +18,7 @@ import { toDatabaseDagAfsluiting, toDatabaseDagPrestatieNieuw, toDatabaseDagPres
  * De import brak al 2× op kolom-mismatches (quoted camelCase vs lowercase,
  * NOT NULL-defaults) — precies de laag die de integratietests wegmocken.
  * Deze test sluit de keten: elke kolom die een toDatabase*-mapper schrijft
- * MOET in api/schemaProbes.ts staan, en die lijst wordt door
+ * MOET in api/_lib/schemaProbes.ts staan, en die lijst wordt door
  * GET /api/health/schema live tegen productie gevalideerd. Een nieuwe
  * mapper-kolom zonder probe-update faalt dus hier in CI, en een probe-kolom
  * zonder migratie faalt op de health-check.
@@ -108,7 +108,7 @@ describe('schema-contract: mappers schrijven enkel geprobe-de kolommen', () => {
       expect(allowed.size).toBeGreaterThan(0);
       const written = Object.keys(row);
       const unknown = written.filter((k) => !allowed.has(k));
-      expect(unknown, `kolommen zonder schema-probe (voeg toe aan api/schemaProbes.ts + draai de migratie): ${unknown.join(', ')}`).toEqual([]);
+      expect(unknown, `kolommen zonder schema-probe (voeg toe aan api/_lib/schemaProbes.ts + draai de migratie): ${unknown.join(', ')}`).toEqual([]);
     });
   }
 

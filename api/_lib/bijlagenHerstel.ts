@@ -26,7 +26,7 @@
  */
 import { MAX_OMLEIDING_BIJLAGEN } from "../../shared/schemas/diversion.js";
 import { MAX_UPDATE_BIJLAGEN } from "../../shared/schemas/update.js";
-import { bijlagenUitKolom } from "../helpers.js";
+import { bijlagenUitKolom } from "./helpers.js";
 import { HERSTEL_VENSTER_MS, KLOK_SPELING_MS, VERWIJDERD_ACTIE, laatsteVerwijdering, mogelijkeEigenaars } from "./bijlagenActies.js";
 import {
   bestaandeDiversionBijlagen,
@@ -38,7 +38,7 @@ import {
   verplaatsDiversionLegacyBijlage,
   zetDiversionBijlagen,
   zetUpdateBijlagen,
-} from "../storage.js";
+} from "./storage.js";
 
 /** Zelfde strakke vorm als de bijlage-routes: het id wordt de sleutel. */
 const STORAGE_ID = /^[a-zA-Z0-9_-]+$/;

@@ -46,7 +46,7 @@ import {
   logregelsVanEntiteiten,
   verwijderBijlageBestanden,
   type BijlageBestand,
-} from "../storage.js";
+} from "./storage.js";
 
 export { mogelijkeEigenaars };
 

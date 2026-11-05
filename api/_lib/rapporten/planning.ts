@@ -2,7 +2,7 @@ import type { DayGap } from "../../../shared/coverageGaps.js";
 import { OPEN_STATUS_LABEL } from "../../../shared/rapporten/definities/planning.js";
 import { maandenInPeriode } from "../../../shared/rapporten/periode.js";
 import type { RapportBereik, RapportFilters, RapportResultaat, RapportRij } from "../../../shared/rapporten/types.js";
-import { berekenMaandoverzicht, dienstMinuten, telMaandoverzichtenOp, type Maandoverzicht } from "../../helpers.js";
+import { berekenMaandoverzicht, dienstMinuten, telMaandoverzichtenOp, type Maandoverzicht } from "../helpers.js";
 import { berekenCelWaarheid, type CelWaarheidInvoer } from "../celWaarheid.js";
 import { persoonZoeker, weekdagKort, type RapportGebruiker } from "./gedeeld.js";
 

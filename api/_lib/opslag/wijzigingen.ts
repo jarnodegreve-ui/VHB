@@ -1,6 +1,6 @@
 import { variantenAfdruk } from "../../../shared/dagtype.js";
-import type { AppUser, IncomingUser, PlanningCodeRecord, ServiceRecord } from "../../types.js";
-import { sanitizeIncomingUser, toLookupToken } from "../../helpers.js";
+import type { AppUser, IncomingUser, PlanningCodeRecord, ServiceRecord } from "../types.js";
+import { sanitizeIncomingUser, toLookupToken } from "../helpers.js";
 
 // --- Change summarizers (pure utilities used by routes) ---
 

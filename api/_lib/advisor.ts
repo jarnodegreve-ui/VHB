@@ -14,13 +14,13 @@
  */
 
 import { addDagenIso } from "./helpers.js";
-import { MAX_PERIODE_DAGEN, dagenInPeriode, isIsoDag } from "../shared/rapporten/periode.js";
+import { MAX_PERIODE_DAGEN, dagenInPeriode, isIsoDag } from "../../shared/rapporten/periode.js";
 
 // De rekenkern van de rustregel (dagVenster, rust t.o.v. de dag ervoor en
 // erna, het minimum) woont sinds 22-09 in shared/ruilRust.ts, zodat de
 // rustcontrole bij een dienstruil exact dezelfde uitkomst geeft als dit
 // advies. Hier doorgeëxporteerd: bestaande imports blijven gelijk.
-import { MIN_RUST_UREN, dagVenster, formatRust, rustTovVolgendeDag, rustTovVorigeDag, type TijdRij } from "../shared/ruilRust.js";
+import { MIN_RUST_UREN, dagVenster, formatRust, rustTovVolgendeDag, rustTovVorigeDag, type TijdRij } from "../../shared/ruilRust.js";
 export { MIN_RUST_UREN, dagVenster, rustTovVolgendeDag, rustTovVorigeDag, type TijdRij };
 
 export const MAX_WERKDAGEN_NA_ELKAAR = 6;

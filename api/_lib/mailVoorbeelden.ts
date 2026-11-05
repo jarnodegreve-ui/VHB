@@ -1,9 +1,9 @@
-import { bouwUitnodigingMail, bouwVerlofBeslissingMail, bouwVervaldatumMail, bouwWelkomMail, portalUrl, type MailTekst } from "../email.js";
+import { bouwUitnodigingMail, bouwVerlofBeslissingMail, bouwVervaldatumMail, bouwWelkomMail, portalUrl, type MailTekst } from "./email.js";
 import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwDringendeUpdateMail, bouwOverzichtMail, bouwRestoreProefMail, bouwRuilaanvraagMail, bouwTestMail, bouwWachtwoordMail, bouwZiekmeldingMail } from "./mailTeksten.js";
 
 /**
  * Voorbeeld van elke mailsoort voor Beheer › Mails: de échte bouwer van die
- * mail (api/email.ts en mailTeksten.ts), met vaste voorbeeldgegevens. Hier
+ * mail (api/_lib/email.ts en mailTeksten.ts), met vaste voorbeeldgegevens. Hier
  * staat dus geen mailtekst meer, alleen de gegevens; vroeger was dit een
  * handgeschreven spiegel van de echte teksten en liep die stil achter
  * (nr. 34). src/mailVoorbeelden.test.ts bewaakt dat het zo blijft.

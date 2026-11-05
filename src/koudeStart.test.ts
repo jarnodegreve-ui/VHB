@@ -39,7 +39,7 @@ describe('koude start van de API', () => {
     process.env.VAPID_PUBLIC_KEY = 'publiek';
     process.env.VAPID_PRIVATE_KEY = 'geheim';
     try {
-      const { getVapidPublicKey } = await import('../api/push');
+      const { getVapidPublicKey } = await import('../api/_lib/push');
       // Met de oude code gooide dit: web-push weigert deze nepsleutels in
       // setVapidDetails. Nu is het gewoon de env-var.
       expect(getVapidPublicKey()).toBe('publiek');

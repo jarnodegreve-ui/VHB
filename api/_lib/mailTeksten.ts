@@ -1,5 +1,5 @@
-import { mailOpbouw, portalUrl, type MailTekst } from "../email.js";
-import { DAG_DMJ } from "../helpers.js";
+import { mailOpbouw, portalUrl, type MailTekst } from "./email.js";
+import { DAG_DMJ } from "./helpers.js";
 import { MAIL_KLEUR, type MailStatusToon } from "./mailLayout.js";
 
 /**
@@ -8,7 +8,7 @@ import { MAIL_KLEUR, type MailStatusToon } from "./mailLayout.js";
  * voorbeeld in Beheer › Mails (mailVoorbeelden.ts). Vroeger stond elke tekst
  * twee keer, in de route en als handgeschreven kopie in de voorbeelden, en
  * liepen die stil uit elkaar. De drie mails met een eigen verzendfunctie
- * (verlofbeslissing, welkom, vervaldatum) hebben hun bouwer in api/email.ts;
+ * (verlofbeslissing, welkom, vervaldatum) hebben hun bouwer in api/_lib/email.ts;
  * src/mailVoorbeelden.test.ts bewaakt dat geen route of voorbeeld nog zelf
  * een mail opbouwt.
  *

@@ -11,14 +11,14 @@ import {
   telPlan,
   voerBackfillUit,
 } from '../../scripts/omleiding-pdf-backfill-kern.mjs';
-import { LEGACY_OMLEIDING_PDF_NAAM, omleidingBijlagen } from '../../api/helpers';
+import { LEGACY_OMLEIDING_PDF_NAAM, omleidingBijlagen } from '../../api/_lib/helpers';
 import { MAX_OMLEIDING_BIJLAGEN } from '../../shared/schemas/diversion';
 
 /**
  * Kern van scripts/omleiding-pdf-backfill.mjs (controle-ronde 29-09, nr. 30,
  * stap 1): elke omleiding met een PDF van vóór 25-09 verhuist naar de
  * bijlagenlijst, zodat de overgangslaag later weg kan. De opslag is hier een
- * in-memory bucket en tabel met dezelfde twee bewerkingen als api/storage.ts.
+ * in-memory bucket en tabel met dezelfde twee bewerkingen als api/_lib/storage.ts.
  */
 type Rij = { id: string; title: string; pdfUrl?: string | null; bijlagen?: Array<{ slot: number; filename: string; sizeBytes?: number }> | null };
 

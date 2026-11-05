@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SourceMapGenerator } from 'source-map-js';
-import { clearSymbolicateCache, symbolicateTopFrame } from '../api/symbolicate';
+import { clearSymbolicateCache, symbolicateTopFrame } from '../api/_lib/symbolicate';
 
 /**
  * Symbolicatie voor de foutendigest: geminifieerde stack-posities →

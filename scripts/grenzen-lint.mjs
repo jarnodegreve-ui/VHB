@@ -8,7 +8,7 @@
  *  2. src/ (de browser) importeert niets uit api/ (de server).
  *  3. api/ importeert niets uit src/.
  *     Tests mogen bij 1 tot 3 wel oversteken: ze vergelijken lagen juist.
- *  4. De opslaglaag (api/_lib/opslag/) is alleen bereikbaar via api/storage.ts.
+ *  4. De opslaglaag (api/_lib/opslag/) is alleen bereikbaar via api/_lib/storage.ts.
  *     De integratietests bootsen dat ene bestand na; een route die een
  *     domeinbestand rechtstreeks importeert, valt daar stil buiten.
  */
@@ -24,12 +24,12 @@ const REGELS = [
   { naam: 'src/ importeert uit api/ (server-code in de browser)', map: 'src', verboden: /^api\//, tests: false },
   { naam: 'api/ importeert uit src/', map: 'api', verboden: /^src\//, tests: false },
   {
-    naam: 'api/_lib/opslag/ rechtstreeks geïmporteerd (ga via api/storage.ts)',
+    naam: 'api/_lib/opslag/ rechtstreeks geïmporteerd (ga via api/_lib/storage.ts)',
     map: 'api', verboden: /^api\/_lib\/opslag\//, tests: true,
-    behalve: (bestand) => bestand === 'api/storage.ts' || bestand.startsWith('api/_lib/opslag/'),
+    behalve: (bestand) => bestand === 'api/_lib/storage.ts' || bestand.startsWith('api/_lib/opslag/'),
   },
-  { naam: 'api/_lib/opslag/ rechtstreeks geïmporteerd (ga via api/storage.ts)', map: 'src', verboden: /^api\/_lib\/opslag\//, tests: true },
-  { naam: 'api/_lib/opslag/ rechtstreeks geïmporteerd (ga via api/storage.ts)', map: 'dbtests', verboden: /^api\/_lib\/opslag\//, tests: true },
+  { naam: 'api/_lib/opslag/ rechtstreeks geïmporteerd (ga via api/_lib/storage.ts)', map: 'src', verboden: /^api\/_lib\/opslag\//, tests: true },
+  { naam: 'api/_lib/opslag/ rechtstreeks geïmporteerd (ga via api/_lib/storage.ts)', map: 'dbtests', verboden: /^api\/_lib\/opslag\//, tests: true },
 ];
 
 const bestanden = (map) => {

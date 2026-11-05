@@ -14,7 +14,7 @@ import { RECORD_ID_RE } from '../api/_lib/collectie';
 // `negeerFilter`: de database geeft ook regels van niet-gevraagde ruilen terug.
 const db = vi.hoisted(() => ({ rijen: [] as Array<Record<string, unknown>>, negeerFilter: false }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   // Genoeg querybuilder voor de twee lezers: elke stap geeft de keten terug,
   // `in('entity_id', …)` filtert zoals PostgREST, en het antwoord is de lijst.
   const keten = (filter: string[] | null): any => new Proxy({}, {
@@ -28,7 +28,7 @@ vi.mock('../api/db.js', () => {
   return { db: { from: () => keten(null) }, supabase: null, supabaseAdmin: null };
 });
 
-const { getSwapVerloopRegels, getSwapHistories } = await import('../api/storage.js');
+const { getSwapVerloopRegels, getSwapHistories } = await import('../api/_lib/storage.js');
 
 const NAMEN = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', 'prototype'];
 const GEWOON = '6f1c2d3e-0000-4000-8000-000000000001';

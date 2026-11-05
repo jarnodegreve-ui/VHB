@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addDagenIso } from '../api/helpers';
+import { addDagenIso } from '../api/_lib/helpers';
 import {
   dagVenster,
   rustTovVorigeDag,
@@ -25,7 +25,7 @@ import {
   type KandidaatAdvies,
   type KettingPersoon,
   type KettingWerkende,
-} from '../api/advisor';
+} from '../api/_lib/advisor';
 import { kandidaatMeta, formatRustUren, segmentenLabel } from './lib/advisor';
 
 /**

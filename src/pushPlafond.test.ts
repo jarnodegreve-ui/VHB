@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Plafond op push-abonnementen per gebruiker (api/push.ts): bij meer dan
+ * Plafond op push-abonnementen per gebruiker (api/_lib/push.ts): bij meer dan
  * MAX_PUSH_ABONNEMENTEN_PER_USER vervallen de oudste (controle-ronde 16-09,
  * nr. 18). In-memory push_subscriptions-tabel met de paar query-builder-
  * ketens die savePushSubscription en snoeiPushAbonnementen gebruiken.
@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type Rij = { user_id: string; endpoint: string; p256dh: string; auth: string; created_at: string };
 const mem = vi.hoisted(() => ({ rijen: [] as Rij[], klok: 0 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const tabel = () => {
     let selectie: Rij[] = [];
     let filters: Array<(r: Rij) => boolean> = [];
@@ -44,9 +44,9 @@ vi.mock('../api/db.js', () => {
   };
   return { db: { from: () => tabel() }, supabase: null, supabaseAdmin: null };
 });
-vi.mock('../api/storage.js', () => ({ bewaarMeldingen: vi.fn() }));
+vi.mock('../api/_lib/storage.js', () => ({ bewaarMeldingen: vi.fn() }));
 
-const { savePushSubscription, snoeiPushAbonnementen, MAX_PUSH_ABONNEMENTEN_PER_USER } = await import('../api/push.js');
+const { savePushSubscription, snoeiPushAbonnementen, MAX_PUSH_ABONNEMENTEN_PER_USER } = await import('../api/_lib/push.js');
 
 const abonneer = (userId: string, n: number) => savePushSubscription({ userId, endpoint: `https://push.example/${userId}/${n}`, p256dh: 'k', auth: 'a' });
 const endpointsVan = (userId: string) => mem.rijen.filter((r) => r.user_id === userId).map((r) => r.endpoint);

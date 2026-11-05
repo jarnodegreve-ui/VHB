@@ -1,9 +1,9 @@
 import { db } from "./db.js";
-import type { MeldingSoort } from "../shared/schemas/meldingen.js";
-import { filterPushOntvangers } from "../shared/schemas/dashboardVoorkeuren.js";
-import { meldingUitPayload } from "./_lib/meldingen.js";
+import type { MeldingSoort } from "../../shared/schemas/meldingen.js";
+import { filterPushOntvangers } from "../../shared/schemas/dashboardVoorkeuren.js";
+import { meldingUitPayload } from "./meldingen.js";
 import { bewaarMeldingen } from "./storage.js";
-import { beoordeelPushBestemming } from "./_lib/pushBestemming.js";
+import { beoordeelPushBestemming } from "./pushBestemming.js";
 
 /**
  * Web-push notificaties. Volledig optioneel: zonder de drie VAPID env-vars

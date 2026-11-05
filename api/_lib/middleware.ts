@@ -4,18 +4,18 @@ import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
 import { getAppSetting, koppelAuthId, noteerAanwezigheid, type UserDevice } from "./storage.js";
-import { getDeviceCached, isSessieIngetrokken } from "./_lib/deviceCache.js";
-import { locatieUitHeaders, magSchrijven } from "./_lib/aanwezigheid.js";
-import { getOnderhoud } from "./_lib/onderhoud.js";
-import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
+import { getDeviceCached, isSessieIngetrokken } from "./deviceCache.js";
+import { locatieUitHeaders, magSchrijven } from "./aanwezigheid.js";
+import { getOnderhoud } from "./onderhoud.js";
+import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./onderhoudRegels.js";
 import { bijUsersCacheWissel, epochStand, getUsersCached, invalidateUsersCache } from "./userCache.js";
-import { maakSwrCache, SWR_STALE_MS } from "./_lib/swrCache.js";
-import { markeer } from "./_lib/serverTiming.js";
+import { maakSwrCache, SWR_STALE_MS } from "./swrCache.js";
+import { markeer } from "./serverTiming.js";
 import { isStafRol } from "./types.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, Role } from "./types.js";
-import { heeftRol } from "../shared/toegang.js";
+import { heeftRol } from "../../shared/toegang.js";
 
-// --- Toestel-whitelist (zie supabase/user_devices.sql + api/deviceGate.ts) ---
+// --- Toestel-whitelist (zie supabase/user_devices.sql + api/_lib/deviceGate.ts) ---
 // Chauffeurs mogen de API alleen gebruiken vanaf een goedgekeurd toestel;
 // zo is een doorgegeven login onbruikbaar voor buitenstaanders. Planner/admin
 // worden nooit geblokkeerd (registratie is daar alleen zichtbaarheid) — de
@@ -135,7 +135,7 @@ export const aalUitJwt = (token: string): "aal1" | "aal2" => {
 // en de beheerder zichzelf heeft ingeschreven, anders sluit je jezelf buiten.
 export const mfaStafVerplicht = (): boolean => (process.env.MFA_STAF ?? "uit").toLowerCase() === "aan";
 export const MFA_EXEMPT = new Set(["/api/me", "/api/me/beveiliging", "/api/auth/session", "/api/devices/register", "/api/client-errors"]);
-// isStafRol staat in api/types.ts (geen afhankelijkheden); hier opnieuw
+// isStafRol staat in api/_lib/types.ts (geen afhankelijkheden); hier opnieuw
 // geëxporteerd zodat bestaande imports uit middleware blijven werken.
 export { isStafRol };
 const is4xx = (e: unknown): boolean => {

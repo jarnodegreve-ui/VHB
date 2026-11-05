@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { redenVoorChauffeur } from '../api/helpers';
+import { redenVoorChauffeur } from '../api/_lib/helpers';
 import { kaleReden } from './lib/ruilBadge';
 
 describe('redenVoorChauffeur', () => {

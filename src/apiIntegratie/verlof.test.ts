@@ -856,11 +856,11 @@ describe('ziekte is geen verlof (Jarno 06-10): geen mail of push naar de chauffe
   const ziek = { id: 'z-b1', userId: '4', startDate: '2026-08-25', endDate: '2026-09-30', type: 'ziekte', status: 'approved', comment: 'griep', createdAt: '2026-08-25T08:00:00Z', decidedAt: '2026-08-25T08:00:00Z' };
   const verlofMails = () => mem.emailsSent.filter((m) => (m.context ?? '').startsWith('leave:'));
   const pushesNaarChauffeurB = () => mem.pushesSent.filter((p) => p.userIds.includes('4'));
-  const beslisMails = async () => vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mock.calls.length;
+  const beslisMails = async () => vi.mocked((await import('../../api/_lib/email.js')).sendLeaveDecisionEmail).mock.calls.length;
 
   beforeEach(async () => {
     mem.leave = [...mem.leave, ziek];
-    vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mockClear();
+    vi.mocked((await import('../../api/_lib/email.js')).sendLeaveDecisionEmail).mockClear();
   });
 
   it('intrekken in Beheer › Ziekte (POST, status cancelled): "Ziekmelding ingetrokken", geen "Verlof geannuleerd", geen mail, geen push', async () => {
@@ -955,11 +955,11 @@ describe('ziekte is geen verlof (Jarno 06-10): geen mail of push naar de chauffe
 // verzoek landt hier echt in het venster van het eerste, via de haak
 // `mem.voorLeaveStatusWissel`, en gaat zelf ook door de echte route.
 describe('verlof: twee beslissers op hetzelfde moment (05-11)', () => {
-  const beslisMails = async () => vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mock.calls.length;
+  const beslisMails = async () => vi.mocked((await import('../../api/_lib/email.js')).sendLeaveDecisionEmail).mock.calls.length;
   const patch = (token: string, body: Record<string, unknown>) => api('PATCH', '/api/leave/l-b1', { token, body });
 
   beforeEach(async () => {
-    vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mockClear();
+    vi.mocked((await import('../../api/_lib/email.js')).sendLeaveDecisionEmail).mockClear();
     mem.pushesSent = [];
     mem.activity = [];
   });

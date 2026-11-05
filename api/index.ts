@@ -11,9 +11,9 @@
 import express from "express";
 import cors from "cors";
 import { createRequire } from "node:module";
-import { rateLimitMiddleware } from "./rateLimit.js";
-import { mountOcpiRoutes } from "./ocpi.js";
-import { mountDeviceRoutes } from "./deviceRoutes.js";
+import { rateLimitMiddleware } from "./_lib/rateLimit.js";
+import { mountOcpiRoutes } from "./_lib/ocpi.js";
+import { mountDeviceRoutes } from "./_lib/deviceRoutes.js";
 import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
 import { mountMailRoutes } from "./_lib/mailRoutes.js";
 import { serverTiming } from "./_lib/serverTiming.js";
@@ -23,8 +23,8 @@ import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
 import { mountDienstregelingRoutes } from "./_lib/dienstregelingRoutes.js";
 import { mountMededelingRoutes } from "./_lib/mededelingRoutes.js";
 import { mountRapportRoutes } from "./_lib/rapportRoutes.js";
-import { mountTelegramRoutes } from "./telegram.js";
-import { mountCoverageRoutes, berekenDekkingsGaten, berekenCoverageAdvies } from "./coverageRoutes.js";
+import { mountTelegramRoutes } from "./_lib/telegram.js";
+import { mountCoverageRoutes, berekenDekkingsGaten, berekenCoverageAdvies } from "./_lib/coverageRoutes.js";
 import { mountSysteemRoutes } from "./_lib/systeemRoutes.js";
 import { mountAccountRoutes } from "./_lib/accountRoutes.js";
 import { mountGebruikersRoutes } from "./_lib/gebruikersRoutes.js";
@@ -147,10 +147,10 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // OCPI 2.2.1 (eMSP, read-only monitoring van ChargEye) — eigen token-auth,
-// los van de Supabase-auth. Zie api/ocpi.ts.
+// los van de Supabase-auth. Zie api/_lib/ocpi.ts.
 mountOcpiRoutes(app);
 
-// Toestel-whitelist (registratie + admin-beheer). Zie api/deviceRoutes.ts.
+// Toestel-whitelist (registratie + admin-beheer). Zie api/_lib/deviceRoutes.ts.
 mountDeviceRoutes(app);
 
 // Onderhoudsmodus (banner + schrijfblok). Zie api/_lib/onderhoudRoutes.ts;
@@ -163,7 +163,7 @@ mountMailRoutes(app);
 mountTechniekRoutes(app);
 
 // Telegram-bot voor de planner (webhook, commando's, goedkeurknoppen). Zie
-// api/telegram.ts. De bereken-functies komen uit coverageRoutes/advisor; de
+// api/_lib/telegram.ts. De bereken-functies komen uit coverageRoutes/advisor; de
 // *Intern-schrijfkernen uit de domeinmodules (ruil, verlof, planning). Ze
 // worden hier doorgegeven i.p.v. in telegram.ts geïmporteerd: die modules
 // importeren zelf de meld-helpers van telegram.ts, dus omgekeerd importeren
@@ -177,7 +177,7 @@ mountTelegramRoutes(app, {
   wijsDienstToe: wijsDienstToeIntern,
 });
 
-// Dekking & advies (expectations, gaten, advisor). Zie api/coverageRoutes.ts.
+// Dekking & advies (expectations, gaten, advisor). Zie api/_lib/coverageRoutes.ts.
 mountCoverageRoutes(app);
 
 // Loon: dagafsluiting en Easypay-export (fase B Access-migratie, 13-09). Zie api/_lib/loonRoutes.ts.

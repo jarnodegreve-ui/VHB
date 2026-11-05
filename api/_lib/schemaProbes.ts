@@ -49,7 +49,7 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat,beslisreden" },
   // entity_type/entity_id: koppeling naar het gelogde record
   // (supabase/activity_log_entity_columns.sql). Ontbraken hier, terwijl
-  // api/storage.ts ze bij élke logregel schrijft — de health-check meldde dus
+  // api/_lib/storage.ts ze bij élke logregel schrijft — de health-check meldde dus
   // "ok" in een omgeving waar die migratie nog moest.
   { table: "activity_log", columns: "id,created_at,actor_name,actor_role,category,action,details,entity_type,entity_id" },
   // user_documents hoort bij de documenten-module (supabase/user_documents.sql)

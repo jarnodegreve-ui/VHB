@@ -1,5 +1,5 @@
-import type { PlanningCodeRecord, PlanningMatrixRow } from "../../types.js";
-import { supabaseAdmin } from "../../db.js";
+import type { PlanningCodeRecord, PlanningMatrixRow } from "../types.js";
+import { supabaseAdmin } from "../db.js";
 import { herstelDienstregelingen, saveCoverageExpectations, saveServicesData } from "./diensten.js";
 import { saveUsersData } from "./gebruikers.js";
 import { saveDiversionsData } from "./omleidingen.js";

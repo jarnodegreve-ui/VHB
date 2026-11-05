@@ -20,7 +20,7 @@ const mem = vi.hoisted(() => ({
   geladen: 0,
 }));
 
-vi.mock('../api/db.js', () => ({
+vi.mock('../api/_lib/db.js', () => ({
   db: {
     from: (tabel: string) => ({
       select: () => ({
@@ -40,11 +40,11 @@ vi.mock('../api/db.js', () => ({
   supabase: null,
   supabaseAdmin: null,
 }));
-vi.mock('../api/storage.js', () => ({ bewaarMeldingen: vi.fn(async () => 0) }));
+vi.mock('../api/_lib/storage.js', () => ({ bewaarMeldingen: vi.fn(async () => 0) }));
 vi.mock('web-push', () => {
   return {
     default: {
-      // api/push.ts stelt de sleutels in op het moment dat het de bibliotheek
+      // api/_lib/push.ts stelt de sleutels in op het moment dat het de bibliotheek
       // laadt, één keer per module: zo is te tellen of ze geladen werd.
       setVapidDetails: () => { mem.geladen += 1; },
       sendNotification: async (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) => {
@@ -65,7 +65,7 @@ afterAll(() => {
   if (vorige.priv === undefined) delete process.env.VAPID_PRIVATE_KEY; else process.env.VAPID_PRIVATE_KEY = vorige.priv;
 });
 
-const { sendPushToUsers, kiesPushDoelen } = await import('../api/push.js');
+const { sendPushToUsers, kiesPushDoelen } = await import('../api/_lib/push.js');
 
 const rij = (user_id: string, endpoint: string): Rij => ({ user_id, endpoint, p256dh: `k-${user_id}`, auth: `a-${user_id}` });
 const BERICHT = { title: 'Verlof goedgekeurd', body: '1 tot 3 juli', url: '/?view=verlof', soort: 'verlof' as const };
@@ -118,10 +118,10 @@ describe('versturen: alleen naar een echte pushdienst', () => {
   });
 
   it('laadt web-push niet eens als er geen enkele pushdienst tussen zit', async () => {
-    // Een verse api/push.ts heeft de bibliotheek nog niet geladen; de teller
+    // Een verse api/_lib/push.ts heeft de bibliotheek nog niet geladen; de teller
     // loopt op zodra dat gebeurt.
     vi.resetModules();
-    const { sendPushToUsers: vers } = await import('../api/push.js');
+    const { sendPushToUsers: vers } = await import('../api/_lib/push.js');
     const voor = mem.geladen;
     mem.rijen = [rij('3', 'https://push.aanvaller.tld/geheim-pad')];
     await vers(['3'], BERICHT);

@@ -1,5 +1,5 @@
 import { MAIL_LOG_NIET_AFGEROND } from "../../../shared/mailLog.js";
-import { isMissingTableError } from "../../deviceGate.js";
+import { isMissingTableError } from "../deviceGate.js";
 import { saveActivityLogEntry } from "./activiteit.js";
 import { requireDb } from "./basis.js";
 

@@ -967,7 +967,7 @@ describe('uitnodigen voor het portaal', () => {
   });
 
   it('mislukt de mail, dan gaat de link weer weg en komt er geen logregel; `alleen` stuurt daarna alleen naar de rest', async () => {
-    const { sendEmail } = await import('../../api/email.js');
+    const { sendEmail } = await import('../../api/_lib/email.js');
     vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
       if (opts.to[0] === 'b@vhb.be') return { ok: false, mocked: false, error: '450 rate limit' };
       mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text });
@@ -1040,7 +1040,7 @@ describe('uitnodigen voor het portaal', () => {
   it('mislukt een nieuwe mail, dan werkt de vorige uitnodiging weer', async () => {
     await nodigUit(['4']);
     const vorige = codeUitMail(mem.emailsSent[0].text);
-    const { sendEmail } = await import('../../api/email.js');
+    const { sendEmail } = await import('../../api/_lib/email.js');
     vi.mocked(sendEmail).mockImplementation(async () => ({ ok: false, mocked: false, error: '450 rate limit' }));
     try {
       const res = await nodigUit(['4']);

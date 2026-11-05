@@ -4,9 +4,9 @@ import type {
   PlanningMatrixImportHistoryRow,
   PlanningMatrixRow,
   ShiftRecord,
-} from "../../types.js";
-import { toDatabasePlanningCode, maandGrenzen, toPublicPlanningCode } from "../../helpers.js";
-import { supabaseAdmin } from "../../db.js";
+} from "../types.js";
+import { toDatabasePlanningCode, maandGrenzen, toPublicPlanningCode } from "../helpers.js";
+import { supabaseAdmin } from "../db.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { BACKUPS_BUCKET } from "./backups.js";
 import { isEchteIsoDag, isMissingDbFunction, paginatedFetch, requireDb } from "./basis.js";

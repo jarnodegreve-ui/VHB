@@ -14,8 +14,8 @@ import express from 'express';
 
 const gelezen = { medewerkers: 0, voertuigen: 0 };
 
-vi.mock('../api/middleware.js', async (origineel) => {
-  const echt = await origineel<typeof import('../api/middleware')>();
+vi.mock('../api/_lib/middleware.js', async (origineel) => {
+  const echt = await origineel<typeof import('../api/_lib/middleware')>();
   return {
     ...echt,
     // Alleen wie aangemeld is wisselt: de rol komt uit een header, de rolcontrole zelf is de echte.
@@ -26,8 +26,8 @@ vi.mock('../api/middleware.js', async (origineel) => {
     },
   };
 });
-vi.mock('../api/storage.js', async (origineel) => ({
-  ...(await origineel<typeof import('../api/storage')>()),
+vi.mock('../api/_lib/storage.js', async (origineel) => ({
+  ...(await origineel<typeof import('../api/_lib/storage')>()),
   getUserExpiries: async () => [
     { userId: '10', soort: 'medische_schifting', validUntil: '2020-01-01', updatedAt: null, updatedBy: null },
   ],

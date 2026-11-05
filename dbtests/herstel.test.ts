@@ -10,8 +10,8 @@ import { bouwHerstelPlan } from '../shared/herstelPlan';
 import {
   checkBackupIntegrity, replacePlanningAndMatrix, restoreFromBackup, saveDiversionsData, saveLeaveData,
   savePlanningCodesData, saveServicesData, saveUpdatesData, saveUsersData, voegSwapsToe,
-} from '../api/storage';
-import { db } from '../api/db';
+} from '../api/_lib/storage';
+import { db } from '../api/_lib/db';
 import { dienst, gebruiker, leegDatabase, matrixRij } from './hulp';
 
 beforeEach(leegDatabase);

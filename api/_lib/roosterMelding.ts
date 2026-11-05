@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { DAG_DMJ } from "../helpers.js";
-import { sendPushToUsers } from "../push.js";
+import { DAG_DMJ } from "./helpers.js";
+import { sendPushToUsers } from "./push.js";
 
 /**
  * Gerichte roostermeldingen (verbeterronde 09-10, punt 2, keuze Jarno).

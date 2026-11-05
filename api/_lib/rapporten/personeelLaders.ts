@@ -1,4 +1,4 @@
-import { getUserExpiries } from "../../storage.js";
+import { getUserExpiries } from "../storage.js";
 import { PERSONEEL_VERVAL_RAPPORTEN, type PersoneelVervalRapport } from "../../../shared/rapporten/definities/personeel.js";
 import type { RapportLader } from "../../../shared/rapporten/types.js";
 import { vandaagInBelgie } from "./peildatumServer.js";

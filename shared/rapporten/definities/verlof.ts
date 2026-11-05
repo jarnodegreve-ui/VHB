@@ -9,7 +9,7 @@ import { AANVRAAG_STATUS } from '../../status.js';
 
 /**
  * De verloftypes die een chauffeur kan aanvragen, met hun label. Bewust een
- * derde kopie naast api/helpers.ts (LEAVE_TYPE_LABEL) en src/lib/format.ts
+ * derde kopie naast api/_lib/helpers.ts (LEAVE_TYPE_LABEL) en src/lib/format.ts
  * (LEAVE_TYPE_LABELS): shared/ mag uit geen van beide importeren. De
  * drift-test in src/rapportVerlof.test.ts houdt ze gelijk.
  */

@@ -10,7 +10,7 @@ export type ResolvedPlanningAssignment = {
   segments: string[];
 };
 
-// Zelfde normalisatie als de server (api/helpers.ts toLookupToken): accenten
+// Zelfde normalisatie als de server (api/_lib/helpers.ts toLookupToken): accenten
 // én interpunctie weg. Zo matcht het Planning-overzicht exact dezelfde namen/
 // codes als de matrix-import — de oude trim().toLowerCase() gaf vals-positieve
 // "niet-gematchte chauffeur" bij accent-/koppelteken-verschillen.
@@ -94,7 +94,7 @@ export const vindNaamBotsingen = <T extends { id: string; name: string }>(
 };
 
 // Let op: client-variant die 'HH:MM–HH:MM'-labels teruggeeft. De server heeft
-// een gelijknamige-maar-andere getServiceSegments (api/storage.ts) die HH:MM
+// een gelijknamige-maar-andere getServiceSegments (api/_lib/storage.ts) die HH:MM
 // valideert en {startTime,endTime,segment}-objecten geeft — bewust los, dus
 // hier een eigen naam om de divergente duplicaat niet te verwarren.
 const getServiceSegmentLabels = (service: Service) => (

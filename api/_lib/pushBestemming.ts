@@ -25,7 +25,7 @@
  *  - elke host onder notify.windows.com: Edge op Windows (WNS).
  *
  * Een pushdienst die hier ontbreekt verliest zijn meldingen niet stil: het
- * versturen logt de hostnaam (api/push.ts) en de rij blijft staan. Voeg de
+ * versturen logt de hostnaam (api/_lib/push.ts) en de rij blijft staan. Voeg de
  * host dan hier toe, met de bron erbij.
  *
  * Zuiver en zonder afhankelijkheden: geen DNS, geen netwerk. Getest in

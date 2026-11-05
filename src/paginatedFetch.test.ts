@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../api/db.js', () => ({ db: null, supabase: null, supabaseAdmin: null }));
-const { paginatedFetch } = await import('../api/storage.js');
+vi.mock('../api/_lib/db.js', () => ({ db: null, supabase: null, supabaseAdmin: null }));
+const { paginatedFetch } = await import('../api/_lib/storage.js');
 
 type Oproep = { from: number; to: number; telling: boolean };
 

@@ -13,7 +13,7 @@
  * dag-optellers over availability, kalender, shiftTime, typedag en
  * CoverageView (controle-ronde 05-09, 27). `availability.ts` re-exporteert
  * isoDate/addDays voor de bestaande importeurs. De API-kant heeft zijn eigen
- * exemplaar in api/helpers.ts (addDagenIso): api/ en src/ delen bewust geen
+ * exemplaar in api/_lib/helpers.ts (addDagenIso): api/ en src/ delen bewust geen
  * code.
  */
 

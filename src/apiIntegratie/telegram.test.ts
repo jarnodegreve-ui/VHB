@@ -14,7 +14,7 @@ describe('telegram-webhook, secret, koppeling en commando\'s', () => {
     });
 
   beforeEach(async () => {
-    const { zetTelegramVerzenderVoorTests } = await import('../../api/telegram');
+    const { zetTelegramVerzenderVoorTests } = await import('../../api/_lib/telegram');
     verzonden.length = 0;
     zetTelegramVerzenderVoorTests(async (v: any) => { verzonden.push(v); return true; });
     process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
@@ -24,7 +24,7 @@ describe('telegram-webhook, secret, koppeling en commando\'s', () => {
   });
 
   afterAll(async () => {
-    const { zetTelegramVerzenderVoorTests } = await import('../../api/telegram');
+    const { zetTelegramVerzenderVoorTests } = await import('../../api/_lib/telegram');
     zetTelegramVerzenderVoorTests(null);
     delete process.env.TELEGRAM_WEBHOOK_SECRET;
     delete process.env.TELEGRAM_CHAT_ID;
@@ -250,7 +250,7 @@ describe('telegram-webhook, secret, koppeling en commando\'s', () => {
   });
 
   it('parseDagAanduiding: jaargrens-rol, kalender-echtheid en weekdagen', async () => {
-    const { parseDagAanduiding } = await import('../../api/telegram');
+    const { parseDagAanduiding } = await import('../../api/_lib/telegram');
     // Zonder jaar rolt een verleden datum naar volgend jaar (december-case).
     expect(parseDagAanduiding('03/01', '2026-12-28')).toBe('2027-01-03');
     expect(parseDagAanduiding('29/12', '2026-12-28')).toBe('2026-12-29');

@@ -1,4 +1,4 @@
-import { toDatabaseLeave, toPublicLeave } from "../../helpers.js";
+import { toDatabaseLeave, toPublicLeave } from "../helpers.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 

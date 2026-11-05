@@ -369,7 +369,7 @@ function StartschermRij({ user }: { user: User }) {
 
 /**
  * Waarover wil je meldingen (punt 15): één schakelaar per soort, standaard
- * allemaal aan. Uitzetten filtert alleen het pushkanaal (api/push.ts); in
+ * allemaal aan. Uitzetten filtert alleen het pushkanaal (api/_lib/push.ts); in
  * Meldingen blijft elke melding staan. 'systeem' (vervaldata van je eigen
  * attesten) is bewust niet uit te zetten en staat er niet tussen.
  */

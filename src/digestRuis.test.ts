@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isDigestRuis } from '../api/helpers';
+import { isDigestRuis } from '../api/_lib/helpers';
 
 describe('isDigestRuis', () => {
   it('filtert de sessie-levenscyclus', () => {

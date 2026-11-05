@@ -5,7 +5,7 @@
  * De mails die Supabase zelf verstuurt (wachtwoord vergeten, uitnodiging,
  * e-mailwijziging, …) kwamen als de Engelse standaardtemplates aan, naast
  * een portaal dat verder volledig in huisstijl is. Dit script bouwt uit één
- * lay-out (zelfde recept als de welkomstmail in api/email.ts) zes templates
+ * lay-out (zelfde recept als de welkomstmail in api/_lib/email.ts) zes templates
  * en schrijft ze naar supabase/auth-mails/*.html (gecommit, plakbaar in het
  * dashboard: Authentication › Emails › Templates).
  *

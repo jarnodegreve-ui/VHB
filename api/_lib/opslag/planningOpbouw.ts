@@ -1,5 +1,5 @@
-import type { AppUser, PlanningCodeRecord, PlanningMatrixRow, ServiceRecord, ShiftRecord } from "../../types.js";
-import { sortedNameToken, toLookupToken } from "../../helpers.js";
+import type { AppUser, PlanningCodeRecord, PlanningMatrixRow, ServiceRecord, ShiftRecord } from "../types.js";
+import { sortedNameToken, toLookupToken } from "../helpers.js";
 import { dienstenOpDag } from "../../../shared/dienstregeling.js";
 import { dagtypeVanDag, tijdenOpDag, type DagtypeKalender } from "../../../shared/dagtype.js";
 import { getServicesPerVersie, laadDagtypeKalender } from "./diensten.js";

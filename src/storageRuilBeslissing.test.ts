@@ -15,7 +15,7 @@ const stappen = vi.hoisted(() => ({
   antwoord: null as null | ((query: Array<[string, ...unknown[]]>) => unknown),
 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const keten = (query: Stap[]): any => new Proxy({}, {
     get: (_t, naam: string) => {
       if (naam === 'then') return (ok: (v: unknown) => void) => ok(stappen.antwoord?.(query) ?? { data: [], error: null, count: 0 });
@@ -29,7 +29,7 @@ vi.mock('../api/db.js', () => {
   };
 });
 
-const { schrijfSwapAlsStatus, voegSwapsToe, applySwapToPlanning, revertSwapFromPlanning } = await import('../api/storage.js');
+const { schrijfSwapAlsStatus, voegSwapsToe, applySwapToPlanning, revertSwapFromPlanning } = await import('../api/_lib/storage.js');
 const { patchDefect } = await import('../api/_lib/techniekStorage.js');
 
 const RUIL = {

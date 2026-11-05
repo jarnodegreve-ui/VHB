@@ -1,6 +1,6 @@
 /**
  * Eén lay-out voor elke mail die het portaal verstuurt (mailtranche PR 2,
- * 25-09): de systeemmails in api/email.ts en de routes, én de Supabase-
+ * 25-09): de systeemmails in api/_lib/email.ts en de routes, én de Supabase-
  * authmails (scripts/auth-mails.mjs bouwt daar dezelfde opbouw mee).
  *
  * Bewust ouderwets: tabellen en inline stijlen, want mailclients (Outlook,

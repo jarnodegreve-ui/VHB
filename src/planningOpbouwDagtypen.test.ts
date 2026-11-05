@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bouwPlanningUitMatrix, getServiceSegments } from '../api/storage';
+import { bouwPlanningUitMatrix, getServiceSegments } from '../api/_lib/storage';
 import { kalenderUitDekking } from '../shared/dagtype';
 
 /**

@@ -197,7 +197,7 @@ const mem = vi.hoisted(() => ({
   koppelMislukt: false,
 }));
 
-vi.mock('../../api/db.js', () => {
+vi.mock('../../api/_lib/db.js', () => {
   const tokenToEmail: Record<string, string> = {
     'tok-admin': 'admin@vhb.be',
     'tok-planner': 'planner@vhb.be',
@@ -342,7 +342,7 @@ function loonFrom(tabel: string) {
   return q;
 }
 
-vi.mock('../../api/push.js', async (importOriginal) => ({
+vi.mock('../../api/_lib/push.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
   getVapidPublicKey: () => 'test-public-key',
   savePushSubscription: async (record: any) => { mem.pushSubscriptions.push(record); },
@@ -360,7 +360,7 @@ vi.mock('../../api/push.js', async (importOriginal) => ({
   sendPushToUsers: async (userIds: string[], payload: any) => {
     if (userIds.length === 0) return;
     mem.pushesSent.push({ userIds, payload });
-    // Zelfde bijwerking als de echte functie (api/push.ts → bewaarMeldingen):
+    // Zelfde bijwerking als de echte functie (api/_lib/push.ts → bewaarMeldingen):
     // één rij per unieke ontvanger, soort/doel uit de payload of de url.
     const { meldingUitPayload } = await import('../../api/_lib/meldingen.js');
     const rij = meldingUitPayload(payload);
@@ -371,7 +371,7 @@ vi.mock('../../api/push.js', async (importOriginal) => ({
   getUsersMetPush: async () => [...new Set(mem.pushSubscriptions.map((s: any) => String(s.userId)))],
 }));
 
-vi.mock('../../api/email.js', async (importOriginal) => ({
+vi.mock('../../api/_lib/email.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
   sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
   sendEmail: vi.fn(async (opts: any) => {
@@ -397,7 +397,7 @@ const archiefUitMem = async (f: { grens: string; aanvragerId?: string; persoonId
     .sort(archiefVolgorde);
 };
 
-vi.mock('../../api/storage.js', async (importOriginal) => {
+vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
   const orig = await importOriginal<any>();
   // Dienstregelingversies op de mem-store, met dezelfde regels als de echte
   // opslag (shared/dienstregeling.ts): een dienst zonder versie telt als de
@@ -932,7 +932,7 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       const isoDag = (v?: string) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
       const venster = isoDag(opts?.van) && isoDag(opts?.tot) ? `${opts!.van}..${opts!.tot}` : null;
       mem.matrixMaandFilters.push(maand || venster || null);
-      // Spiegelt de .gte/.lte op source_date in api/storage.ts, zodat een
+      // Spiegelt de .gte/.lte op source_date in api/_lib/storage.ts, zodat een
       // route die de maand vergeet hier evenveel rijen ziet als in productie.
       if (/^\d{4}-(0[1-9]|1[0-2])$/.test(maand)) return mem.planningMatrix.filter((r: any) => String(r.source_date ?? '').startsWith(`${maand}-`));
       if (venster) return mem.planningMatrix.filter((r: any) => String(r.source_date ?? '') >= opts!.van! && String(r.source_date ?? '') <= opts!.tot!);
@@ -1123,8 +1123,8 @@ afterEach(() => { vi.useRealTimers(); });
 
 beforeAll(async () => {
   const app = (await import('../../api/index')).default;
-  resetAllRateLimiters = (await import('../../api/rateLimit')).resetAllRateLimiters;
-  invalidateUsersCache = (await import('../../api/userCache')).invalidateUsersCache;
+  resetAllRateLimiters = (await import('../../api/_lib/rateLimit')).resetAllRateLimiters;
+  invalidateUsersCache = (await import('../../api/_lib/userCache')).invalidateUsersCache;
   invalidateOnderhoudCache = (await import('../../api/_lib/onderhoud')).invalidateOnderhoudCache;
   await new Promise<void>((resolve) => {
     server = app.listen(0, '127.0.0.1', () => resolve());

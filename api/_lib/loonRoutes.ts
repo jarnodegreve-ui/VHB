@@ -1,11 +1,11 @@
 import type express from "express";
-import { authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
 import {
   getAppSetting, getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, laadDagtypeKalender, logActivity, setAppSetting,
-} from "../storage.js";
-import type { AuthenticatedRequest } from "../types.js";
-import { DAG_DMJ, brusselsDay, nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
+} from "./storage.js";
+import type { AuthenticatedRequest } from "./types.js";
+import { DAG_DMJ, brusselsDay, nameIdIndex, sortedNameToken, toLookupToken } from "./helpers.js";
 import { loonCodeSleutel } from "../../shared/loon.js";
 import {
   LOON_INSTELLINGEN_KEY, dagPrestatieBodySchema, dagPrestatieNieuwSchema, heropenBodySchema, loonCodeBodySchema, loonInstellingenSchema,

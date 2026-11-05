@@ -6,9 +6,9 @@
  * pas in productie.
  */
 import { describe, expect, it } from 'vitest';
-import { db } from '../api/db';
-import { RPC_PROBES, TABLE_PROBES } from '../api/schemaProbes';
-import { isMissingDbFunction } from '../api/storage';
+import { db } from '../api/_lib/db';
+import { RPC_PROBES, TABLE_PROBES } from '../api/_lib/schemaProbes';
+import { isMissingDbFunction } from '../api/_lib/storage';
 
 describe('schema uit de migraties', () => {
   it('praat met de lokale database', () => {

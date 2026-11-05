@@ -445,7 +445,7 @@ describe('advies openstaande diensten, het venster van één aanvraag is begrens
   });
 
   it('Telegram: een knop met een dag die niet kan krijgt een antwoord in de chat, geen crash en geen dataload', async () => {
-    const { zetTelegramVerzenderVoorTests } = await import('../../api/telegram');
+    const { zetTelegramVerzenderVoorTests } = await import('../../api/_lib/telegram');
     const verzonden: Array<{ tekst: string }> = [];
     zetTelegramVerzenderVoorTests(async (v: any) => { verzonden.push(v); return true; });
     process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
@@ -554,7 +554,7 @@ describe('verbeterronde 22-08, voorstel, batch-advies en maandoverzicht', () => 
 
 describe('dekkingsinstellingen: een databasefout gaat niet naar de client (05-11)', () => {
   it('PUT /api/coverage-expectations geeft bij een opslagfout een generieke 500, de Supabase-tekst blijft in het log', async () => {
-    const storage = await import('../../api/storage.js');
+    const storage = await import('../../api/_lib/storage.js');
     const spion = vi.spyOn(storage, 'saveCoverageExpectations').mockRejectedValueOnce(new Error('relation "coverage_expectations" does not exist'));
     const fouten = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {

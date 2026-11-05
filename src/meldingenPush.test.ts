@@ -11,8 +11,8 @@ const mem = vi.hoisted(() => ({
   faalt: false,
 }));
 
-vi.mock('../api/db.js', () => ({ db: {}, supabase: null, supabaseAdmin: null }));
-vi.mock('../api/storage.js', () => ({
+vi.mock('../api/_lib/db.js', () => ({ db: {}, supabase: null, supabaseAdmin: null }));
+vi.mock('../api/_lib/storage.js', () => ({
   bewaarMeldingen: vi.fn(async (userIds: string[], melding: any) => {
     if (mem.faalt) throw { code: '42P01', message: 'relation "meldingen" does not exist' };
     mem.bewaard.push({ userIds, melding });
@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe('sendPushToUsers bewaart de melding', () => {
   it('schrijft één rij per unieke ontvanger, ook zonder VAPID-configuratie', async () => {
-    const { sendPushToUsers } = await import('../api/push');
+    const { sendPushToUsers } = await import('../api/_lib/push');
     await sendPushToUsers(['3', '4', '3', ''], { title: 'Verlof goedgekeurd', body: 'Betaald verlof (1–3 jul)', url: '/?view=verlof', soort: 'verlof' });
     expect(mem.bewaard).toEqual([
       { userIds: ['3', '4'], melding: { titel: 'Verlof goedgekeurd', tekst: 'Betaald verlof (1–3 jul)', soort: 'verlof', doel: 'verlof' } },
@@ -37,13 +37,13 @@ describe('sendPushToUsers bewaart de melding', () => {
   });
 
   it('leidt soort en doel af uit de url als de caller ze niet meegeeft', async () => {
-    const { sendPushToUsers } = await import('../api/push');
+    const { sendPushToUsers } = await import('../api/_lib/push');
     await sendPushToUsers(['9'], { title: 'Toestel goedgekeurd', body: 'Dit toestel heeft toegang.', url: '/' });
     expect(mem.bewaard[0].melding).toMatchObject({ soort: 'systeem', doel: null });
   });
 
   it('doet niets zonder ontvangers en breekt niet op een ontbrekende tabel', async () => {
-    const { sendPushToUsers } = await import('../api/push');
+    const { sendPushToUsers } = await import('../api/_lib/push');
     await sendPushToUsers([], { title: 'x', body: 'y' });
     expect(mem.bewaard).toEqual([]);
     mem.faalt = true;

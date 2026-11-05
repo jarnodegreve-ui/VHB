@@ -12,7 +12,7 @@ describe('een uitgeschakelde mail meldt niet dat hij verstuurd is (nr. 13)', () 
   const UIT = { ok: true, mocked: false, overgeslagen: true };
 
   it('dringende update: het antwoord zegt dat de mail uit staat, niet "succesvol verzonden"', async () => {
-    const { sendEmail } = await import('../../api/email.js');
+    const { sendEmail } = await import('../../api/_lib/email.js');
     vi.mocked(sendEmail).mockResolvedValueOnce(UIT);
     const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
     expect(res.status).toBe(200);
@@ -21,7 +21,7 @@ describe('een uitgeschakelde mail meldt niet dat hij verstuurd is (nr. 13)', () 
   });
 
   it('weekoverzicht: de hartslag en het antwoord zeggen "niet verstuurd", niet "verstuurd"', async () => {
-    const { sendEmail } = await import('../../api/email.js');
+    const { sendEmail } = await import('../../api/_lib/email.js');
     process.env.ERROR_DIGEST_WEEKDAG = 'elke';
     mem.hartslagen = [];
     mem.clientErrors = [];
@@ -90,7 +90,7 @@ describe('urgente-update-mail: ontvangers server-side', () => {
 
 describe('urgente-update-mail: fouten onderweg', () => {
   it('een DB-fout bij het lezen van de gebruikers geeft een nette 500, geen hangend verzoek', async () => {
-    const storage = await import('../../api/storage.js');
+    const storage = await import('../../api/_lib/storage.js');
     const spion = vi.spyOn(storage, 'getUsersData').mockRejectedValueOnce(new Error('relation "users" does not exist'));
     const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -104,7 +104,7 @@ describe('urgente-update-mail: fouten onderweg', () => {
   });
 
   it('een pushdienst die weigert houdt de mail niet tegen: 200 en de mail is vertrokken', async () => {
-    const push = await import('../../api/push.js');
+    const push = await import('../../api/_lib/push.js');
     const spion = vi.spyOn(push, 'sendPushToUsers').mockRejectedValueOnce(new Error('push kapot'));
     const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
     mem.emailsSent = [];
@@ -1461,7 +1461,7 @@ describe('Beheer › Mails (/api/mails)', () => {
     });
 
     it('de logregel staat er vóór de eerste mail, als niet afgerond, en wordt daarna bijgewerkt (nr. 5)', async () => {
-      const { sendEmail } = await import('../../api/email.js');
+      const { sendEmail } = await import('../../api/_lib/email.js');
       mem.mailLogVerloop = [];
       const tijdens: any[] = [];
       vi.mocked(sendEmail).mockImplementationOnce(async (opts: any) => {
@@ -1484,7 +1484,7 @@ describe('Beheer › Mails (/api/mails)', () => {
     });
 
     it('deels mislukt: het antwoord noemt wie niet vertrok, en `alleen` stuurt daarna alleen naar hen (nr. 5)', async () => {
-      const { sendEmail } = await import('../../api/email.js');
+      const { sendEmail } = await import('../../api/_lib/email.js');
       vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
         if (opts.to[0] === 'planner@vhb.be') return { ok: false, mocked: false, error: '450 rate limit' };
         mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });

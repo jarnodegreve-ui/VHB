@@ -12,7 +12,7 @@ const storage = vi.hoisted(() => ({
   antwoord: null as null | ((paden: string[]) => unknown),
 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const from = (bucket: string) => ({
     createSignedUrls: async (paden: string[], ttl: number) => {
       storage.aanroepen.push({ bucket, paden, ttl });
@@ -24,7 +24,7 @@ vi.mock('../api/db.js', () => {
   return { db: client, supabase: client, supabaseAdmin: client };
 });
 
-const { ondertekenDiversionBijlagen, ondertekenDiversionBijlage, vergeetDiversionBijlageUrls, DIVERSION_URL_TTL_SEC } = await import('../api/storage.js');
+const { ondertekenDiversionBijlagen, ondertekenDiversionBijlage, vergeetDiversionBijlageUrls, DIVERSION_URL_TTL_SEC } = await import('../api/_lib/storage.js');
 
 beforeEach(() => {
   storage.aanroepen = [];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRateLimiter } from '../api/rateLimit';
+import { createRateLimiter } from '../api/_lib/rateLimit';
 
 describe('createRateLimiter', () => {
   it('staat tot en met max toe en blokkeert daarna', () => {
@@ -43,7 +43,7 @@ describe('createRateLimiter', () => {
 
 describe('gedeelde store (Upstash), fallback-gedrag', () => {
   it('sharedCheck geeft null zonder configuratie, zodat de in-memory limiter blijft werken', async () => {
-    const { sharedCheck, hasSharedStore } = await import('../api/rateLimit');
+    const { sharedCheck, hasSharedStore } = await import('../api/_lib/rateLimit');
     // In de testomgeving staan de env-vars niet: nooit een remote call doen.
     expect(hasSharedStore()).toBe(false);
     expect(await sharedCheck('ip:1.2.3.4', 60_000, 10)).toBeNull();
@@ -52,7 +52,7 @@ describe('gedeelde store (Upstash), fallback-gedrag', () => {
 
 describe('IP-bepaling: gespoofte headers mogen de limiet niet omzeilen', () => {
   it('gebruikt x-vercel-forwarded-for boven een door de client gezette x-real-ip', async () => {
-    const { rateLimitMiddleware } = await import('../api/rateLimit');
+    const { rateLimitMiddleware } = await import('../api/_lib/rateLimit');
     const seen: number[] = [];
     const run = (headers: Record<string, string>) =>
       new Promise<void>((resolve) => {

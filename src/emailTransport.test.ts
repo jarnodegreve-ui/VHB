@@ -8,10 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nep = vi.hoisted(() => ({ createTransport: vi.fn(), log: vi.fn() }));
 vi.mock('nodemailer', () => ({ default: { createTransport: nep.createTransport } }));
-vi.mock('../api/storage.js', () => ({ logMail: nep.log }));
+vi.mock('../api/_lib/storage.js', () => ({ logMail: nep.log }));
 vi.mock('../api/_lib/mailInstellingen.js', () => ({ mailSoortAan: async () => true }));
 
-import { maakMailTransport, sendEmail } from '../api/email';
+import { maakMailTransport, sendEmail } from '../api/_lib/email';
 
 const mail = { to: ['a@vhb.be'], subject: 'Test', text: 't', html: '<p>t</p>', soort: 'eigen-mail', zonderLog: true };
 const vorige = { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS };

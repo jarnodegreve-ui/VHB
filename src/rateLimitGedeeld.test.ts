@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type Mod = typeof import('../api/rateLimit');
+type Mod = typeof import('../api/_lib/rateLimit');
 
 const redis = new Map<string, number>();
 let pipelines: string[][][] = [];
@@ -32,7 +32,7 @@ const laad = async (env: Record<string, string> = {}): Promise<Mod> => {
   process.env.UPSTASH_REDIS_REST_URL = 'https://nep.upstash.test';
   process.env.UPSTASH_REDIS_REST_TOKEN = 'nep';
   for (const [k, v] of Object.entries(env)) process.env[k] = v;
-  return import('../api/rateLimit');
+  return import('../api/_lib/rateLimit');
 };
 
 const run = (mod: Mod, headers: Record<string, string>) =>
@@ -127,7 +127,7 @@ describe('rateLimitMiddleware met gedeelde store', () => {
 
 describe('makeUserCache neemt de meegelezen epoch over', () => {
   it('doet geen eigen lees() zolang de limiter een verse waarde aanlevert, en ziet een wissel meteen', async () => {
-    const { makeUserCache } = await import('../api/userCache');
+    const { makeUserCache } = await import('../api/_lib/userCache');
     let t = 10_000;
     let lees = 0;
     let fetches = 0;
@@ -149,7 +149,7 @@ describe('makeUserCache neemt de meegelezen epoch over', () => {
   });
 
   it('valt terug op lees() wanneer de waarneming te oud is', async () => {
-    const { makeUserCache } = await import('../api/userCache');
+    const { makeUserCache } = await import('../api/_lib/userCache');
     let t = 10_000;
     let lees = 0;
     const cache = makeUserCache(async () => [], {

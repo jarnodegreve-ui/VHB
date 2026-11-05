@@ -1,4 +1,4 @@
-import { brusselsDay } from "../helpers.js";
+import { brusselsDay } from "./helpers.js";
 
 /**
  * Laadpalen: de zuivere rekenlaag voor maandoverzicht, historiek en de
@@ -6,7 +6,7 @@ import { brusselsDay } from "../helpers.js";
  * rijen in, cijfers uit, zodat alles hier met unit-tests dicht te timmeren
  * is (src/ocpiOverzicht.test.ts).
  *
- * Kernregels, dezelfde als de bestaande verbruikskaart (api/ocpi.ts):
+ * Kernregels, dezelfde als de bestaande verbruikskaart (api/_lib/ocpi.ts):
  *  - Een sessie telt op de Brusselse kalenderdag waarop hij STARTTE.
  *  - INVALID-sessies (door ChargEye ongeldig verklaard) tellen nergens mee.
  *  - "Laadbeurt" = sessie met energie (kWh > 0). "Mislukt" = ChargEye's

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { legRuilenOverMaandbeeld, type OverlayCellen, type OverlayRuil } from '../api/_lib/ruilOverlay.js';
-import { HANDMATIGE_WISSEL_PREFIX } from '../api/helpers.js';
+import { HANDMATIGE_WISSEL_PREFIX } from '../api/_lib/helpers.js';
 
 /**
  * Ruil-overlay op het maandbeeld. De kern (bevinding Jarno 12-09): een ruil

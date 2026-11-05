@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { sanitizeDiversionPdfUrl, toDatabaseDiversion } from '../api/helpers.js';
+import { sanitizeDiversionPdfUrl, toDatabaseDiversion } from '../api/_lib/helpers.js';
 
 /** Server-side helft van de bijlage-validatie. Client-side weigert
  *  isSafeDocumentUrl (src/lib/ui.ts) al data:text/html en javascript:, maar de

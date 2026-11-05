@@ -1,4 +1,4 @@
-import { db } from "../../db.js";
+import { db } from "../db.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 
 // --- Client errors ---

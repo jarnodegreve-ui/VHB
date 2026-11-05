@@ -1,7 +1,7 @@
 /**
  * Zuivere kern van scripts/omleiding-pdf-backfill.mjs: beslissen wat er per
  * omleiding moet gebeuren, en het plan uitvoeren met de verhuisfuncties die
- * het script aanreikt (api/storage.ts). Geen netwerk, geen env: getest in
+ * het script aanreikt (api/_lib/storage.ts). Geen netwerk, geen env: getest in
  * src/lib/omleidingPdfBackfill.test.ts.
  */
 import { mogelijkeEigenaars, uploadMoment } from '../api/_lib/bijlagenActies.ts';
@@ -11,7 +11,7 @@ import { mogelijkeEigenaars, uploadMoment } from '../api/_lib/bijlagenActies.ts'
 export const MAX_SLOT = 5;
 
 /** Bestandsnaam van een PDF van vóór 25-09: die is nooit bewaard. Moet
- *  gelijk zijn aan LEGACY_OMLEIDING_PDF_NAAM in api/helpers.ts (test bewaakt
+ *  gelijk zijn aan LEGACY_OMLEIDING_PDF_NAAM in api/_lib/helpers.ts (test bewaakt
  *  het), zodat de chauffeur vóór en na de verhuis dezelfde naam ziet. */
 export const OUDE_PDF_NAAM = 'omleiding.pdf';
 
@@ -97,7 +97,7 @@ export function telPlan(plan) {
  *  @param {PlanRegel[]} plan */
 export const stap2Veilig = (plan) => plan.every((regel) => !BLOKKEERT_STAP_2.includes(regel.actie));
 
-/** Paginagrootte van de lijsten (PAGE_SIZE in api/storage.ts). */
+/** Paginagrootte van de lijsten (PAGE_SIZE in api/_lib/storage.ts). */
 export const PAGINA = 1000;
 
 /**
@@ -149,7 +149,7 @@ export function oordeelStap2(plan, zekerheid) {
 
 /**
  * Het plan uitvoeren. `verplaats` en `zetLijst` zijn de bestaande functies
- * uit api/storage.ts (verplaatsDiversionLegacyBijlage, zetDiversionBijlagen);
+ * uit api/_lib/storage.ts (verplaatsDiversionLegacyBijlage, zetDiversionBijlagen);
  * zetLijst zet de marker "pdfUrl" zelf op null. Een fout bij één omleiding
  * stopt de rest niet: een volgende run pakt ze op (verhuisd zonder lijst
  * wordt dan "lijst-herstellen").

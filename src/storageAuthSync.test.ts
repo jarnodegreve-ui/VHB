@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Auth-kant van saveUsersData (api/storage.ts): het koppelen van profielen
+ * Auth-kant van saveUsersData (api/_lib/storage.ts): het koppelen van profielen
  * aan Supabase-Auth-accounts bij e-mailwijzigingen en nieuwe profielen.
  * Supabase wordt hier volledig gemockt: een in-memory users-tabel met de
  * paar query-builder-ketens die saveUsersData gebruikt, en een Auth-admin
@@ -18,7 +18,7 @@ const mem = vi.hoisted(() => ({
   updateUserById: vi.fn(),
 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const tabel = () => {
     const b: any = {
       select: () => b,
@@ -64,7 +64,7 @@ vi.mock('../api/db.js', () => {
   return { supabase: client, supabaseAdmin, db: supabaseAdmin };
 });
 
-const { saveUsersData, EmailInGebruikError } = await import('../api/storage.js');
+const { saveUsersData, EmailInGebruikError } = await import('../api/_lib/storage.js');
 
 const rij = (id: string, email: string, extra: Record<string, unknown> = {}) => ({
   id, name: `Gebruiker ${id}`, role: 'chauffeur', employeeid: `VHB-${id}`, email, isactive: true, activesessions: 0, ...extra,

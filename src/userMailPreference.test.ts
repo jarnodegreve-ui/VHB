@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { sanitizeIncomingUser, toPublicUser, toDatabaseUser } from '../api/helpers';
+import { sanitizeIncomingUser, toPublicUser, toDatabaseUser } from '../api/_lib/helpers';
 
 /**
  * wantsSystemMail (systeemmail-opt-out voor admins) passeert drie

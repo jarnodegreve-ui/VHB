@@ -8,7 +8,7 @@ export {
   isMissingDbFunction,
   type PaginaTelling,
   paginatedFetch,
-} from "./_lib/opslag/basis.js";
+} from "./opslag/basis.js";
 export {
   type PlanningFilters,
   getPlanningData,
@@ -40,7 +40,7 @@ export {
   getUserExpiries,
   saveUserExpiry,
   deleteUserExpiry,
-} from "./_lib/opslag/planning.js";
+} from "./opslag/planning.js";
 export {
   getActivityLog,
   getLoginActivity,
@@ -57,7 +57,7 @@ export {
   vergeetPresenceLocatie,
   noteerAanwezigheid,
   getAanwezigheid,
-} from "./_lib/opslag/activiteit.js";
+} from "./opslag/activiteit.js";
 export {
   summarizeTokens,
   summarizeUserChanges,
@@ -70,13 +70,13 @@ export {
   diffPlanningCodeChanges,
   summarizeDiversionChanges,
   summarizeUpdateChanges,
-} from "./_lib/opslag/wijzigingen.js";
+} from "./opslag/wijzigingen.js";
 export {
   isValidHHMM,
   getServiceSegments,
   buildPlanningFromMatrix,
   bouwPlanningUitMatrix,
-} from "./_lib/opslag/planningOpbouw.js";
+} from "./opslag/planningOpbouw.js";
 export {
   EmailInGebruikError,
   OOK_TECHNIEKER_MIGRATIE,
@@ -88,7 +88,7 @@ export {
   updateUserSessionMeta,
   updateUserDashboardVoorkeuren,
   bumpActiveSessions,
-} from "./_lib/opslag/gebruikers.js";
+} from "./opslag/gebruikers.js";
 export {
   DIVERSIONS_BUCKET,
   diversionBijlagePad,
@@ -114,7 +114,7 @@ export {
   logregelsVanEntiteiten,
   getDiversionsData,
   saveDiversionsData,
-} from "./_lib/opslag/omleidingen.js";
+} from "./opslag/omleidingen.js";
 export {
   getServicesData,
   saveServicesData,
@@ -134,19 +134,19 @@ export {
   type VersieKeuze,
   getCoverageExpectations,
   saveCoverageExpectations,
-} from "./_lib/opslag/diensten.js";
+} from "./opslag/diensten.js";
 export {
   DAGTYPE_KALENDER_MIGRATIE,
   getDagtypeKalender,
   schrijfDagtypeKalender,
   type DagtypeKalenderRij,
-} from "./_lib/opslag/dagtypeKalender.js";
+} from "./opslag/dagtypeKalender.js";
 export {
   storeBackup,
   type RestorableCollections,
   checkBackupIntegrity,
   restoreFromBackup,
-} from "./_lib/opslag/backups.js";
+} from "./opslag/backups.js";
 export {
   DOCUMENTS_BUCKET,
   ondertekenDocumenten,
@@ -169,7 +169,7 @@ export {
   verwijderRitbladBestand,
   ondertekenRitblad,
   verwijderRitbladVanVersie,
-} from "./_lib/opslag/documenten.js";
+} from "./opslag/documenten.js";
 export {
   type ClientErrorEntry,
   logClientError,
@@ -179,14 +179,14 @@ export {
   getClientErrors,
   getClientErrorsSince,
   pruneOldRecords,
-} from "./_lib/opslag/fouten.js";
+} from "./opslag/fouten.js";
 export {
   bewaarMeldingen,
   getMeldingen,
   telOngelezenMeldingen,
   markeerMeldingenGelezen,
   verwijderMeldingen,
-} from "./_lib/opslag/meldingen.js";
+} from "./opslag/meldingen.js";
 export {
   getUpdatesData,
   UPDATE_BIJLAGEN_BUCKET,
@@ -201,7 +201,7 @@ export {
   markUpdatesRead,
   getUpdateReadIdsForUser,
   getUpdateReadCounts,
-} from "./_lib/opslag/updates.js";
+} from "./opslag/updates.js";
 export {
   getDevice,
   registerDevice,
@@ -212,7 +212,7 @@ export {
   renameDevice,
   deleteDevice,
   revokeAllDevices,
-} from "./_lib/opslag/toestellen.js";
+} from "./opslag/toestellen.js";
 export {
   getSwapsData,
   getPlanningMatrixGrenzen,
@@ -233,12 +233,12 @@ export {
   applySwapToPlanning,
   revertSwapFromPlanning,
   swapToestandInPlanning,
-} from "./_lib/opslag/ruilen.js";
+} from "./opslag/ruilen.js";
 export {
   getLeaveData,
   saveLeaveData,
   schrijfLeaveAlsStatus,
-} from "./_lib/opslag/verlof.js";
+} from "./opslag/verlof.js";
 export {
   type MailLogRegel,
   logMail,
@@ -250,6 +250,6 @@ export {
   getCronHeartbeats,
   getAppSetting,
   setAppSetting,
-} from "./_lib/opslag/systeem.js";
+} from "./opslag/systeem.js";
 export type { DeviceStatus } from "./types.js";
 export type { UserDevice } from "./types.js";

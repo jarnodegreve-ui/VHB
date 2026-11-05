@@ -469,7 +469,7 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
   });
 
   it('bewaart de reden bij een afwijzing via PATCH: op het record, in het log, in de mail en de push', async () => {
-    const { sendLeaveDecisionEmail } = await import('../../api/email.js');
+    const { sendLeaveDecisionEmail } = await import('../../api/_lib/email.js');
     vi.mocked(sendLeaveDecisionEmail).mockClear();
     const res = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending', reden: "  Die week zijn er al te veel collega's vrij.  " } });
     expect(res.status).toBe(200);
@@ -709,7 +709,7 @@ describe('handmatige planning-save: tijden (POST /api/planning)', () => {
     bewaard = null;
     // De mock kent geen planning-tabel; hier vangen we alleen op wat de route
     // zou wegschrijven.
-    const storage = await import('../../api/storage.js');
+    const storage = await import('../../api/_lib/storage.js');
     spionnen.push(vi.spyOn(storage, 'savePlanningData').mockImplementation(async (data: any) => { bewaard = data; }));
   });
   afterEach(() => { for (const spion of spionnen.splice(0)) spion.mockRestore(); });
@@ -748,7 +748,7 @@ describe('handmatige planning-save: tijden (POST /api/planning)', () => {
   });
 
   it('de lege lijst blijft de wis-actie van de admin, zonder tijdcontrole', async () => {
-    const storage = await import('../../api/storage.js');
+    const storage = await import('../../api/_lib/storage.js');
     const wis = vi.spyOn(storage, 'clearPlanningData').mockImplementation(async () => undefined as never);
     spionnen.push(wis);
     const res = await api('POST', '/api/planning', { token: 'tok-admin', body: [] });
@@ -2161,7 +2161,7 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
     });
 
     describe('de lezing van de planningscodes of het dienstoverzicht faalt', () => {
-      // De echte lezers gooien bij een databasefout (api/storage.ts:
+      // De echte lezers gooien bij een databasefout (api/_lib/storage.ts:
       // getPlanningCodesData en paginatedFetch). Dat wordt een 500, geen
       // "alles is onbekend": er wordt niets geweigerd met een misleidende
       // melding over een onbekende code, en er wordt niets geschreven.

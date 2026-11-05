@@ -1,8 +1,8 @@
-import { normalizePlanningMatrixDate, sortedNameToken, veilig } from "../helpers.js";
-import type { PlanningMatrixRow } from "../types.js";
+import { normalizePlanningMatrixDate, sortedNameToken, veilig } from "./helpers.js";
+import type { PlanningMatrixRow } from "./types.js";
 
 // --- Excel-werk van de planningsmatrix, met de xlsx-bibliotheek LUI geladen ---
-// (ronde 3, 19-09) Deze functies stonden in api/helpers.ts, dat in het
+// (ronde 3, 19-09) Deze functies stonden in api/_lib/helpers.ts, dat in het
 // auth-pad zit: `import * as XLSX from "xlsx"` bovenaan kostte daardoor bij
 // ELKE koude start het inlezen van ±1 MB SheetJS, ook voor een request dat
 // nooit een Excel aanraakt. De bibliotheek komt nu pas binnen wanneer een

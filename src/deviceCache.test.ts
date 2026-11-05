@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../api/storage.js', () => ({ getDevice: vi.fn(), listRevokedSessionIds: vi.fn(async () => []), getUsersData: vi.fn(async () => []) }));
+vi.mock('../api/_lib/storage.js', () => ({ getDevice: vi.fn(), listRevokedSessionIds: vi.fn(async () => []), getUsersData: vi.fn(async () => []) }));
 
 const { makeDeviceCache } = await import('../api/_lib/deviceCache.js');
 

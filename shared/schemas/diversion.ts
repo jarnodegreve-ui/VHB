@@ -2,7 +2,7 @@ import { z } from './zod.js';
 import { isoDatum, optioneel, verplichteTekst } from './basis.js';
 
 /**
- * Omleiding — spiegel van `DiversionRecord` (api/types.ts) en `Diversion`
+ * Omleiding — spiegel van `DiversionRecord` (api/_lib/types.ts) en `Diversion`
  * (src/types.ts). Einddatum is optioneel (leeg = tot hij verwijderd wordt)
  * maar mag niet vóór de startdatum liggen.
  */

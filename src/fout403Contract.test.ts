@@ -46,7 +46,7 @@ describe('403-antwoorden zijn client-safe', () => {
   });
 
   it('de constanten en het poortverdict die als 403 terugkomen zijn vaste teksten', () => {
-    const middleware = bronnen.find((b) => b.p.endsWith(join('api', 'middleware.ts')))!.tekst;
+    const middleware = bronnen.find((b) => b.p.endsWith(join('api', '_lib', 'middleware.ts')))!.tekst;
     expect(middleware).toMatch(/SESSIE_INGETROKKEN\s*=\s*\{\s*error:\s*"[^"$`]+"/);
     expect(middleware).toMatch(/verdict\.body \?\? \{ error: "[^"$`]+"/);
   });

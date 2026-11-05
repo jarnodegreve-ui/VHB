@@ -13,7 +13,7 @@
  *   begin tot zijn laatste einde (`dagVenster`).
  * - De regel kijkt naar de dag ervoor en de dag erna. Ligt er een vrije dag
  *   tussen, dan is de rust per definitie ruim genoeg en zegt de regel niets.
- * - De rekenkern is dezelfde als die van het herverdeeladvies (api/advisor.ts
+ * - De rekenkern is dezelfde als die van het herverdeeladvies (api/_lib/advisor.ts
  *   exporteert ze door), zodat beide nooit een andere uitkomst geven.
  */
 

@@ -1,5 +1,5 @@
-import { db } from "../db.js";
-import { paginatedFetch } from "../storage.js";
+import { db } from "./db.js";
+import { paginatedFetch } from "./storage.js";
 import type { Bevinding, Segment } from "../../shared/dienst.js";
 import type { ImportETWaarschuwing } from "../../shared/dienst/importET.js";
 

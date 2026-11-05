@@ -5,7 +5,7 @@
  * opslag is een constraint of een cascade niet te bewijzen; hier wel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDienstregeling, deleteDienstregeling, getRitbladRijen, saveRitbladRij, deleteRitbladRij } from '../api/storage';
+import { createDienstregeling, deleteDienstregeling, getRitbladRijen, saveRitbladRij, deleteRitbladRij } from '../api/_lib/storage';
 import { leegDatabase } from './hulp';
 
 beforeEach(leegDatabase);

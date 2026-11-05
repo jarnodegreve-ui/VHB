@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { brusselsDay, toDatabaseService, toPublicService } from "../../helpers.js";
-import type { ServiceRecord } from "../../types.js";
+import { brusselsDay, toDatabaseService, toPublicService } from "../helpers.js";
+import type { ServiceRecord } from "../types.js";
 import { hoortBijVersie, oudsteVersie, versieVoorDatum } from "../../../shared/dienstregeling.js";
 import { kalenderUitDekking, variantenSchoon, type DagtypeKalender } from "../../../shared/dagtype.js";
 import { perDagVan } from "../../../shared/dagtypeKalender.js";

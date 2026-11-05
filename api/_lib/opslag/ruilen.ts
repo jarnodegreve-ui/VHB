@@ -1,5 +1,5 @@
-import type { ShiftRecord, SwapRecord } from "../../types.js";
-import { toDatabaseSwap, toPublicSwap } from "../../helpers.js";
+import type { ShiftRecord, SwapRecord } from "../types.js";
+import { toDatabaseSwap, toPublicSwap } from "../helpers.js";
 import { IN_FILTER_MAX, inStukken, verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 import { OPEN_RUIL_STATUSSEN } from "../../../shared/ruilVenster.js";

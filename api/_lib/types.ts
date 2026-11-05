@@ -1,8 +1,8 @@
 import type express from "express";
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
-import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
-import type { MeldingSoort } from "../shared/schemas/meldingen.js";
-import type { DienstVariant } from "../shared/dagtype.js";
+import type { DashboardVoorkeuren } from "../../shared/schemas/dashboardVoorkeuren.js";
+import type { MeldingSoort } from "../../shared/schemas/meldingen.js";
+import type { DienstVariant } from "../../shared/dagtype.js";
 
 export type Role = "chauffeur" | "technieker" | "planner" | "admin";
 
@@ -221,7 +221,7 @@ export interface DiversionRecord {
   /**
    * Kolom "pdfUrl" (quoted camelCase): vóór 25-09 de marker "er hangt één PDF
    * op `<id>.pdf`". Zolang een rij geen `bijlagen` heeft, telt die PDF als
-   * slot 1 (zie omleidingBijlagen in api/helpers.ts); de eerste upload of
+   * slot 1 (zie omleidingBijlagen in api/_lib/helpers.ts); de eerste upload of
    * verwijdering op die omleiding zet de marker op null.
    */
   pdfUrl?: string;

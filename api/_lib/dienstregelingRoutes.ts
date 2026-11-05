@@ -1,15 +1,15 @@
 import type express from "express";
-import { authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import type { AuthenticatedRequest } from "../types.js";
-import { DAG_DMJ, brusselsDay } from "../helpers.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
+import type { AuthenticatedRequest } from "./types.js";
+import { DAG_DMJ, brusselsDay } from "./helpers.js";
 import { dienstregelingBodySchema, dienstregelingPatchSchema } from "../../shared/schemas/dienstregeling.js";
 import { dagVoor, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum } from "../../shared/dienstregeling.js";
 import { valideerRecord } from "./valideer.js";
 import {
   DIENSTREGELING_MIGRATIE, MigratieOntbreektError, createDienstregeling, deleteDienstregeling, getDienstregelingen, getServicesPerVersie, getUsersData, logActivity, updateDienstregeling, verwijderRitbladVanVersie,
-} from "../storage.js";
-import { sendPushToUsers } from "../push.js";
+} from "./storage.js";
+import { sendPushToUsers } from "./push.js";
 import { viewUrl } from "./collectie.js";
 import { heropbouwNaDienstoverzicht, planningUitkomstVoorAntwoord } from "./planningHeropbouw.js";
 

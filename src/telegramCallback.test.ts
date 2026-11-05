@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isBeslisCallback } from '../api/telegram';
+import { isBeslisCallback } from '../api/_lib/telegram';
 
 // Security-audit 07-09-2026, bevinding 9: callback_data `lv|<id>|<besluit>`
 // werd met split('|') gelezen en nam alleen de eerste velden; een id met een

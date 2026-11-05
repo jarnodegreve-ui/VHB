@@ -8,9 +8,9 @@ import type { AuthenticatedRequest } from "./types.js";
 import {
   bouwDagen, bouwMaanden, bouwPuntMatrix, bouwPunten, bouwTotalen, dagVan, dagpiekenUitSnapshots, dagpiekenUitTabel,
   maandGrenzenVan, sessieDetail, voegPiekenSamen, type DagPiek, type SessieDetail,
-} from "./_lib/ocpiOverzicht.js";
-import { bouwHistoriekXlsx, bouwPeriodeXlsx } from "./_lib/ocpiExport.js";
-import { busVoorLaadpunt } from "../shared/laadplein.js";
+} from "./ocpiOverzicht.js";
+import { bouwHistoriekXlsx, bouwPeriodeXlsx } from "./ocpiExport.js";
+import { busVoorLaadpunt } from "../../shared/laadplein.js";
 
 /**
  * OCPI 2.2.1 — eMSP/receiver-kant, read-only monitoring van ChargEye (CPO).

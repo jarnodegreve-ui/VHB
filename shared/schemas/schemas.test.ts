@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import type { DiversionRecord, IncomingUser } from '../../api/types';
+import type { DiversionRecord, IncomingUser } from '../../api/_lib/types';
 import type { Diversion, Update, User } from '../../src/types';
 import {
   diversionBodySchema,
@@ -30,7 +30,7 @@ import {
 
 /**
  * Gedeelde API-contracten: (1) de afgeleide types zijn veld-voor-veld gelijk
- * aan api/types.ts én src/types.ts — drift faalt op `tsc` (en dus in CI);
+ * aan api/_lib/types.ts én src/types.ts — drift faalt op `tsc` (en dus in CI);
  * (2) geldige en ongeldige voorbeelden met de Nederlandse teksten per veld.
  */
 
@@ -42,7 +42,7 @@ const schemaNaarClientUser = (u: Required<GevalideerdeUser>): Required<UserDraft
 const clientNaarSchemaUser = (u: Required<UserDraft>): Required<GevalideerdeUser> => u;
 
 // "pdfUrl" is de oude marker van vóór 25-09 en blijft server-intern
-// (omleidingBijlagen in api/helpers.ts); ze hoort niet in het contract.
+// (omleidingBijlagen in api/_lib/helpers.ts); ze hoort niet in het contract.
 const schemaNaarApiDiversion = (d: Required<GevalideerdeDiversion>): Required<Omit<DiversionRecord, 'pdfUrl'>> => d;
 const apiNaarSchemaDiversion = (d: Required<Omit<DiversionRecord, 'pdfUrl'>>): Required<GevalideerdeDiversion> => d;
 const schemaNaarClientDiversion = (d: Required<GevalideerdeDiversion>): Required<Diversion> => d;

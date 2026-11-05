@@ -1,5 +1,5 @@
-import { getAppSetting, getDagtypeKalender } from "../storage.js";
-import { isMissingTableError } from "../deviceGate.js";
+import { getAppSetting, getDagtypeKalender } from "./storage.js";
+import { isMissingTableError } from "./deviceGate.js";
 import { VERLOF_LIMIETEN_KEY, parseVerlofLimieten, type VerlofLimieten } from "../../shared/schemas/verlofLimieten.js";
 
 /**
