@@ -89,11 +89,18 @@ export function useAppData({
   // een uitgestelde collectie naar voren halen: vóór de 2FA-poort zou de
   // server ze weigeren).
   const uitgesteldBezigRef = useRef(new Map<Uitgesteld, Promise<void>>());
+  // Het token in de beurt dient alleen om in loadAppData dezelfde beurt te
+  // herkennen; een latere herkansing (Foutkaart, schermwissel) vertrekt
+  // zonder expliciet token, zodat de fetcher de live sessie neemt. Met het
+  // token van het inlogmoment liep "Opnieuw proberen" uren later eerst tegen
+  // een 401 (05-11).
   const laadbeurtRef = useRef<{ rol: User['role']; userId: string; accessToken: string } | null>(null);
 
   /** Eén uitgestelde collectie ophalen; een tweede vraag terwijl ze loopt
-   *  krijgt dezelfde belofte (boot-start en schermwissel botsen zo niet). */
-  const haalCollectie = (sleutel: Uitgesteld, accessToken: string, userId: string): Promise<void> => {
+   *  krijgt dezelfde belofte (boot-start en schermwissel botsen zo niet).
+   *  `accessToken` alleen voor de laadbeurt zelf (vlak na het inloggen is de
+   *  sessie-state nog niet bijgewerkt). */
+  const haalCollectie = (sleutel: Uitgesteld, userId: string, accessToken?: string): Promise<void> => {
     switch (sleutel) {
       case 'services': return planning.fetchServices(accessToken);
       case 'planningCodes': return planning.fetchPlanningCodes(accessToken);
@@ -107,13 +114,12 @@ export function useAppData({
       case 'meldingen': return meldingenData.fetchMeldingen(accessToken);
     }
   };
-  const laadUitgesteld = (sleutel: Uitgesteld): Promise<void> => {
+  const laadUitgesteld = (sleutel: Uitgesteld, accessToken?: string): Promise<void> => {
     const beurt = laadbeurtRef.current;
     if (!beurt) return Promise.resolve();
     const bezig = uitgesteldBezigRef.current.get(sleutel);
     if (bezig) return bezig;
-    const { accessToken, userId } = beurt;
-    const belofte = haalCollectie(sleutel, accessToken, userId).finally(() => {
+    const belofte = haalCollectie(sleutel, beurt.userId, accessToken).finally(() => {
       uitgesteldBezigRef.current.delete(sleutel);
       // Intussen uitgelogd: het late antwoord mag geen data of vlag van de
       // vorige gebruiker achterlaten voor wie daarna inlogt.
@@ -145,7 +151,7 @@ export function useAppData({
     const zonderEigenLader = (k: Uitgesteld) => !(k === 'activityLog' && currentViewRef.current === 'activiteit');
     // Nu al nodig voor het open scherm: naast de poort starten.
     const nuNodig = (UITGESTELD_PER_VIEW[currentViewRef.current] ?? []).filter((k) => uitgesteld.includes(k));
-    const vroeg = nuNodig.map((k) => laadUitgesteld(k));
+    const vroeg = nuNodig.map((k) => laadUitgesteld(k, accessToken));
     let laat: Promise<void>[] = [];
     try {
       // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
@@ -187,7 +193,7 @@ export function useAppData({
       // fouten (laadfout-toast waar dat al zo was) en zetten hun vlag altijd.
       // Niet wanneer intussen is uitgelogd (resetAll wist de laadbeurt).
       if (laadbeurtRef.current?.accessToken === accessToken) {
-        laat = uitgesteld.filter(zonderEigenLader).map((k) => laadUitgesteld(k));
+        laat = uitgesteld.filter(zonderEigenLader).map((k) => laadUitgesteld(k, accessToken));
       }
     }
     if (opts?.wachtOpAlles) await Promise.allSettled([...vroeg, ...laat]);
