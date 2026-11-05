@@ -200,8 +200,13 @@ export const beoordeelKandidaat = (invoer: {
   datum: string;
   keren: number;
 }): KandidaatAdvies => {
-  const rustVoor = invoer.dienstVenster ? rustTovVorigeDag(invoer.vorigeDag, invoer.dienstVenster.start) : null;
-  const rustNa = invoer.dienstVenster ? rustTovVolgendeDag(invoer.volgendeDag, invoer.dienstVenster.eind) : null;
+  // vorigeDag en volgendeDag zijn de dag vóór en ná `datum` (coverageRoutes
+  // bouwt ze met addDagenIso), dus de rust kan in echte tijd gerekend worden,
+  // ook over een uurwissel heen.
+  const vorige = addDagenIso(invoer.datum, -1);
+  const volgende = addDagenIso(invoer.datum, 1);
+  const rustVoor = invoer.dienstVenster ? rustTovVorigeDag(invoer.vorigeDag, invoer.dienstVenster.start, { eerder: vorige, later: invoer.datum }) : null;
+  const rustNa = invoer.dienstVenster ? rustTovVolgendeDag(invoer.volgendeDag, invoer.dienstVenster.eind, { eerder: invoer.datum, later: volgende }) : null;
   const dagen = dagenNaElkaarMet(invoer.gewerkteDagen, invoer.datum);
   const grens = MIN_RUST_UREN * 60;
   const redenen: string[] = [];

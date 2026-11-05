@@ -27,8 +27,8 @@ export const TYPPRE_PER_TYPE: Record<SegmentType, number> = {
   RIT: 20101, LED: 20201, AVO: 20301, ANA: 20401, ATU: 20112, AFL: 20112, ANW: 20112,
   STA: 30300, ONS: 30300, ONE: 30201, ONV: 30202,
 };
-/** Stationnement gesplitst: eerste 15 min (100 % arbeidstijd), minuten 16-45 (100 % niet-arbeidstijd), rest (50 %). */
-export const TYPPRE_STAT_100_AT = 30300;
+/** Stationnement gesplitst: eerste 15 min (100 % arbeidstijd, dat is de 30300
+ *  uit TYPPRE_PER_TYPE), minuten 16-45 (100 % niet-arbeidstijd), rest (50 %). */
 export const TYPPRE_STAT_100_NAT = 30301;
 export const TYPPRE_STAT_50_NAT = 30302;
 

@@ -39,7 +39,9 @@ export const splitsStationnement = (duur: number): { at: number; nat100: number;
 });
 
 export function looncomponentenVanSegmenten(segments: Segment[]): LoonComponent[] {
-  const uit: LoonComponent[] = [];
+  // De startminuut reist naast de rij mee voor de sortering: de HD-tekst is
+  // na middernacht al omgeslagen ("00:18" voor 24:18) en zou vóór "23:04" komen.
+  const uit: Array<{ startMin: number; rij: LoonComponent }> = [];
   for (const s of segments) {
     const stat = s.type === 'STA' || s.type === 'ONS';
     const { nat100, nat50 } = stat ? splitsStationnement(s.duurMin) : { nat100: 0, nat50: 0 };
@@ -49,11 +51,16 @@ export function looncomponentenVanSegmenten(segments: Segment[]): LoonComponent[
       activiteit: 'LIJN' as const, nbplace: 0 as const, alpha1: 0 as const, decimal1: (s.type === 'ONE' ? 1 : 0) as 0 | 1, alpha2: ' ' as const, decimal2: 0 as const,
       typeinfo: 'PRT' as const, service: s.serviceNumber.slice(-5), jd: naMiddernacht(s.startMin), ja: naMiddernacht(einde1),
     };
-    uit.push({ ...basis, hd: formatEasypayTijd(s.startMin), ha: formatEasypayTijd(einde1), duree: stat && s.duurMin > 15 ? '00:15' : formatHHMM(s.duurMin), typprest: TYPPRE_PER_TYPE[s.type] });
-    if (nat100 > 0) uit.push({ ...basis, hd: formatEasypayTijd(einde1), ha: formatEasypayTijd(einde2), duree: `00:${String(nat100).padStart(2, '0')}`, typprest: TYPPRE_STAT_100_NAT });
-    if (nat50 > 0) uit.push({ ...basis, hd: formatEasypayTijd(einde2), ha: formatEasypayTijd(s.eindeMin), duree: formatHHMM(nat50), typprest: TYPPRE_STAT_50_NAT });
+    uit.push({ startMin: s.startMin, rij: { ...basis, hd: formatEasypayTijd(s.startMin), ha: formatEasypayTijd(einde1), duree: stat && s.duurMin > 15 ? '00:15' : formatHHMM(s.duurMin), typprest: TYPPRE_PER_TYPE[s.type] } });
+    if (nat100 > 0) uit.push({ startMin: einde1, rij: { ...basis, hd: formatEasypayTijd(einde1), ha: formatEasypayTijd(einde2), duree: `00:${String(nat100).padStart(2, '0')}`, typprest: TYPPRE_STAT_100_NAT } });
+    if (nat50 > 0) uit.push({ startMin: einde2, rij: { ...basis, hd: formatEasypayTijd(einde2), ha: formatEasypayTijd(s.eindeMin), duree: formatHHMM(nat50), typprest: TYPPRE_STAT_50_NAT } });
   }
-  return uit.sort((a, b) => a.service.localeCompare(b.service, 'nl', { numeric: true }) || a.hd.localeCompare(b.hd));
+  // Per dienst in de volgorde van de klok van de dienstdag (minuten), zoals de
+  // Access-tabel ze per dienst ook heeft (4110: 23:49, 00:18, 01:17, 01:19).
+  // Sorteren op de HD-tekst zette "00:18" vóór "23:04" (controle-ronde 04-11).
+  return uit
+    .sort((a, b) => a.rij.service.localeCompare(b.rij.service, 'nl', { numeric: true }) || a.startMin - b.startMin)
+    .map((x) => x.rij);
 }
 
 /** CSV zoals Access hem exporteert (qry-LoonDienstFormEasypayXport). */

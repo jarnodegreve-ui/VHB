@@ -595,6 +595,16 @@ if (!kaartMatch) {
   // verlof-kalender in de staf-set: lokaal staf 151 → 153. De chauffeur-set
   // blijft 83 → 84 (budget 84, ongewijzigd). Budget = de meting plus ±1 kB.
   WARMUP_BUDGET_KB.staf = 154;
+  // 05-11 (controle-ronde 04-11, zes PR's samen): chauffeur 84 → 85 en staf
+  // 154 → 155,5. Elke PR bleef apart binnen het budget, de combinatie niet:
+  // lokaal chauffeur 83,87 en staf 154,01 (de nieuwe src/lib/verlofBezetting.ts
+  // en planningTelefoon.ts in verlof-kalender en ruil-verzoeken, de
+  // uurwissel-helper in de ruilregel, de Foutkaart in Dienstruil). Geen nieuwe
+  // dependency; de warmup start pas na LCP + 2 s. Budget = de meting plus
+  // ±1 kB; de runner meet tot ±0,5 kB zwaarder. De regel hieronder drukt sinds
+  // vandaag twee decimalen, zodat "84 (budget 84)" niet meer kan misleiden.
+  WARMUP_BUDGET_KB.chauffeur = 85;
+  WARMUP_BUDGET_KB.staf = 155.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
@@ -641,8 +651,8 @@ if (!kaartMatch) {
       files.forEach((f) => set.add(f.replace(/^.*\/assets\//, '')));
     }
     const kb = [...set].reduce((s, f) => s + (bestanden.includes(f) ? gzipKb(f) : 0), 0);
-    console.log(`  warmup ${rol.padEnd(9)} ${Math.round(kb).toString().padStart(4)} kB  (${set.size} bestanden, budget ${WARMUP_BUDGET_KB[rol]})`);
-    if (kb > WARMUP_BUDGET_KB[rol]) fouten.push(`Warmup-set ${rol} is ${Math.round(kb)} kB gzip, budget ${WARMUP_BUDGET_KB[rol]} kB. Nieuwe zware import in een van de warmup-views (${views.join(', ')})?`);
+    console.log(`  warmup ${rol.padEnd(9)} ${kb.toFixed(2).padStart(7)} kB  (${set.size} bestanden, budget ${WARMUP_BUDGET_KB[rol]})`);
+    if (kb > WARMUP_BUDGET_KB[rol]) fouten.push(`Warmup-set ${rol} is ${kb.toFixed(2)} kB gzip, budget ${WARMUP_BUDGET_KB[rol]} kB. Nieuwe zware import in een van de warmup-views (${views.join(', ')})?`);
   }
 }
 

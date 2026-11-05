@@ -69,6 +69,15 @@ describe('dienstopbouw (golden, dienstregeling 2026-09)', () => {
     expect(new Set(mijn.map((r) => r.split('|')[0])).size).toBe(55);
   });
 
+  it('binnen een dienst staan de rijen op de klok van de dienstdag, zoals in de Access-tabel: 4110 eindigt met 23:49, 00:18, 01:17, 01:19', () => {
+    // De HD-tekst is na middernacht al omgeslagen; sorteren op die tekst zette
+    // "00:18" vóór "16:32" (controle-ronde 04-11, punt 4).
+    const mijn = looncomponentenVanSegmenten(segments.filter((s) => s.serviceNumber === '4110')).map((r) => r.hd);
+    const access = verwacht.filter((r) => r.Service === '4110').map((r) => r.HD);
+    expect(mijn).toEqual(access);
+    expect(mijn.slice(-4)).toEqual(['23:49', '00:18', '01:17', '01:19']);
+  });
+
   it('controles: de actuele dienstregeling heeft geen gaten of overlap, wel de bekende duurafwijkingen', () => {
     const b = controleerSegmenten(segments);
     expect(b.filter((x) => x.soort === 'gat' || x.soort === 'overlap' || x.soort === 'einde_voor_start')).toEqual([]);
@@ -99,11 +108,31 @@ describe('dienstopbouw, rekenregels', () => {
     expect(splitsStationnement(78)).toEqual({ at: 15, nat100: 30, nat50: 33 });
   });
 
+  it('looncomponenten over middernacht: 23:50 vóór 00:05 (minuten, niet de Easypay-tekst), dienstnummers natuurlijk gesorteerd', () => {
+    const rijen = looncomponentenVanSegmenten([
+      seg({ serviceNumber: '2607', volgorde: 2, type: 'RIT', startMin: 24 * 60 + 5, eindeMin: 24 * 60 + 30 }),
+      seg({ serviceNumber: '2607', volgorde: 1, type: 'RIT', startMin: 23 * 60 + 50, eindeMin: 24 * 60 + 5 }),
+      seg({ serviceNumber: '2510', volgorde: 1, type: 'RIT', startMin: 6 * 60, eindeMin: 7 * 60 }),
+    ]);
+    expect(rijen.map((r) => `${r.service} ${r.hd}-${r.ha} ${r.jd}${r.ja}`)).toEqual(['2510 06:00-07:00 00', '2607 23:50-00:05 01', '2607 00:05-00:30 11']);
+  });
+
   it('nachtminuten: vóór 06:00 en vanaf 20:00, klok loopt door', () => {
     expect(nachtMinuten(5 * 60, 7 * 60)).toBe(60);
     expect(nachtMinuten(19 * 60, 21 * 60)).toBe(60);
     expect(nachtMinuten(22 * 60, 25 * 60)).toBe(180);
     expect(nachtMinuten(8 * 60, 12 * 60)).toBe(0);
+  });
+
+  it('nachtminuten na middernacht: 06:00 de volgende dag sluit de nacht ook dan af (controle-ronde 04-11, punt 38)', () => {
+    expect(nachtMinuten(22 * 60, 23 * 60)).toBe(60);
+    expect(nachtMinuten(23 * 60 + 30, 24 * 60 + 30)).toBe(60);
+    expect(nachtMinuten(5 * 60 + 30, 6 * 60 + 30)).toBe(30);
+    expect(nachtMinuten(29 * 60 + 30, 30 * 60 + 30)).toBe(30); // 05:30-06:30 de dag erna, niet 60
+    expect(nachtMinuten(30 * 60, 31 * 60)).toBe(0);
+    expect(nachtMinuten(10 * 60, 11 * 60)).toBe(0);
+    // Een ritdeel over het hele venster heen: 19:00-07:00 = 10 uur nacht.
+    expect(nachtMinuten(19 * 60, 31 * 60)).toBe(600);
   });
 
   it('loonparameters: rijtijd, stationnement, onderbrekingen, administratie, nacht en tiktijden per dienstdeel', () => {
