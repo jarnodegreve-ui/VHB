@@ -8,7 +8,7 @@ import { ACCOUNT_STATUS } from '../../../shared/status';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
-import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDateTimeHuman, formatDatumDMJ } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { CredentialsModal } from '../../components/CredentialsModal';
@@ -685,7 +685,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
           const dubbeleNamen = [...perToken.values()].filter((namen) => namen.length > 1).map((namen) => namen[0]);
           // De uitleg over bestaande accounts stond vroeger in een (i) naast
           // de importknop; nu de import in het "…"-menu zit, hoort ze hier.
-          const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die op naam worden bijgewerkt (hun wachtwoord blijft ongemoeid). Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
+          const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die op naam worden bijgewerkt (hun wachtwoord blijft ongemoeid). Wil je doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wil je deze toevoegen?`;
           setPendingImportUsers(newUsersList);
           setPendingImportMessage(dubbeleNamen.length > 0 ? `${basis} Let op: na deze import bestaan er meerdere accounts met dezelfde naam (${dubbeleNamen.join(', ')}), die namen zijn dan niet aan de planning te koppelen.` : basis);
         }
@@ -911,7 +911,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                                 tone="amber"
                                 icon={<CalendarOff size={12} />}
                                 title={laatsteInPlanning(u)
-                                  ? `Laatste dag in de planning: ${laatsteInPlanning(u)}, daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                                  ? `Laatste dag in de planning: ${formatDatumDMJ(laatsteInPlanning(u))}, daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
                                   : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor, nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
                               >
                                 Niet in planning

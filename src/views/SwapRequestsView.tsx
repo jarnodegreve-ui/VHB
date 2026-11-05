@@ -26,7 +26,7 @@ import { RuilBekekenBaken } from '../components/RuilBekekenBaken';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
 import { ruilOverzichtQuery, ruilPeriodeFout, standaardRuilPeriode, type RuilPeriode } from '../lib/ruilOverzicht';
-import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
+import { formatDateHuman, formatDatumDMJ, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
@@ -1396,7 +1396,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {freeForDate && freeCount === 0 && (
                           <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)}, je kan wel met een collega die rijdt 1-op-1 ruilen.</p>
                         )}
-                        <p className="text-xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven; met een collega die die dag rijdt, ruil je 1-op-1.</p>
+                        <p className="text-xs font-medium text-slate-500">{citaat('Vrij')} = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven; met een collega die die dag rijdt, ruil je 1-op-1.</p>
                       </>
                     )}
                   </>
@@ -1684,7 +1684,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         onClose={() => setHistorySwap(null)}
         entityType="swap"
         entityId={historySwap?.id ?? ''}
-        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'}, ${shifts.find((s) => s.id === historySwap.shiftId)?.date ?? ''}` : undefined}
+        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'}, ${formatDatumDMJ(shifts.find((s) => s.id === historySwap.shiftId)?.date)}` : undefined}
       />
     </PageShell>
   );

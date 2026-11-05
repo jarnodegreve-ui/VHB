@@ -24,7 +24,7 @@ import { formatDuration } from '../lib/shiftTime';
 import { brusselseMinuten, dienstGereden } from '../../shared/dienstGereden';
 import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
-import { formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDateHuman, formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
@@ -348,6 +348,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
                     variant="ghost"
                     size="sm"
                     className="-ml-3"
+                    aria-expanded={showPast}
                     onClick={() => setShowPast((v) => !v)}
                     icon={<ChevronDown size={14} className={uitklapChevron(showPast)} />}
                   >
@@ -517,7 +518,7 @@ function MonthCalendar({
                 key={day}
                 type="button"
                 onClick={() => setSelected(iso)}
-                aria-label={`${iso}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}`}
+                aria-label={`${formatDateHuman(iso)}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}`}
                 title={dayGroups.length > 0 ? `${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : undefined}
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',

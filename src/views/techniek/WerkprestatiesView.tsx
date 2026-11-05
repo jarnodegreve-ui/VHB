@@ -414,7 +414,7 @@ function KruisTabel({ titel, kolom, rijen }: { titel: string; kolom: string; rij
               <li key={r.label} className="px-4 py-3">
                 <div className="flex items-baseline gap-3">
                   <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{r.label}</p>
-                  <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-slate-800">{urenTekst(r.uren)} u</span>
+                  <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-slate-800">{urenMetEenheid(r.uren)}</span>
                   <span className="w-10 shrink-0 whitespace-nowrap text-right text-xs text-slate-500">{r.aantal}×</span>
                 </div>
                 <dl className="mt-1.5 grid grid-cols-4 gap-2 text-xs">
@@ -440,7 +440,7 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {jaren.map((j) => <FilterChip key={j} active={jaar === j} onClick={() => onJaar(j)}>{j}</FilterChip>)}
-        {rapport && <span className="ml-auto text-xs font-medium text-slate-500">{urenTekst(rapport.totaalUren)} u in {rapport.aantal} prestaties</span>}
+        {rapport && <span className="ml-auto text-xs font-medium text-slate-500">{urenMetEenheid(rapport.totaalUren)} in {rapport.aantal} prestaties</span>}
       </div>
       {laden || !rapport ? <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : (
         <div className={cn('grid gap-4', 'lg:grid-cols-2')}>
