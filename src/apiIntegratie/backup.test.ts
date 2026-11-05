@@ -181,6 +181,9 @@ describe('back-up export', () => {
     const res = await api('GET', '/api/cron/backup', { headers: { Authorization: 'Bearer test-cron-secret' } });
     expect(res.status).toBe(200);
     expect(mem.cronVolgorde[0]).toBe('heartbeat: backup');
+    // Ook vóór de retentie (05-11): die praat met de database en mag bij een
+    // hapering evenmin als een mislukte back-up lezen.
+    expect(mem.cronVolgorde.indexOf('heartbeat: backup')).toBeLessThan(mem.cronVolgorde.indexOf('opruiming: retentie'));
     expect(mem.cronVolgorde.indexOf('heartbeat: backup')).toBeLessThan(mem.cronVolgorde.indexOf('opruiming: diversions'));
     // Niets opgeruimd en niets overgeslagen: geen aparte regel over de bijlagen.
     expect(mem.cronVolgorde).not.toContain('heartbeat: bijlagen-opruim');
@@ -198,7 +201,7 @@ describe('back-up export', () => {
       expect(res.json.success).toBe(true);
       expect(mem.storedBackups).toHaveLength(1);
       expect(res.json.bijlagen).toEqual({ omleidingen: 0, updates: 0, overgeslagen: ['omleidingen: geen tijd meer', 'updates: geen tijd meer'] });
-      expect(mem.cronVolgorde).toEqual(['heartbeat: backup', 'opruiming: diversions', 'heartbeat: bijlagen-opruim']);
+      expect(mem.cronVolgorde).toEqual(['heartbeat: backup', 'opruiming: retentie', 'opruiming: diversions', 'heartbeat: bijlagen-opruim']);
       const regel = mem.activity.find((a) => a.action === 'Cron geslaagd: bijlagen-opruim');
       expect(regel.message).toBe('Verweesde bijlagen: 0 van omleidingen en 0 van updates opgeruimd, overgeslagen: omleidingen: geen tijd meer; updates: geen tijd meer.');
     } finally {

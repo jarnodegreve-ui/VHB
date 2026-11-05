@@ -769,6 +769,11 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
         .filter((k) => k.startsWith(`${bucket}/`))
         .map((k) => ({ naam: k.slice(bucket.length + 1), gewijzigdOp: mem.opslagTijd.get(k) ?? '2026-01-01T00:00:00Z' }));
     },
+    // Retentie van de nachtcron: alleen de volgorde telt hier.
+    pruneOldRecords: async () => {
+      mem.cronVolgorde.push('opruiming: retentie');
+      return { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0, aanwezigheid: 0, mailLog: 0 };
+    },
     // De heartbeat van een cron: hier alleen onthouden wat er wanneer kwam.
     // Eén opname voor de mail-tests (mem.hartslagen) en de nachtcron
     // (mem.cronVolgorde, mem.activity).

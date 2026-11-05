@@ -52,6 +52,27 @@ describe('een uitgeschakelde mail meldt niet dat hij verstuurd is (nr. 13)', () 
   });
 });
 
+describe('weekoverzicht: tijdsbudget (05-11)', () => {
+  it('na het budget verzamelt de cron niets meer, de mail vertrekt toch en noemt wat overgeslagen is', async () => {
+    process.env.ERROR_DIGEST_WEEKDAG = 'elke';
+    process.env.ERROR_DIGEST_BUDGET_MS = '0.001';
+    mem.hartslagen = [];
+    mem.emailsSent = [];
+    try {
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ success: true, alerted: true, afgekapt: ['documenten', 'voertuigen', 'openstaande diensten'] });
+      const mail = mem.emailsSent.find((e) => e.context === 'error-digest');
+      expect(mail?.text).toContain('Niet verzameld (tijd op)');
+      expect(mail?.text).toContain('documenten: overgeslagen');
+      expect(mem.hartslagen.at(-1)?.details).toContain('afgekapt: documenten, voertuigen, openstaande diensten');
+    } finally {
+      delete process.env.ERROR_DIGEST_WEEKDAG;
+      delete process.env.ERROR_DIGEST_BUDGET_MS;
+    }
+  });
+});
+
 describe('urgente-update-mail: ontvangers server-side', () => {
   it('negeert client-opgegeven adressen en stuurt alleen naar interne gebruikers', async () => {
     mem.emailsSent = [];
