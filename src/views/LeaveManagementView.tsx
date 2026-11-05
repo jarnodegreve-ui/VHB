@@ -35,6 +35,7 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 import { apiJson } from '../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
+import { metOngedaan } from '../lib/ongedaan';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
 import { uitersteVerlofdag, verlofGrensMelding } from '../../shared/verlofGrens';
@@ -537,20 +538,20 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // Mag alleen voor 'pending' — de aanvraag wordt volledig verwijderd, niet
   // op 'cancelled' gezet. Goedgekeurd verlof blijft via handleCancel
   // (planner/admin) zodat de rij-/rusttijden-check intact blijft.
+  // Eén record verwijderen gaat met een weg terug, niet met een bevestigvenster
+  // (huisregel, zelfde recept als een ziekmelding verwijderen in ZiekteView):
+  // meteen doen en een ongedaan-toast. De verse lijst via een ref, want het
+  // herstel loopt na de nieuwe render.
+  const leaveRef = useRef(leaveRequests);
+  leaveRef.current = leaveRequests;
   const handleWithdraw = (requestId: string) => {
     const target = leaveRequests.find((r) => r.id === requestId);
     if (!target || target.status !== 'pending') return;
-    setConfirmAction({
-      title: 'Aanvraag intrekken',
-      message: 'Deze openstaande aanvraag intrekken? Ze wordt volledig verwijderd.',
-      confirmText: 'Intrekken',
-      variant: 'danger',
-      run: () => {
-        void (async () => {
-          const ok = await Promise.resolve(onSave(leaveRequests.filter((r) => r.id !== requestId)));
-          if (ok !== false) notify('Aanvraag ingetrokken.', 'success');
-        })();
-      },
+    void metOngedaan({
+      boodschap: 'Aanvraag ingetrokken.',
+      uitvoeren: () => Promise.resolve(onSave(leaveRef.current.filter((r) => r.id !== requestId))),
+      herstellen: () => Promise.resolve(onSave([...leaveRef.current.filter((r) => r.id !== requestId), target])),
+      toast: (message, tone, action, opties) => notify(message, tone, { action, opties }),
     });
   };
 
