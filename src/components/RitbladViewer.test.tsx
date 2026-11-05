@@ -21,6 +21,10 @@ vi.mock('../lib/ritbladPaginas', async (importOriginal) => ({
 }));
 vi.mock('../lib/ritbladCache', () => ({ isRitbladOpgeslagen: async () => false, verwijderRitbladUitCache: verwijderMock }));
 vi.mock('../lib/monitoring', () => ({ reportHandledError: meldFoutMock }));
+// Sinds 05-11 leest de viewer het bereik uit de online-store (isOnlineNu, met
+// ping) in plaats van navigator.onLine; de test zet die store.
+const bereik = vi.hoisted(() => ({ online: true }));
+vi.mock('../lib/useOnline', () => ({ useOnline: () => bereik.online, isOnlineNu: () => bereik.online }));
 
 import { RitbladViewer } from './RitbladViewer';
 
@@ -29,6 +33,7 @@ const NIEUW = 'https://test.supabase.co/storage/v1/object/sign/ritblaadjes/bunde
 const antwoord = (url: string) => new Response(JSON.stringify({ url, uploadedAt: '2026-09-01T08:00:00Z' }));
 
 beforeEach(() => {
+  bereik.online = true;
   apiFetchMock.mockReset();
   openPdfMock.mockReset();
   laadDocumentMock.mockReset();
@@ -114,7 +119,7 @@ describe('Ritbladviewer: zelfherstel en meldingen (melding chauffeurs 07-10)', (
   });
 
   it('probeert zonder bereik niet opnieuw en meldt de fout', async () => {
-    vi.stubGlobal('navigator', { ...navigator, onLine: false });
+    bereik.online = false;
     apiFetchMock.mockResolvedValue(antwoord(OUD));
     laadDocumentMock.mockRejectedValue(new Error('Load failed'));
     verwijderMock.mockResolvedValue(true);

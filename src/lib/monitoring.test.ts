@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_BREADCRUMBS, PRESTATIE_DREMPELS, addBreadcrumb, beoordeelPrestatie, getBreadcrumbs, getLaatsteReferentie, reportBoundaryError, reportHandledError, reportUserFeedback, resetMonitoring, setMonitoringUser, subscribeReferentie, wisReferentie } from './monitoring';
+import { MAX_BREADCRUMBS, PRESTATIE_DREMPELS, addBreadcrumb, beoordeelPrestatie, beschrijfDoel, getBreadcrumbs, getLaatsteReferentie, reportBoundaryError, reportHandledError, reportUserFeedback, resetMonitoring, setMonitoringUser, subscribeReferentie, wisReferentie } from './monitoring';
 
 describe('monitoring: broodkruimels en rapportcontext', () => {
   const fetchMock = vi.fn(async () => ({ ok: true }) as Response);
@@ -99,5 +99,42 @@ describe('monitoring: prestatiedrempels op Mijn dag (golf 4)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(body(0).message).toBe('Trage INP op mijn-dag: 301 ms (drempel 300 ms)');
     expect(body(1).message).toMatch(/^Trage LCP op mijn-dag/);
+  });
+});
+
+describe('monitoring: wat er bij een trage INP meegaat (05-11)', () => {
+  const fetchMock = vi.fn(async () => ({ ok: true }) as Response);
+  beforeEach(() => {
+    resetMonitoring();
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('beschrijft het doel met tag, id en aria-label of role, hoogstens 60 tekens, nooit de tekst of de waarde', () => {
+    const knop = document.createElement('button');
+    knop.id = 'opslaan';
+    knop.textContent = 'Jan Peeters ziek melden';
+    expect(beschrijfDoel(knop)).toBe('button#opslaan');
+    const veld = document.createElement('input');
+    veld.value = 'geheim wachtwoord';
+    veld.setAttribute('aria-label', 'Wachtwoord');
+    expect(beschrijfDoel(veld)).toBe('input [Wachtwoord]');
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    expect(beschrijfDoel(menu)).toBe('div [menu]');
+    const lang = document.createElement('a');
+    lang.setAttribute('aria-label', 'x'.repeat(80));
+    expect(beschrijfDoel(lang)!.length).toBe(60);
+    expect(beschrijfDoel(null)).toBeUndefined();
+    expect(beschrijfDoel(document.createTextNode('tekst'))).toBeUndefined();
+  });
+
+  it('het INP-rapport noemt het eventtype en het doel', async () => {
+    addBreadcrumb('navigatie', 'mijn-dag');
+    expect(beoordeelPrestatie('INP', 450, { event: 'click', doel: 'button#opslaan' })).toBe(true);
+    await Promise.resolve();
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.message).toBe('Trage INP op mijn-dag: 450 ms (drempel 300 ms), click op button#opslaan');
   });
 });

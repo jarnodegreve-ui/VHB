@@ -71,10 +71,12 @@ const WERKVOORRAAD_PLEK = <span aria-hidden="true" className="inline-block h-11 
 /** Voorladen van de account-overlays: bij hover/focus op het avatar-menu en
  *  zodra Instellingen open staat (daar zitten dezelfde knoppen). */
 export const laadAccountOverlays = () => {
-  void laadChangePasswordModal();
-  void laadCalendarSubscribeModal();
+  // Elke voorlading slikt haar fout (03-11: twee foutrapporten uit een
+  // mislukte voorlading); de echte opening heeft haar eigen vangnet.
+  void laadChangePasswordModal().catch(() => {});
+  void laadCalendarSubscribeModal().catch(() => {});
   void laadRoosterIcs().catch(() => {});
-  void laadProbleemMelder();
+  void laadProbleemMelder().catch(() => {});
 };
 
 export type AppSchilProps = {

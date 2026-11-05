@@ -1,4 +1,5 @@
-import { Fragment, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazyWithRetry } from '../lib/lazyRetry';
 import { BusFront, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, SlidersHorizontal, Users, Wrench } from 'lucide-react';
 import { RuilIcoon } from '../components/RuilIcoon';
 import { activeDiversions, lopendeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
@@ -17,6 +18,7 @@ import { formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } 
 import { isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
 import { warmRitbladCache } from '../lib/ritbladCache';
+import { isOnlineNu } from '../lib/useOnline';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, parseHHMM, shiftWindowMinutes } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
 import { SkeletonRow, SkeletonTile } from '../components/Skeleton';
@@ -34,8 +36,8 @@ import { kleineTegelSpan, pasVoorkeurenToe, tegelsVoorRol, useDashboardVoorkeure
 
 // Techniek (13-09): de defectmelding en de gele-boek-tegel laden pas bij
 // gebruik, zodat de chauffeurschunk niets van de techniekmodule draagt.
-const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
-const LazyGeleBoekTegel = lazy(() => import('../components/GeleBoekTegel').then((m) => ({ default: m.GeleBoekTegel })));
+const LazyDefectMeldenModal = lazyWithRetry(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
+const LazyGeleBoekTegel = lazyWithRetry(() => import('../components/GeleBoekTegel').then((m) => ({ default: m.GeleBoekTegel })));
 
 /**
  * Chauffeursdashboard — zelfde Operations Center-taal als het planner/admin-
@@ -94,7 +96,7 @@ export function DashboardView({ notes = [],
   morgenDate.setDate(morgenDate.getDate() + 1);
   const heeftDienstBinnenkort = myShifts.some((s) => s.date === today || s.date === isoDate(morgenDate));
   useEffect(() => {
-    if (isInitialLoad || !heeftDienstBinnenkort || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    if (isInitialLoad || !heeftDienstBinnenkort || !isOnlineNu()) return;
     void warmRitbladCache();
   }, [isInitialLoad, heeftDienstBinnenkort]);
   // Nachtdienst over middernacht: zolang de dienst van gisteren nog loopt, is

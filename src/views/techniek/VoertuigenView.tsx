@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { lazyWithRetry } from '../../lib/lazyRetry';
 import { AlertTriangle, Bus, Pencil, Plus, ShieldCheck, Wrench, Zap } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
@@ -32,7 +33,7 @@ import { VervalPil } from '../../components/VervalPil';
 import { VOERTUIG_STATUS } from '../../../shared/status';
 import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../../components/Table';
 
-const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
+const LazyDefectMeldenModal = lazyWithRetry(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 
 type Filter = 'actief' | 'reserve' | 'uit_dienst' | 'alles' | 'verloopt';
 type CategorieFilter = 'alle' | VoertuigCategorie;

@@ -9,12 +9,16 @@ const meldLive = vi.hoisted(() => vi.fn());
 vi.mock('../lib/liveSignaal', () => ({ meldLive }));
 
 import type { User } from '../types';
-import { useLiveUpdates, type LiveBronnen } from './useLiveUpdates';
+import { CATCHUP_BUNDEL_MS, useLiveUpdates, type LiveBronnen } from './useLiveUpdates';
 
 /**
  * Welke bron na welk realtime-event opnieuw wordt opgehaald, zoals het tot
  * 07-10 in App.tsx stond. Vastgelegd per rol: het stille signaal, de dekking
  * voor staf, het planningfilter van een chauffeur en de catch-ups.
+ *
+ * Sinds 05-11 loopt de volledige catch-up door `boekSync` van de datalaag
+ * (de synctijd verschuift alleen als er echt een antwoord kwam) en is ze ook
+ * het pad voor terug-online; twee rondes binnen 30 s zijn er één.
  */
 type Fn = ReturnType<typeof vi.fn>;
 type Bronnen = LiveBronnen & Record<keyof LiveBronnen, Fn>;
@@ -23,6 +27,9 @@ const maakBronnen = (): Bronnen => {
   for (const k of ['fetchLeave', 'fetchSwaps', 'fetchDiversions', 'fetchUpdates', 'fetchMyNotes', 'fetchMeldingen', 'fetchPlanning', 'fetchPlanningMatrix', 'fetchPlanningMatrixHistory', 'refreshCoverageGaps', 'fetchUsers']) {
     b[k] = vi.fn(async () => undefined);
   }
+  // De echte boekSync (useAppData) meet de herkomst rond het werk; hier
+  // alleen het werk zelf uitvoeren.
+  b.boekSync = vi.fn(async (werk: () => Promise<unknown>) => { await werk(); });
   return b as unknown as Bronnen;
 };
 type Refetchers = {
@@ -129,6 +136,27 @@ describe('useLiveUpdates', () => {
     expect(s.fetchUsers).toHaveBeenCalledTimes(1);
     expect(s.refreshCoverageGaps).toHaveBeenCalledTimes(1);
     expect(s.fetchPlanningMatrix).toHaveBeenCalledTimes(1);
+  });
+
+  it('wifi-herstel: reconnect en terug-online binnen 30 s zijn één ronde, en elke ronde gaat door boekSync (05-11)', () => {
+    vi.useFakeTimers();
+    try {
+      const b = maakBronnen();
+      const { result } = renderHook(() => useLiveUpdates(true, chauffeur, b));
+      // Socket-reconnect (refetchAll) en de online-overgang (catchUp) vlak na elkaar.
+      laatste().refetchers.refetchAll();
+      result.current.catchUp();
+      expect(b.fetchLeave).toHaveBeenCalledTimes(1);
+      expect(b.fetchMeldingen).toHaveBeenCalledTimes(1);
+      expect(b.boekSync).toHaveBeenCalledTimes(1);
+      // Na het venster is een volgende aanleiding weer een echte ronde.
+      vi.advanceTimersByTime(CATCHUP_BUNDEL_MS + 1);
+      result.current.catchUp();
+      expect(b.fetchLeave).toHaveBeenCalledTimes(2);
+      expect(b.boekSync).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('lichte catch-up: meldingen, verlof en ruilen; de planning alleen als haar versie wijzigde', () => {

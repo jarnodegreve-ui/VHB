@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { lazyWithRetry } from '../lib/lazyRetry';
 import { BusFront, Calendar, FileText, WifiOff, Wrench } from 'lucide-react';
 import { RuilIcoon } from '../components/RuilIcoon';
 import { useOptioneleAppData } from '../app/AppDataContext';
@@ -29,7 +30,7 @@ import { MIJN_WEEK_DAGEN, bouwMijnWeek } from '../lib/mijnWeek';
 import { dagtypeWoord, useDagtypes } from '../lib/dagtypes';
 
 // Defect melden (techniek, 13-09): pas laden bij de klik, de chunk van Mijn dag blijft licht.
-const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
+const LazyDefectMeldenModal = lazyWithRetry(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 
 /**
  * Mijn dag — het broekzakscherm van de chauffeur.

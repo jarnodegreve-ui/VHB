@@ -11,10 +11,12 @@ import { useCollectieState } from './kern';
  * opgebouwd — `fetchActivityLog` gaat via de kern naar alle savers, die na
  * een geslaagde opslag het logboek van een admin verversen.
  */
-export function useActiviteitData({ session, currentUser, currentView, noteerCollectie }: {
+export function useActiviteitData({ session, currentUser, currentView, dataKlaar, noteerCollectie }: {
   session: Session | null;
   currentUser: User | null;
   currentView: View;
+  /** Zie DataBasis.dataKlaar: de polls hieronder starten pas dan. */
+  dataKlaar: boolean;
   /** Laadstaat melden aan de kern (die ontstaat pas ná deze hook, zie useAppData). */
   noteerCollectie: (key: string, geslaagd: boolean) => void;
 }) {
@@ -74,24 +76,24 @@ export function useActiviteitData({ session, currentUser, currentView, noteerCol
   };
 
   useEffect(() => {
-    if (currentView === 'activiteit' && currentUser?.role === 'admin') {
+    if (dataKlaar && currentView === 'activiteit' && currentUser?.role === 'admin') {
       fetchActivityLog();
       fetchLoginActivity();
       fetchAanwezigheid();
     }
-  }, [currentView, currentUser?.role]);
+  }, [dataKlaar, currentView, currentUser?.role]);
 
   // Zolang het scherm open staat de aanwezigheid bijhouden: "nu online" is
   // een live-getal en de hartslag is er per 5 minuten, dus vaker verversen
   // levert niets op. Alleen bij een zichtbaar tabblad, net als de andere polls.
   useEffect(() => {
-    if (currentView !== 'activiteit' || currentUser?.role !== 'admin') return;
+    if (!dataKlaar || currentView !== 'activiteit' || currentUser?.role !== 'admin') return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void fetchAanwezigheid();
     }, 5 * 60 * 1000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentView, currentUser?.role]);
+  }, [dataKlaar, currentView, currentUser?.role]);
 
   /** Bij uitloggen: het logboek leeg (loginActivity blijft, zoals voorheen). */
   const resetActiviteit = () => {

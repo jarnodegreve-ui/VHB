@@ -69,6 +69,28 @@ describe('useNieuweVersie', () => {
     expect(showToast).toHaveBeenCalledTimes(2);
   });
 
+  it('een worker die bij het openen al installeert, wordt gemeld zodra hij klaarstaat (05-11)', async () => {
+    // Tot dan keek de start alleen naar `waiting`: deze worker gaf zijn
+    // melding pas bij de volgende terugkeer naar de app.
+    const reg = maakRegistratie(null);
+    const nieuwe = maakWorker();
+    nieuwe.state = 'installing';
+    reg.installing = nieuwe;
+    zetServiceWorker(reg);
+    const showToast = vi.fn();
+    renderHook(() => useNieuweVersie(showToast));
+    await act(async () => {});
+    expect(showToast).not.toHaveBeenCalled();
+    reg.waiting = nieuwe;
+    nieuwe.state = 'installed';
+    act(() => { nieuwe._l.statechange?.forEach((f) => f()); });
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast.mock.calls[0][0]).toBe(NIEUWE_VERSIE_TEKST);
+    // Terug naar de app: dezelfde worker, geen tweede melding.
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
   it('bij de eerste installatie (geen controller) komt er geen melding', async () => {
     zetServiceWorker(maakRegistratie(maakWorker()), null);
     const showToast = vi.fn();

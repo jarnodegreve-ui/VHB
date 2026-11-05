@@ -1,13 +1,19 @@
+import { useRef } from 'react';
 import { isStaf, type User } from '../types';
 import { meldLive } from '../lib/liveSignaal';
 import { useRealtimeSync } from '../lib/realtime';
 import type { AppData } from './useAppData';
 
-/** De bronnen uit de datalaag die een realtime-event opnieuw ophaalt. */
+/** De bronnen uit de datalaag die een realtime-event opnieuw ophaalt, plus
+ *  `boekSync` dat een volledige ronde als synchronisatie boekt. */
 export type LiveBronnen = Pick<AppData,
   'fetchLeave' | 'fetchSwaps' | 'fetchDiversions' | 'fetchUpdates' | 'fetchMyNotes' | 'fetchMeldingen' |
-  'fetchPlanning' | 'fetchPlanningMatrix' | 'fetchPlanningMatrixHistory' | 'refreshCoverageGaps' | 'fetchUsers'
+  'fetchPlanning' | 'fetchPlanningMatrix' | 'fetchPlanningMatrixHistory' | 'refreshCoverageGaps' | 'fetchUsers' | 'boekSync'
 >;
+
+/** Twee volledige catch-ups binnen dit venster zijn er één: bij wifi-herstel
+ *  komen de socket-reconnect en de online-overgang seconden na elkaar. */
+export const CATCHUP_BUNDEL_MS = 30_000;
 
 /**
  * Live-updates: welke bron na welk realtime-event opnieuw wordt opgehaald,
@@ -19,8 +25,39 @@ export type LiveBronnen = Pick<AppData,
 export function useLiveUpdates(actief: boolean, currentUser: User | null, bronnen: LiveBronnen) {
   const {
     fetchLeave, fetchSwaps, fetchDiversions, fetchUpdates, fetchMyNotes, fetchMeldingen,
-    fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchUsers,
+    fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchUsers, boekSync,
   } = bronnen;
+  // Volledige catch-up (reconnect, heropenen na lang weg, terug online): stil
+  // alles verversen, want gemiste realtime-events zijn definitief weg. Eén
+  // pad voor alle aanleidingen; tot 05-11 had App.tsx een eigen kopie voor
+  // terug-online, en bij wifi-herstel liepen die twee rondes vlak na elkaar.
+  const catchUpRef = useRef<{ op: number; belofte: Promise<void> } | null>(null);
+  const volledigeCatchUp = (): Promise<void> => {
+    const lopend = catchUpRef.current;
+    if (lopend && Date.now() - lopend.op < CATCHUP_BUNDEL_MS) return lopend.belofte;
+    const planningFilter = currentUser && !isStaf(currentUser.role)
+      ? { driverId: String(currentUser.id) }
+      : undefined;
+    const belofte = boekSync(() => Promise.allSettled([
+      fetchMyNotes(),
+      fetchMeldingen(),
+      fetchLeave(),
+      fetchSwaps(),
+      fetchDiversions(undefined, { silent: true }),
+      fetchUpdates(),
+      fetchPlanning(undefined, planningFilter, { silent: true }),
+      ...(currentUser && isStaf(currentUser.role) ? [
+        refreshCoverageGaps(),
+        fetchPlanningMatrix(),
+        fetchPlanningMatrixHistory(),
+        // Sessie-metadata (lastLogin) verandert zonder realtime-event; zonder
+        // deze refetch liep "Laatst actief" achter in een openstaand tabblad.
+        fetchUsers(),
+      ] : []),
+    ])).then(() => undefined);
+    catchUpRef.current = { op: Date.now(), belofte };
+    return belofte;
+  };
   // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
   // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
   // gebeurt er niets.
@@ -70,29 +107,7 @@ export function useLiveUpdates(actief: boolean, currentUser: User | null, bronne
         void fetchPlanningMatrixHistory();
       }
     },
-    refetchAll: () => {
-      void fetchMyNotes();
-      void fetchMeldingen();
-      // Catch-up na reconnect/heropenen: stil alles verversen — gemiste
-      // realtime-events zijn definitief weg, dus opnieuw ophalen is de
-      // enige manier om zeker in sync te komen.
-      void fetchLeave();
-      void fetchSwaps();
-      void fetchDiversions(undefined, { silent: true });
-      void fetchUpdates();
-      const planningFilter = currentUser && !isStaf(currentUser.role)
-        ? { driverId: String(currentUser.id) }
-        : undefined;
-      void fetchPlanning(undefined, planningFilter, { silent: true });
-      if (currentUser && isStaf(currentUser.role)) {
-        refreshCoverageGaps();
-        void fetchPlanningMatrix();
-        void fetchPlanningMatrixHistory();
-        // Sessie-metadata (lastLogin) verandert zonder realtime-event; zonder
-        // deze refetch liep "Laatst actief" achter in een openstaand tabblad.
-        void fetchUsers();
-      }
-    },
+    refetchAll: volledigeCatchUp,
     // Lichte catch-up (tabblad terug binnen 5 min na de laatste volledige
     // ronde, src/lib/realtime.ts): alleen wat vaak wijzigt. De planning hoort
     // er alleen bij als planning_version wijzigde (of niet te lezen was), en
@@ -114,4 +129,6 @@ export function useLiveUpdates(actief: boolean, currentUser: User | null, bronne
       }
     },
   });
+  // Voor App.tsx: dezelfde ronde bij de overgang naar online.
+  return { catchUp: volledigeCatchUp };
 }

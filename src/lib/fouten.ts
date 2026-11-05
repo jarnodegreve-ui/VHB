@@ -1,4 +1,5 @@
 import { notify } from './ui';
+import { isOnlineNu } from './useOnline';
 
 /**
  * Foutcopy met een vervolgstap (tranche 3A, 22-09-2026).
@@ -44,7 +45,10 @@ export const isVeiligeFouttekst = (tekst: string): boolean => tekst.length <= 24
 
 /** Leest status, servertekst en netwerkaard uit wat een save-pad gooit. */
 export function leesFout(err: unknown): FoutInfo {
-  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  // De online-store (met ping): navigator.onLine is op bus-wifi zonder internet
+  // waar. `=== false`: buiten de browser (Node, tests van lib-helpers) heeft de
+  // store geen antwoord, en dat is geen offline.
+  const offline = isOnlineNu() === false;
   if (err == null) return { netwerk: false, offline };
   if (typeof Response !== 'undefined' && err instanceof Response) return { status: err.status, netwerk: false, offline };
   const o = err as { status?: unknown; response?: { status?: unknown }; message?: unknown; name?: unknown };

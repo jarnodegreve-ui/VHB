@@ -1,6 +1,7 @@
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
 import { Bell } from 'lucide-react';
 import { useAppDataContext } from '../app/AppDataContext';
+import { lazyWithRetry } from '../lib/lazyRetry';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
 import { CountUp } from './CountUp';
@@ -21,7 +22,11 @@ import { useDropdown } from './useDropdown';
  * knop raakt, dus bij de klik staat hij er meestal al.
  */
 const laadMeldingenPaneel = () => import('./MeldingenPaneel');
-const LazyMeldingenPaneel = lazy(() => laadMeldingenPaneel().then((m) => ({ default: m.MeldingenPaneel })));
+// Met vangnet (lazyWithRetry): de bel staat buiten de foutgrens van het
+// scherm, dus een verlopen chunk na een deploy gaf hier het crashscherm van
+// de hele app. De voorlading slikt haar fout: de klik probeert het opnieuw.
+const LazyMeldingenPaneel = lazyWithRetry(() => laadMeldingenPaneel().then((m) => ({ default: m.MeldingenPaneel })));
+const laadVooruit = () => { void laadMeldingenPaneel().catch(() => {}); };
 
 export function MeldingenBel({ onNavigate, actief = false }: { onNavigate: (view: View) => void; actief?: boolean }) {
   const { ongelezenMeldingen } = useAppDataContext();
@@ -35,8 +40,8 @@ export function MeldingenBel({ onNavigate, actief = false }: { onNavigate: (view
         variant="ghost"
         size="sm"
         onClick={() => setOpen((v) => !v)}
-        onPointerEnter={() => void laadMeldingenPaneel()}
-        onFocus={() => void laadMeldingenPaneel()}
+        onPointerEnter={laadVooruit}
+        onFocus={laadVooruit}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-current={actief ? 'page' : undefined}

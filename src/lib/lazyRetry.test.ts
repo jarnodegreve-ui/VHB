@@ -91,6 +91,30 @@ describe('lazyWithRetry', () => {
     expect(sessionStorage.getItem('vhb-chunk-reload')).toBeNull();
   });
 
+  it('zonder werkende opslag (Safari met geblokkeerde opslag) herlaadt het nooit, maar meldt het meteen', async () => {
+    // Zonder sessionStorage is er geen vlag tegen een herlaadlus; dan geldt
+    // de vlag als gezet (05-11). Safari gooit al bij het aanraken van
+    // `sessionStorage`, niet pas bij getItem.
+    const { herlaad } = opzet();
+    const eigen = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
+    Object.defineProperty(window, 'sessionStorage', { configurable: true, get() { throw new Error('SecurityError: The operation is insecure.'); } });
+    try {
+      const metRetry = await laadModule();
+      const toasts: CustomEvent[] = [];
+      window.addEventListener('vhb-toast', (e) => toasts.push(e as CustomEvent));
+      await expect(draaiFactory(metRetry(async () => { throw new Error('stuk'); }))).rejects.toThrow('stuk');
+      expect(herlaad).not.toHaveBeenCalled();
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0].detail.action.label).toBe('Vernieuwen');
+      // Een geslaagde import blijft gewoon werken (het wissen van de vlag faalt stil).
+      const comp = { default: () => null } as never;
+      expect(await draaiFactory(metRetry(async () => comp))).toBe(comp);
+    } finally {
+      if (eigen) Object.defineProperty(window, 'sessionStorage', eigen);
+      else delete (window as unknown as { sessionStorage?: unknown }).sessionStorage;
+    }
+  });
+
   it('herlaadt niet twee keer, maar meldt het met een Vernieuwen-knop', async () => {
     const { herlaad } = opzet();
     sessionStorage.setItem('vhb-chunk-reload', '1');
