@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
+import { lazyWithRetry } from '../../lib/lazyRetry';
 import { Armchair, Bus, Car, CheckCircle2, Pencil, Phone, Plus, Printer, RotateCcw, Route, Wrench, XCircle } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
@@ -30,7 +31,7 @@ import { Td, Th } from '../../components/TabelBasis';
 import { ToonMeer, useToonMeer } from '../../components/ToonMeer';
 import type { ActieMenuItem } from '../../components/ActieMenu';
 
-const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
+const LazyDefectMeldenModal = lazyWithRetry(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 
 type Filter = 'open' | 'recent' | 'alles';
 const RECENT_DAGEN = 62;

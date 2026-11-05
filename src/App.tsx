@@ -262,7 +262,8 @@ export default function App() {
   // parallel met de data, zodat het plekje maar een oogwenk leeg is); de
   // account-overlays zodra Instellingen open staat (de knoppen zitten daar).
   useEffect(() => {
-    if (currentUser && isStaf(currentUser.role)) void laadWerkvoorraadMenu();
+    // Voorlading slikt haar fout; de knop zelf laadt met vangnet (lazyWithRetry).
+    if (currentUser && isStaf(currentUser.role)) void laadWerkvoorraadMenu().catch(() => {});
   }, [currentUser?.role]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (currentView === 'instellingen') laadAccountOverlays();
