@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DAGTYPE_GROEPEN, DAGTYPES, KIESBARE_DAGTYPES, dagtypeKort, dagtypeLabel, dagtypePeriode, dagtypeVanDag, dagtypesKort, delenTekst, isDagtypeCode, isKiesbaarDagtype,
+  DAGTYPE_GROEPEN, DAGTYPES, KIESBARE_DAGTYPES, dagtypeKort, dagtypeLabel, dagtypePeriode, dagtypeVanDag, dagtypesKort, delenTekst, dienstregelingCode, isDagtypeCode, isKiesbaarDagtype,
   kalenderUitDekking, normaliseerTijd, tijdenOpDag, variantTekst, variantenAfdruk, variantenSchoon, variantVoor,
 } from './dagtype';
 
@@ -233,5 +233,29 @@ describe('dagtypekalender per dag (11-10)', () => {
     expect(tijdenOpDag(d, '28')).toEqual({ startTime: '08:00', endTime: '12:00' });
     expect(tijdenOpDag(d, '27')).toEqual({ startTime: '08:00', endTime: '12:00' });
     expect(tijdenOpDag(d, '26')).toEqual({ startTime: '06:00', endTime: '14:00' });
+  });
+});
+
+describe('dienstregelingCode: juli en augustus rijden de schoolvakantieregeling (controle-ronde 04-11, punt 5)', () => {
+  it('vouwt 41-45 naar 31-35 en 28 naar 27; de rest blijft zichzelf', () => {
+    expect(['41', '42', '43', '44', '45'].map(dienstregelingCode)).toEqual(['31', '32', '33', '34', '35']);
+    expect(dienstregelingCode('28')).toBe('27');
+    expect(['21', '25', '26', '27', '33', '51', '55'].map(dienstregelingCode)).toEqual(['21', '25', '26', '27', '33', '51', '55']);
+    expect(dienstregelingCode('')).toBe('');
+  });
+
+  it('tijdenOpDag vindt op een zomerdag (41) de variant van de schoolvakantie (31)', () => {
+    // De planningsmatrix draagt in juli en augustus 41-45 en wint van de kalender;
+    // zonder de vouw reed deze dienst dan de schooldagtijden.
+    const d = { startTime: '06:00', endTime: '14:00', varianten: [{ dagtypes: ['31', '32'], startTime: '07:00', endTime: '13:00' }] };
+    expect(tijdenOpDag(d, '41')).toEqual({ startTime: '07:00', endTime: '13:00' });
+    expect(tijdenOpDag(d, '42')).toEqual({ startTime: '07:00', endTime: '13:00' });
+    expect(tijdenOpDag(d, '43')).toEqual({ startTime: '06:00', endTime: '14:00' });
+    expect(tijdenOpDag(d, '21')).toEqual({ startTime: '06:00', endTime: '14:00' });
+  });
+
+  it('alleen het vinden van de variant vouwt: dagtypeVanDag geeft de matrixcode 41 zelf terug', () => {
+    expect(dagtypeVanDag('2026-07-06', '41', kalender)).toEqual({ code: '41', bron: 'excel' });
+    expect(isKiesbaarDagtype('41')).toBe(false);
   });
 });

@@ -52,16 +52,25 @@ const LABEL_PER_CODE: Readonly<Record<string, string>> = Object.fromEntries(DAGT
  * De dagtypes die een afwijking kan dragen (controle-ronde 10-10, punt 3;
  * dagtypekalender 11-10): schooldag, schoolvakantie en examen uit de
  * dagtypekalender of de matrixcode, zaterdag en zondag ook uit de weekdag.
- * Feestdag (28) rijdt de zondagregeling (dienstregelingCode) en juli-augustus
- * (41-45) komt in de kalender van Jarno niet voor (de zomer is vakantie), dus
- * die twee biedt de keuzelijst niet aan.
+ * Feestdag (28) rijdt de zondagregeling en juli-augustus (41-45) de
+ * schoolvakantieregeling (dienstregelingCode): een afwijking voor die dagen
+ * hoort op 27 respectievelijk 31-35, dus die twee groepen biedt de keuzelijst
+ * niet aan.
  */
 export const KIESBARE_DAGTYPES: ReadonlySet<string> = new Set(['21', '22', '23', '24', '25', '31', '32', '33', '34', '35', '51', '52', '53', '54', '55', '26', '27']);
 
 /** Welke dienstregeling op een dagtype rijdt: een feestdag (28) rijdt de
- *  zondagregeling (27), de rest zichzelf. Zo hoeft een dienst nooit een
- *  aparte afwijking voor feestdagen (kalender van Jarno, 11-10). */
-export const dienstregelingCode = (typedag: string): string => (typedag === '28' ? '27' : typedag);
+ *  zondagregeling (27), juli en augustus (41-45) rijden de schoolvakantie-
+ *  regeling (31-35, zoals `klasse` in dekkingDagtype.ts 4 als 3 telt), de
+ *  rest zichzelf. Zo hoeft een dienst nooit een aparte afwijking voor
+ *  feestdagen (kalender van Jarno, 11-10) of voor de zomer: de planningsmatrix
+ *  draagt in juli en augustus 41-45 en wint van de kalender, en zonder deze
+ *  vouw vond een dienst op die dagen nooit zijn vakantievariant en reed hij de
+ *  schooldagtijden terwijl het bord een vakantiecode toonde (controle-ronde
+ *  04-11, punt 5). Alleen het vinden van de variant vouwt; kalender, bord en
+ *  dekking tonen de code zelf. */
+export const dienstregelingCode = (typedag: string): string =>
+  typedag === '28' ? '27' : /^4[1-5]$/.test(typedag) ? `3${typedag[1]}` : typedag;
 export const isKiesbaarDagtype = (code: string): boolean => KIESBARE_DAGTYPES.has(code);
 
 /** De dagtypes per groep, in de volgorde van de keuzelijst (het scherm). */
@@ -280,8 +289,9 @@ export const variantVoor = (dienst: MetVarianten, dagtype: string | null | undef
   (dagtype && variantenSchoon(dienst.varianten)?.find((v) => v.dagtypes.includes(dagtype))) || null;
 
 /** De tijden, delen en loopnummers die op een dag gelden: de variant van de
- *  dienstregeling die op dat dagtype rijdt (een feestdag rijdt als zondag),
- *  anders de gewone tijden. Zonder dagtype altijd de gewone. */
+ *  dienstregeling die op dat dagtype rijdt (een feestdag rijdt als zondag,
+ *  juli en augustus als schoolvakantie), anders de gewone tijden. Zonder
+ *  dagtype altijd de gewone. */
 export function tijdenOpDag(dienst: MetVarianten, dagtype: string | null | undefined): DienstTijden {
   const variant = variantVoor(dienst, dagtype ? dienstregelingCode(dagtype) : dagtype);
   return tijdenVan(variant ?? dienst);
