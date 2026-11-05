@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Diversion, Update, User } from '../../types';
 import { apiFetch } from '../../lib/api';
-import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { isRevisieConflict, replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 import { laatSchrijffout } from '../../lib/foutenLui';
 import { metOngedaan } from '../../lib/ongedaan';
 
@@ -91,13 +91,15 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         headers: ctx.revisionHeader('updates'),
         body: JSON.stringify(newUpdates),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('De updates zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
-        await fetchUpdates();
-        return false;
-      }
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        // Alleen een echt revisieconflict ververst (isRevisieConflict, kern.ts);
+        // een 409 met een reden, zoals de massa-verwijder-rem, toont die reden.
+        if (isRevisieConflict(response.status, data)) {
+          showToast('De updates zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
+          await fetchUpdates();
+          return false;
+        }
         throw Object.assign(new Error(data?.details || data?.error || 'Opslaan mislukt.'), { status: response.status });
       }
       setUpdates(newUpdates);
@@ -168,11 +170,6 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         headers: ctx.revisionHeader('diversions'),
         body: JSON.stringify(newDiversions),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('De omleidingen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
-        await fetchDiversions(undefined, { silent: true });
-        return;
-      }
       if (response.ok) {
         setDiversions(newDiversions);
         ctx.captureRevision('diversions', response);
@@ -183,6 +180,12 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         showToast('Omleidingen succesvol opgeslagen.', 'success');
       } else {
         const err = await response.json().catch(() => ({} as any));
+        // Zelfde onderscheid als bij de updates hierboven.
+        if (isRevisieConflict(response.status, err)) {
+          showToast('De omleidingen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
+          await fetchDiversions(undefined, { silent: true });
+          return;
+        }
         laatSchrijffout('Opslaan van omleidingen', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       }
     } catch (error) {

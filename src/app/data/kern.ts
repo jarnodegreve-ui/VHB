@@ -24,6 +24,11 @@ export type ShowToast = (message: string, tone?: Toast['tone'], action?: Toast['
 export type DataBasis = {
   session: Session | null;
   currentUser: User | null;
+  /** Mag er met de API gepraat worden: sessie én gebruiker, geen
+   *  toestel-wachtscherm, geen tweede stap (App.tsx). Achtergrondpolls hangen
+   *  hieraan, niet aan `currentUser` alleen: na een toestelblokkade bleef de
+   *  gebruiker staan en liep elke poll in een 403-lus (05-11). */
+  dataKlaar: boolean;
   showToast: ShowToast;
   meldLaadfout: (bron: string, fout?: unknown) => void;
   fetchActivityLog: (accessToken?: string) => Promise<void>;
@@ -95,6 +100,23 @@ export const antwoordAfdruk = (response: Pick<Response, 'headers' | 'url'> | nul
     // Niet te serialiseren (kringverwijzing): nooit gelijk, dus altijd zetten.
     return `uniek:${Math.random()}`;
   }
+};
+
+/**
+ * Zei de server dat de LIJST intussen door iemand anders gewijzigd is? Alleen
+ * het antwoord van `revisionCheck` (api/_lib/collectie.ts) zegt dat: 409 met
+ * `conflict: 'revision'`, of 428 als de revisie ontbrak. Elke andere 409 is
+ * een regel over de inhoud (de dienst loopt al, de collega staat die dag niet
+ * vrij, de aanvraag is al afgehandeld) en voor een chauffeur bestaat de
+ * revisiecheck niet eens. Wie "status 409" las als "iemand anders was je voor"
+ * verving de echte reden door een toast die vroeg opnieuw te proberen, en dat
+ * liep in een kringetje (dienstruil, 03-11-2026).
+ */
+export const isRevisieConflict = (status: number, body: unknown): boolean => {
+  if (status === 428) return true;
+  if (status !== 409) return false;
+  const conflict = (body as { conflict?: unknown } | null | undefined)?.conflict;
+  return conflict === 'revision' || conflict === 'revision-missing';
 };
 
 /**

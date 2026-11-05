@@ -2,7 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { Download, FileText, IdCard } from 'lucide-react';
 import type { User } from '../types';
 import { isSafeDocumentUrl, notify, openPdfInNewTab } from '../lib/ui';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
@@ -49,7 +49,6 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
   // Wanneer de links van de lijst binnenkwamen: ze zijn maar 15 minuten
   // geldig (src/lib/documentLink.ts).
   const ondertekendOp = useRef<number | null>(null);
-  const eersteLaadKlaar = useRef(false);
   // Het document waarvoor net een verse link opgehaald wordt.
   const [bezigId, setBezigId] = useState<string | null>(null);
   // Eigen vervaldata (Code 95 / medische schifting): zo ziet de
@@ -91,19 +90,13 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
 
   // Laden bij het openen, en stil verversen bij het hervatten van de app
   // zodra de lijst ouder is dan een paar minuten: zo zijn de links vers op
-  // het moment dat de chauffeur tikt. Een mislukte eerste laad meldt zich
-  // als toast, zoals voorheen; een mislukte stille verversing vangt de tik
-  // zelf op (openDoc haalt dan een verse link).
-  const { laden: loading } = useZelfLadend(async () => {
-    try {
-      await haalDocumenten();
-    } catch (err) {
-      if (!eersteLaadKlaar.current) meldSchrijffout('Documenten laden', err);
-      throw err;
-    } finally {
-      eersteLaadKlaar.current = true;
-    }
-  }, { deps: [currentUser.id], focusIntervalMs: DOCUMENT_VERVERS_NA_MS });
+  // het moment dat de chauffeur tikt. Een mislukte eerste laad is een
+  // Foutkaart met herkansing (tot 05-11 een toast plus "Nog geen documenten",
+  // en leeg mag nooit "niet geladen" betekenen); een mislukte stille
+  // verversing vangt de tik zelf op (openDoc haalt dan een verse link).
+  const { laden: loading, fout, opnieuw } = useZelfLadend(async () => { await haalDocumenten(); }, {
+    deps: [currentUser.id], focusIntervalMs: DOCUMENT_VERVERS_NA_MS, boodschap: 'De documenten konden niet laden.',
+  });
 
   /** Leesbevestiging (fire-and-forget): de planner ziet "geopend". */
   const bevestigOpening = (id: string) => {
@@ -181,6 +174,8 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
         </Card>
+      ) : fout && docs.length === 0 ? (
+        <Foutkaart boodschap={fout} onOpnieuw={opnieuw} offline={!online} />
       ) : docs.length === 0 ? (
         <EmptyState title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
       ) : (

@@ -2,9 +2,9 @@
 
 ## Comparison target and evidence
 
-- Source visual truth: `/Users/jarnodegreve/.codex/generated_images/01a0a9ca-3493-7222-8d92-35d800d05abc/exec-788f0512-1d04-42af-83e9-fbf97053add4.png` (1525 × 1031 pixels).
+- Source visual truth: the generated design board (1525 × 1031 pixels). The file lived outside the repo under `~/.codex/generated_images/` and is no longer on disk (checked 05-11-2026).
 - Implementation: `http://localhost:4196/beheer/designsysteem#illustraties`, using local fixture data.
-- Final desktop screenshot: `/Users/jarnodegreve/VHB/output/statusontwerp/desktop-dark.png` (1600 × 1080 pixels and CSS viewport).
+- Final desktop screenshot: `../output/statusontwerp/desktop-dark.png` (relative to the repo root, outside the repo; 1600 × 1080 pixels and CSS viewport).
 - Additional evidence in the same output directory: `desktop-light.png` (1600 × 1080), `tablet-dark.png` (768 × 1024), `mobile-dark.png` and `mobile-light.png` (320 × 800), and `gele-boek-error.png` (1280 × 720).
 - Density: implementation captures are 1 pixel per CSS pixel; no density resampling used. Source is a standalone design board with no specified CSS viewport. Compare the component region and hierarchy, not the existing portal navigation or the source board's larger presentation typography.
 - State: empty, success, error, no search results, and full/compact retry states. Desktop dark matches the source theme; light mode and smaller widths are additional resilience checks.
@@ -33,7 +33,7 @@ No actionable P0/P1/P2 findings remain.
 - Real Gele boek route with a simulated 503: correct title/description and retry returning to the loading state.
 - Real Omleidingen route with an empty fixture: empty view, a search returning “Geen resultaten”, and “Wis filters” restoring “Geen omleidingen”.
 - Console errors checked on the final verification tab: none. A service-worker warning is expected because the fixture server deliberately returns 404 for `sw.js`. Earlier preview-only analytics script errors were resolved in the temporary fixture server. No production backend was used.
-- `npm run lint`, `npm run lint:strict`, `npm run lint:design`: passed.
+- `npm run lint`, `npm run lint:design`: passed (the `lint:strict` script used at the time was folded into `npm run lint` on 21-09; it no longer exists).
 - Production build with local dummy environment: passed.
 - Bundle size check: passed (total gzip 572kB, below 600kB limit).
 - `git diff --check`: passed.

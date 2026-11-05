@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { bouwHeropbouwPlan, planSamenvatting } from '../shared/heropbouwPlan';
+import { bouwHeropbouwPlan } from '../shared/heropbouwPlan';
 
 const rij = (driverId: string, date: string, line: string, startTime = '06:00', endTime = '14:00', loopnr = '') => ({ driverId, date, line, startTime, endTime, loopnr });
 const namen = new Map([['3', 'Chauffeur A'], ['4', 'Chauffeur B']]);
@@ -17,7 +17,6 @@ describe('bouwHeropbouwPlan', () => {
     expect(plan.chauffeurs).toEqual([]);
     expect(plan.totaal).toEqual({ chauffeurs: 0, dagen: 0, erbij: 0, weg: 0, gewijzigd: 0 });
     expect(plan.diensten).toBe(2);
-    expect(planSamenvatting(plan)).toBe('geen wijzigingen');
   });
 
   it('een andere tijd, een dag erbij en een dag weg, per chauffeur op naam gesorteerd', () => {
@@ -33,7 +32,6 @@ describe('bouwHeropbouwPlan', () => {
       { dag: '2026-10-15', was: [], wordt: ['dienst 15, 06:00 tot 14:00'], soort: 'erbij' },
     ]);
     expect(plan.totaal).toEqual({ chauffeurs: 2, dagen: 3, erbij: 1, weg: 1, gewijzigd: 1 });
-    expect(planSamenvatting(plan)).toBe('2 chauffeur(s), 3 dag(en) (1 erbij, 1 weg, 1 gewijzigd)');
   });
 
   it('een gesplitste dienst telt als één dag, het loopnummer staat in het label, een onbekende chauffeur krijgt zijn id', () => {

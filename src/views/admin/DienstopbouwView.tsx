@@ -4,7 +4,7 @@ import type { User } from '../../types';
 import { BEVINDING_LABEL, SEGMENT_TYPE_LABEL } from '../../../shared/dienst';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
-import { aantal, formatDateTimeHuman } from '../../lib/format';
+import { aantal, formatDateTimeHuman, metEenheid } from '../../lib/format';
 import {
   activeerImport, bestandNaarBase64, bewaarDagtype, importeerBestand, laadDagtypes, laadImports, laadLoonparameters, laadRitblad, laadSegmenten, leidLooncodesAf,
   minNaarHHMM, verwijderImport, type Bevinding, type DagtypeCode, type LoonParameters, type RitbladRij, type Segment, type SegmentImport,
@@ -347,7 +347,7 @@ function DienstenTab({ actief, importsLaden }: { actief: SegmentImport | null; i
                         <span className="w-5 shrink-0 text-right text-xs text-slate-500">{s.volgorde}</span>
                         <span title={SEGMENT_TYPE_LABEL[s.type]}><Chip>{s.type}</Chip></span>
                         <span className="whitespace-nowrap font-semibold text-slate-800">{minNaarHHMM(s.startMin)}–{minNaarHHMM(s.eindeMin)}</span>
-                        <span className="ml-auto whitespace-nowrap text-xs text-slate-500">{s.duurMin} min{s.afstandKm != null ? ` · ${s.afstandKm} km` : ''}</span>
+                        <span className="ml-auto whitespace-nowrap text-xs text-slate-500">{metEenheid(s.duurMin, 'min')}{s.afstandKm != null ? ` · ${metEenheid(s.afstandKm, 'km')}` : ''}</span>
                       </p>
                       {(s.loop || s.lijn || s.vertrek || s.aankomst) && (
                         <p className="pl-7 text-xs text-slate-600">

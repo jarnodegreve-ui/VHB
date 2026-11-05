@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { User, View } from '../types';
-import { useDataKern, useStabieleActies, type ShowToast } from './data/kern';
+import { useDataKern, useStabieleActies, type BronMeting, type ShowToast } from './data/kern';
 import { useActiviteitData } from './data/activiteit';
 import { usePlanningData } from './data/planning';
 import { useVerlofData } from './data/verlof';
@@ -37,12 +37,15 @@ import { UITGESTELD_PER_VIEW, uitgesteldVoor, type Uitgesteld } from './data/poo
 export function useAppData({
   session,
   currentUser,
+  dataKlaar,
   currentView,
   showToast,
   meldLaadfout,
 }: {
   session: Session | null;
   currentUser: User | null;
+  /** Zie DataBasis.dataKlaar (App.tsx berekent hem). */
+  dataKlaar: boolean;
   currentView: View;
   showToast: ShowToast;
   meldLaadfout: (bron: string, fout?: unknown) => void;
@@ -59,8 +62,8 @@ export function useAppData({
   // De kern ontstaat pas ná activiteit (kruisverband), dus het log meldt zijn
   // laadstaat via een ref die hieronder op de kern wordt gezet.
   const noteerRef = useRef<(key: string, geslaagd: boolean) => void>(() => {});
-  const activiteit = useActiviteitData({ session, currentUser, currentView, noteerCollectie: (k, f) => noteerRef.current(k, f) });
-  const ctx = useDataKern({ session, currentUser, showToast, meldLaadfout, fetchActivityLog: activiteit.fetchActivityLog });
+  const activiteit = useActiviteitData({ session, currentUser, currentView, dataKlaar, noteerCollectie: (k, f) => noteerRef.current(k, f) });
+  const ctx = useDataKern({ session, currentUser, dataKlaar, showToast, meldLaadfout, fetchActivityLog: activiteit.fetchActivityLog });
   noteerRef.current = ctx.noteerCollectie;
   const planning = usePlanningData(ctx);
   const verlof = useVerlofData({ ...ctx, refreshCoverageGaps: planning.refreshCoverageGaps });
@@ -86,11 +89,18 @@ export function useAppData({
   // een uitgestelde collectie naar voren halen: vóór de 2FA-poort zou de
   // server ze weigeren).
   const uitgesteldBezigRef = useRef(new Map<Uitgesteld, Promise<void>>());
+  // Het token in de beurt dient alleen om in loadAppData dezelfde beurt te
+  // herkennen; een latere herkansing (Foutkaart, schermwissel) vertrekt
+  // zonder expliciet token, zodat de fetcher de live sessie neemt. Met het
+  // token van het inlogmoment liep "Opnieuw proberen" uren later eerst tegen
+  // een 401 (05-11).
   const laadbeurtRef = useRef<{ rol: User['role']; userId: string; accessToken: string } | null>(null);
 
   /** Eén uitgestelde collectie ophalen; een tweede vraag terwijl ze loopt
-   *  krijgt dezelfde belofte (boot-start en schermwissel botsen zo niet). */
-  const haalCollectie = (sleutel: Uitgesteld, accessToken: string, userId: string): Promise<void> => {
+   *  krijgt dezelfde belofte (boot-start en schermwissel botsen zo niet).
+   *  `accessToken` alleen voor de laadbeurt zelf (vlak na het inloggen is de
+   *  sessie-state nog niet bijgewerkt). */
+  const haalCollectie = (sleutel: Uitgesteld, userId: string, accessToken?: string): Promise<void> => {
     switch (sleutel) {
       case 'services': return planning.fetchServices(accessToken);
       case 'planningCodes': return planning.fetchPlanningCodes(accessToken);
@@ -104,13 +114,12 @@ export function useAppData({
       case 'meldingen': return meldingenData.fetchMeldingen(accessToken);
     }
   };
-  const laadUitgesteld = (sleutel: Uitgesteld): Promise<void> => {
+  const laadUitgesteld = (sleutel: Uitgesteld, accessToken?: string): Promise<void> => {
     const beurt = laadbeurtRef.current;
     if (!beurt) return Promise.resolve();
     const bezig = uitgesteldBezigRef.current.get(sleutel);
     if (bezig) return bezig;
-    const { accessToken, userId } = beurt;
-    const belofte = haalCollectie(sleutel, accessToken, userId).finally(() => {
+    const belofte = haalCollectie(sleutel, beurt.userId, accessToken).finally(() => {
       uitgesteldBezigRef.current.delete(sleutel);
       // Intussen uitgelogd: het late antwoord mag geen data of vlag van de
       // vorige gebruiker achterlaten voor wie daarna inlogt.
@@ -142,7 +151,7 @@ export function useAppData({
     const zonderEigenLader = (k: Uitgesteld) => !(k === 'activityLog' && currentViewRef.current === 'activiteit');
     // Nu al nodig voor het open scherm: naast de poort starten.
     const nuNodig = (UITGESTELD_PER_VIEW[currentViewRef.current] ?? []).filter((k) => uitgesteld.includes(k));
-    const vroeg = nuNodig.map((k) => laadUitgesteld(k));
+    const vroeg = nuNodig.map((k) => laadUitgesteld(k, accessToken));
     let laat: Promise<void>[] = [];
     try {
       // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
@@ -168,13 +177,11 @@ export function useAppData({
           planning.refreshCoverageGaps(),
         ] : []),
       ]);
-      // Versheid: kwam er ook maar één antwoord uit de SW-cache (offline of
-      // buiten bereik), dan is dit geen verse synchronisatie. We houden dan
-      // de datum van het oudste gecachte antwoord aan (of laten de vorige
-      // waarde staan), zodat "gegevens van hh:mm" klopt.
+      // Versheid: zie syncTijdNa (kwam er iets uit de SW-cache, dan telt de
+      // datum van het oudste gecachte antwoord; kwam er niets, dan niets).
       const bron = ctx.sluitBronMeting();
-      if (bron.uitCache === 0) setLastSyncedAt(Date.now());
-      else if (bron.oudste !== null) setLastSyncedAt((vorige) => (vorige === null ? bron.oudste : Math.min(vorige, bron.oudste!)));
+      const nu = Date.now();
+      setLastSyncedAt((vorige) => syncTijdNa(bron, vorige, nu));
     } catch (error) {
       console.error('Error loading app data:', error);
       meldLaadfout('de gegevens', error);
@@ -184,7 +191,7 @@ export function useAppData({
       // fouten (laadfout-toast waar dat al zo was) en zetten hun vlag altijd.
       // Niet wanneer intussen is uitgelogd (resetAll wist de laadbeurt).
       if (laadbeurtRef.current?.accessToken === accessToken) {
-        laat = uitgesteld.filter(zonderEigenLader).map((k) => laadUitgesteld(k));
+        laat = uitgesteld.filter(zonderEigenLader).map((k) => laadUitgesteld(k, accessToken));
       }
     }
     if (opts?.wachtOpAlles) await Promise.allSettled([...vroeg, ...laat]);
@@ -217,6 +224,22 @@ export function useAppData({
 
   const refreshAll = () =>
     currentUser && session?.access_token ? loadAppData(currentUser, session.access_token, { wachtOpAlles: true }) : Promise.resolve();
+
+  /** Een stille verversing (de volledige catch-up na een socket-reconnect of
+   *  terug online, useLiveUpdates) als synchronisatie boeken: de synctijd
+   *  verschuift alleen als er echt een antwoord kwam. Tot 05-11 zette de
+   *  online-catch-up in App.tsx de tijd ook als elke call mislukt was, en
+   *  zei "gegevens van hh:mm" bij de volgende uitval dus het verkeerde uur. */
+  const boekSync = async (werk: () => Promise<unknown>): Promise<void> => {
+    ctx.beginBronMeting();
+    try {
+      await werk();
+    } finally {
+      const bron = ctx.sluitBronMeting();
+      const nu = Date.now();
+      setLastSyncedAt((vorige) => syncTijdNa(bron, vorige, nu));
+    }
+  };
 
   /** Alles leegmaken bij uitloggen (sessie verlopen / afgemeld). De poort
    *  gaat weer dicht: wie zich daarna in dezelfde pagina aanmeldt (afmelden
@@ -270,7 +293,7 @@ export function useAppData({
     setIsInitialLoad, setLastSyncedAt,
     // herlaadCollectie: retry vanuit een Foutkaart (useCollectieStaat), zelfde
     // lader en dezelfde bundeling van een lopend verzoek als de laadbeurt.
-    loadAppData, refreshAll, resetAll, herlaadCollectie: laadUitgesteld,
+    loadAppData, refreshAll, resetAll, herlaadCollectie: laadUitgesteld, boekSync,
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, fetchUnseenDocuments, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog, fetchLoginActivity,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
@@ -281,6 +304,19 @@ export function useAppData({
   });
 
   return useMemo(() => ({ ...data, ...acties, acties }), [data, acties]);
+}
+
+/**
+ * De synctijd na een laadronde, uit de herkomstmeting van de kern: alles vers
+ * = nu; ook maar één antwoord uit de SW-cache (offline of buiten bereik) = de
+ * datum van het oudste gecachte antwoord, nooit later dan wat er stond; geen
+ * enkel antwoord (alles mislukt) = de vorige waarde blijft staan.
+ */
+export function syncTijdNa(bron: BronMeting, vorige: number | null, nu: number): number | null {
+  if (bron.vers === 0 && bron.uitCache === 0) return vorige;
+  if (bron.uitCache === 0) return nu;
+  if (bron.oudste === null) return vorige;
+  return vorige === null ? bron.oudste : Math.min(vorige, bron.oudste);
 }
 
 /** De platte vorm die App en de views (via de context) te zien krijgen. */

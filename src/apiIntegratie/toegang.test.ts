@@ -729,12 +729,19 @@ describe('wachtwoordminimum server-side (controle-ronde 27-08, nr. 32)', () => {
 });
 
 describe('wachtwoord resetten door beheer (POST /api/admin/users/reset-password)', () => {
+  // Welke Auth-lezingen de route deed: 'lijst' (listUsers) of 'id:<authId>'.
+  let lezingen: string[] = [];
   const authAttrap = () => {
     const gezet: Array<{ id: string; password?: string }> = [];
+    lezingen = [];
     mem.supabaseAdmin = {
       auth: {
         admin: {
-          listUsers: async () => ({ data: { users: [{ id: 'auth-a', email: 'a@vhb.be' }] }, error: null }),
+          listUsers: async () => { lezingen.push('lijst'); return { data: { users: [{ id: 'auth-a', email: 'a@vhb.be' }] }, error: null }; },
+          getUserById: async (id: string) => {
+            lezingen.push(`id:${id}`);
+            return id === 'auth-a' ? { data: { user: { id, email: 'a@vhb.be' } }, error: null } : { data: { user: null }, error: { status: 404, message: 'User not found' } };
+          },
           updateUserById: async (id: string, velden: { password?: string }) => { gezet.push({ id, password: velden.password }); return { data: {}, error: null }; },
         },
       },
@@ -771,6 +778,32 @@ describe('wachtwoord resetten door beheer (POST /api/admin/users/reset-password)
   it('blijft alleen voor admin (403 voor een planner)', async () => {
     authAttrap();
     expect((await api('POST', '/api/admin/users/reset-password', { token: 'tok-planner', body: { userId: '3', password: '1234567890' } })).status).toBe(403);
+  });
+
+  it('met een gekoppeld Auth-account (users.authid) leest hij dat account rechtstreeks, zonder de hele lijst (05-11)', async () => {
+    const gezet = authAttrap();
+    mem.users = mem.users.map((u) => (u.id === '3' ? { ...u, authId: 'auth-a' } : u));
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '1234567890' } });
+    expect(res.status).toBe(200);
+    expect(lezingen).toEqual(['id:auth-a']);
+    expect(gezet).toEqual([{ id: 'auth-a', password: '1234567890' }]);
+  });
+
+  it('een koppeling naar een verdwenen Auth-account is een 404, geen terugval op e-mail', async () => {
+    const gezet = authAttrap();
+    mem.users = mem.users.map((u) => (u.id === '3' ? { ...u, authId: 'auth-weg' } : u));
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '1234567890' } });
+    expect(res.status).toBe(404);
+    expect(res.json.error).toBe('Geen gekoppeld auth-account gevonden.');
+    expect(lezingen).toEqual(['id:auth-weg']);
+    expect(gezet).toEqual([]);
+  });
+
+  it('zonder koppeling (oud profiel) blijft de lijst-lookup op e-mail', async () => {
+    authAttrap();
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '1234567890' } });
+    expect(res.status).toBe(200);
+    expect(lezingen).toEqual(['lijst']);
   });
 });
 
@@ -1129,15 +1162,33 @@ describe('toestel-whitelist', () => {
     expect(res.json?.code).toBe('device_unknown');
   });
 
-  it('fail-CLOSED bij een echte DB-fout in de gate (503)', async () => {
+  it('fail-CLOSED bij een DB-fout in de gate voor een chauffeur (503), ook als de tabel zou ontbreken', async () => {
     const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-dberror' });
     expect(res.status).toBe(503);
     expect(res.json?.code).toBe('device_check_failed');
+    // De aparte fail-open-tak voor een ontbrekende tabel is weg (05-11):
+    // user_devices zit in de basismigratie.
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-missingtable' })).status).toBe(503);
+    // Een technieker is evenmin staf: zelfde 503.
+    mem.users.push({ id: '5', name: 'Tom Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    invalidateUsersCache();
+    expect((await api('GET', '/api/updates', { token: 'tok-tech', device: 'dev-dberror' })).status).toBe(503);
   });
 
-  it('fail-OPEN alleen wanneer de user_devices-tabel ontbreekt (migratie niet gedraaid)', async () => {
-    const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-missingtable' });
-    expect(res.status).toBe(200);
+  it('staf met een toesteltoken valt bij een DB-fout OPEN: verder zonder gate, zoals staf zonder token (05-11)', async () => {
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await api('GET', '/api/updates', { token: 'tok-planner', device: 'dev-dberror' });
+      expect(res.status).toBe(200);
+      // De sessiecontrole blijft gelden: een ingetrokken sessie is ook dan dicht.
+      mem.devices.push({ userId: '2', deviceToken: 'dev-x', name: 'x', status: 'revoked', sessionId: 'sess-dicht', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: '' });
+      const token = `x.${Buffer.from(JSON.stringify({ sub: 'auth-tok-planner', email: 'planner@vhb.be', session_id: 'sess-dicht' })).toString('base64')}.y`;
+      const dicht = await api('GET', '/api/updates', { token, device: 'dev-dberror' });
+      expect(dicht.status).toBe(403);
+      expect(dicht.json?.code).toBe('device_revoked');
+    } finally {
+      stil.mockRestore();
+    }
   });
 
   it('het laatste toestel van een gebruiker kan niet geschrapt worden (heropent auto-approve)', async () => {

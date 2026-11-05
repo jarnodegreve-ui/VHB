@@ -247,7 +247,17 @@ export function ZiekteView({
   };
 
   // --- Detail: einddatum bijstellen of intrekken ----------------------------
-  const [detail, setDetail] = useState<LeaveRequest | null>(null);
+  // Het paneel onthoudt welk record open is en leest het verder uit de live
+  // lijst: stelt een collega intussen de einddatum bij (realtime), dan toont
+  // het detail die wijziging. Alleen als het record uit de lijst verdween
+  // (verwijderd) blijft de laatst geziene versie staan, zodat het paneel niet
+  // onder je handen dichtklapt. Het veld Nieuwe einddatum houdt de waarde van
+  // het openen: na zo'n wijziging staat het op de oude datum en leest het
+  // formulier als gewijzigd, tot je het veld zelf aanpast of het paneel sluit.
+  const [gekozen, setDetail] = useState<LeaveRequest | null>(null);
+  const detailLive = gekozen ? leaveRequests.find((r) => r.id === gekozen.id) : undefined;
+  useEffect(() => { if (detailLive && detailLive !== gekozen) setDetail(detailLive); }, [detailLive, gekozen]);
+  const detail = detailLive ?? gekozen;
   const [nieuwEinde, setNieuwEinde] = useState('');
   const [isOpslaan, setIsOpslaan] = useState(false);
   const openDetail = (r: LeaveRequest) => { setDetail(r); setNieuwEinde(r.endDate); setBatchAdvies({}); setVerdeelFouten({}); };

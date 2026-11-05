@@ -551,3 +551,21 @@ describe('verbeterronde 22-08, voorstel, batch-advies en maandoverzicht', () => 
     expect((await api('GET', '/api/month-planning?month=2030-09&format=summary', { token: 'tok-a' })).status).toBe(403);
   });
 });
+
+describe('dekkingsinstellingen: een databasefout gaat niet naar de client (05-11)', () => {
+  it('PUT /api/coverage-expectations geeft bij een opslagfout een generieke 500, de Supabase-tekst blijft in het log', async () => {
+    const storage = await import('../../api/storage.js');
+    const spion = vi.spyOn(storage, 'saveCoverageExpectations').mockRejectedValueOnce(new Error('relation "coverage_expectations" does not exist'));
+    const fouten = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await api('PUT', '/api/coverage-expectations', { token: 'tok-planner', body: { dayTypes: [{ name: 'week', services: ['12'] }], weekdays: [], overrides: [] } });
+      expect(res.status).toBe(500);
+      expect(res.json).toEqual({ error: 'Dekkingsinstellingen opslaan is mislukt. Probeer het zo opnieuw.' });
+      expect(JSON.stringify(res.json)).not.toContain('relation');
+      expect(fouten.mock.calls.flat().join(' ')).toContain('coverage_expectations');
+    } finally {
+      spion.mockRestore();
+      fouten.mockRestore();
+    }
+  });
+});

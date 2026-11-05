@@ -44,7 +44,7 @@ export default function App() {
   // refresh-op-dezelfde-plek werken daardoor vanzelf.
   const { view: currentView, navigeer } = useRoute();
   // Aanwezigheid (staf ziet elkaar in de topbar) + broodkruimel per schermwissel (foutrapporten).
-  useAanwezigheid(!!session && !!currentUser, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
+  useAanwezigheid(dataKlaar, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
   useEffect(() => { addBreadcrumb('navigatie', currentView); }, [currentView]);
   // Netwerkstatus uit de online-store (src/lib/useOnline.ts): dezelfde
   // waarheid als Mijn dag en de ritbladviewer, mét ping-fallback voor
@@ -99,6 +99,7 @@ export default function App() {
   const appData = useAppData({
     session,
     currentUser,
+    dataKlaar,
     currentView,
     showToast: (m, t, a, o) => showToast(m, t, a, o),
     meldLaadfout: (b, f) => meldLaadfout(b, f),
@@ -106,9 +107,9 @@ export default function App() {
   const {
     shifts, users, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments,
     planningMatrixHistory, coverageDays, vervaldata, pendingDevices,
-    isInitialLoad, setIsInitialLoad, lastSyncedAt, setLastSyncedAt,
+    isInitialLoad, setIsInitialLoad, lastSyncedAt,
     usersGeladen, swapsGeladen,
-    loadAppData, refreshAll, resetAll,
+    loadAppData, refreshAll, resetAll, boekSync,
     fetchUpdates, fetchSwaps, fetchLeave, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps,
     fetchMyNotes,
@@ -170,31 +171,15 @@ export default function App() {
 
   // Live-updates via Supabase Realtime (src/app/useLiveUpdates.ts): de
   // refetchers per collectie; niet zolang het toestel-wachtscherm staat.
-  useLiveUpdates(dataKlaar, currentUser, {
+  const { catchUp } = useLiveUpdates(dataKlaar, currentUser, {
     fetchLeave, fetchSwaps, fetchDiversions, fetchUpdates, fetchMyNotes, fetchMeldingen,
-    fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchUsers,
+    fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchUsers, boekSync,
   });
 
-  // Terug online (offline-banner verdwijnt): zelfde catch-up als realtime —
-  // gemiste events zijn definitief weg — en daarna de sync-tijd verversen,
-  // zodat "gegevens van HH:MM" bij een volgende uitval klopt.
-  onlineCatchUpRef.current = () => {
-    if (!currentUser || toestelGeblokkeerdRef.current || tweeStaps) return;
-    const planningFilter = isStaf(currentUser.role) ? undefined : { driverId: String(currentUser.id) };
-    void Promise.allSettled([
-      fetchMyNotes(),
-      fetchLeave(),
-      fetchSwaps(),
-      fetchDiversions(undefined, { silent: true }),
-      fetchUpdates(),
-      fetchPlanning(undefined, planningFilter, { silent: true }),
-      ...(isStaf(currentUser.role)
-        ? [refreshCoverageGaps(), fetchPlanningMatrix(), fetchPlanningMatrixHistory()]
-        : []),
-    ]).then(() => {
-      if (typeof navigator === 'undefined' || navigator.onLine) setLastSyncedAt(Date.now());
-    });
-  };
+  // Terug online (offline-banner verdwijnt): dezelfde volledige catch-up als
+  // een socket-reconnect (useLiveUpdates bundelt de twee en boekt de synctijd
+  // alleen als er echt een antwoord kwam).
+  onlineCatchUpRef.current = () => { if (dataKlaar) void catchUp(); };
 
   // Nieuwe versie van het portaal klaar (src/app/useNieuweVersie.ts).
   useNieuweVersie(showToast);
@@ -277,7 +262,8 @@ export default function App() {
   // parallel met de data, zodat het plekje maar een oogwenk leeg is); de
   // account-overlays zodra Instellingen open staat (de knoppen zitten daar).
   useEffect(() => {
-    if (currentUser && isStaf(currentUser.role)) void laadWerkvoorraadMenu();
+    // Voorlading slikt haar fout; de knop zelf laadt met vangnet (lazyWithRetry).
+    if (currentUser && isStaf(currentUser.role)) void laadWerkvoorraadMenu().catch(() => {});
   }, [currentUser?.role]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (currentView === 'instellingen') laadAccountOverlays();

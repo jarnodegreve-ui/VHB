@@ -710,54 +710,68 @@ export function mountCommunicatieRoutes(app: express.Express) {
       return res.status(400).json({ error: "Missing update" });
     }
 
-    // Ontvangers ALTIJD server-side bepalen (nooit uit de request-body): anders
-    // kon een planner/admin de bedrijfs-SMTP als relay naar willekeurige externe
-    // adressen gebruiken. De mail gaat naar wie een e-mailadres heeft; de push
-    // naar álle actieve gebruikers (ook e-mailloze chauffeurs — het is dringend).
-    const allUsers = await getUsersData();
-    const activeUsers = allUsers.filter((u) => u.isActive !== false);
-    const emails = activeUsers.map((u) => u.email).filter(Boolean) as string[];
+    // Zonder try/catch bleef het verzoek hangen op een DB-hik: de globale
+    // foutafhandeling vangt alleen synchrone fouten. Een DB-fout = nette 500;
+    // een mislukte push of mail mag het antwoord niet blokkeren (zie onder).
+    try {
+      // Ontvangers ALTIJD server-side bepalen (nooit uit de request-body): anders
+      // kon een planner/admin de bedrijfs-SMTP als relay naar willekeurige externe
+      // adressen gebruiken. De mail gaat naar wie een e-mailadres heeft; de push
+      // naar álle actieve gebruikers (ook e-mailloze chauffeurs, het is dringend).
+      const allUsers = await getUsersData();
+      const activeUsers = allUsers.filter((u) => u.isActive !== false);
+      const emails = activeUsers.map((u) => u.email).filter(Boolean) as string[];
 
-    // Push naar álle actieve gebruikers (ook wie geen e-mail heeft) — best-effort.
-    await sendPushToUsers(
-      activeUsers.map((u) => String(u.id)).filter(Boolean),
-      // Naar het bericht zelf (/updates/<id>) zodra er een id is: de melding
-      // en de push-tik landen dan op dat item (useRecordParam in UpdatesView).
-      { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: update.id ? recordUrl("updates", String(update.id)) : viewUrl("updates"), soort: "update" },
-    );
+      // Push naar álle actieve gebruikers (ook wie geen e-mail heeft), best-effort:
+      // een pushdienst die weigert mag de mail niet tegenhouden.
+      try {
+        await sendPushToUsers(
+          activeUsers.map((u) => String(u.id)).filter(Boolean),
+          // Naar het bericht zelf (/updates/<id>) zodra er een id is: de melding
+          // en de push-tik landen dan op dat item (useRecordParam in UpdatesView).
+          { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: update.id ? recordUrl("updates", String(update.id)) : viewUrl("updates"), soort: "update" },
+        );
+      } catch (pushErr: any) {
+        console.error("[updates] push dringende update mislukt:", pushErr?.message ?? pushErr);
+      }
 
-    if (emails.length === 0) {
-      return res.json({ success: true, message: "No recipients with email found" });
-    }
+      if (emails.length === 0) {
+        return res.json({ success: true, message: "No recipients with email found" });
+      }
 
-    // Via de gedeelde sendEmail-helper (api/email.ts): één SMTP-configuratie
-    // en één mock-pad i.p.v. een eigen transporter per route. Op de vaste
-    // lay-out; de knop landt op het bericht zelf zodra er een id is.
-    const doelPad = update.id ? recordUrl("updates", String(update.id)) : viewUrl("updates");
-    const { onderwerp, html, text } = bouwDringendeUpdateMail({ titel: String(update.title), inhoud: String(update.content || ""), doelPad });
-    const result = await sendEmail({
-      to: emails,
-      context: "urgent-update",
-      soort: "dringende-update",
-      door: req.appUser?.name ?? null,
-      subject: onderwerp,
-      text,
-      html,
-    });
+      // Via de gedeelde sendEmail-helper (api/email.ts): één SMTP-configuratie
+      // en één mock-pad i.p.v. een eigen transporter per route. Op de vaste
+      // lay-out; de knop landt op het bericht zelf zodra er een id is.
+      // sendEmail gooit zelf nooit: een mislukte verzending komt als ok=false.
+      const doelPad = update.id ? recordUrl("updates", String(update.id)) : viewUrl("updates");
+      const { onderwerp, html, text } = bouwDringendeUpdateMail({ titel: String(update.title), inhoud: String(update.content || ""), doelPad });
+      const result = await sendEmail({
+        to: emails,
+        context: "urgent-update",
+        soort: "dringende-update",
+        door: req.appUser?.name ?? null,
+        subject: onderwerp,
+        text,
+        html,
+      });
 
-    // Uitgezet in Beheer › Mails: sendEmail verstuurt dan niets en geeft
-    // `ok` met `overgeslagen`. Dat eerlijk doorgeven (nr. 13): vroeger stond
-    // hier "Emails succesvol verzonden" en zei het scherm dat alle chauffeurs
-    // de mail hadden. De push hierboven is wel vertrokken.
-    if (result.overgeslagen) {
-      return res.json({ success: true, overgeslagen: true, message: MAIL_UIT_MELDING });
+      // Uitgezet in Beheer › Mails: sendEmail verstuurt dan niets en geeft
+      // `ok` met `overgeslagen`. Dat eerlijk doorgeven (nr. 13): vroeger stond
+      // hier "Emails succesvol verzonden" en zei het scherm dat alle chauffeurs
+      // de mail hadden. De push hierboven is wel vertrokken.
+      if (result.overgeslagen) {
+        return res.json({ success: true, overgeslagen: true, message: MAIL_UIT_MELDING });
+      }
+      if (result.mocked) {
+        return res.json({ success: true, message: "Email gelogd (geen SMTP geconfigureerd)", mocked: true });
+      }
+      if (!result.ok) {
+        return res.status(500).json({ error: "Fout bij verzenden email" });
+      }
+      res.json({ success: true, message: "Emails succesvol verzonden" });
+    } catch (err: any) {
+      console.error("Dringende update versturen is mislukt.", err);
+      res.status(500).json({ error: "Dringende update versturen is mislukt. Probeer het zo opnieuw." });
     }
-    if (result.mocked) {
-      return res.json({ success: true, message: "Email gelogd (geen SMTP geconfigureerd)", mocked: true });
-    }
-    if (!result.ok) {
-      return res.status(500).json({ error: "Fout bij verzenden email" });
-    }
-    res.json({ success: true, message: "Emails succesvol verzonden" });
   });
 }

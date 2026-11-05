@@ -8,7 +8,7 @@ import { ACCOUNT_STATUS } from '../../../shared/status';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
-import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDateTimeHuman, formatDatumDMJ, hoofdletter } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { CredentialsModal } from '../../components/CredentialsModal';
@@ -20,6 +20,7 @@ import { useQueryParam } from '../../app/router';
 import { ActieMenu, type ActieMenuItem } from '../../components/ActieMenu';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
+import { Skeleton } from '../../components/Skeleton';
 import { DateInput, Field, Input, Select } from '../../components/Field';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
@@ -77,30 +78,42 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   // formulier — geen halve saves bij Annuleren).
   const [userExpiries, setUserExpiries] = useState<Record<string, Record<string, string>>>({});
   const [vervalDraft, setVervalDraft] = useState<Record<string, string>>({});
+  // Pas na het antwoord van GET /api/user-expiries mag de draft gezaaid en
+  // bewaard worden: opende de planner Bewerken vóór de vervaldata binnen
+  // waren, dan bleef de draft leeg en stuurde Opslaan voor elke soort
+  // validUntil: null, de vervaldata werden stil gewist (controle 04-11).
+  // Tot dan staan de velden uit; mislukt de fetch, dan blijven ze uit.
+  const [vervaldataGeladen, setVervaldataGeladen] = useState(false);
   // Wie heeft meldingen aanstaan? Zonder abonnement komt er niets aan — bij de
   // uitrol is dat het verschil tussen "hij reageert niet" en "hij krijgt
-  // niets". Best-effort: mislukt de call, dan blijft de kolom gewoon "uit".
+  // niets". "Uit" is pas waar als de lijst binnen is: tot dan een
+  // plaatshouder, en mislukt de call, dan "onbekend" (controle 04-11; een
+  // lege set las als "niemand heeft meldingen aan").
   const [pushUserIds, setPushUserIds] = useState<Set<string>>(new Set());
+  const [pushStaat, setPushStaat] = useState<'laden' | 'geladen' | 'mislukt'>('laden');
   // Goedgekeurde toestellen per gebruiker: vervangt de oude sessieteller.
   // Die telde alleen op (start +1, alleen de uitlogknop -1), waardoor een
   // account op "115 sessies" kon staan; het aantal toestellen is wél waar.
+  // Zelfde regel als bij de meldingen: 0 pas tonen als de lijst binnen is.
   const [toestellenPerUser, setToestellenPerUser] = useState<Map<string, number>>(new Map());
+  const [toestellenStaat, setToestellenStaat] = useState<'laden' | 'geladen' | 'mislukt'>('laden');
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const res = await apiFetch('/api/devices');
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(String(res.status));
         const body = await res.json();
-        if (cancelled || !Array.isArray(body)) return;
+        if (cancelled) return;
         const telling = new Map<string, number>();
-        for (const d of body) {
+        for (const d of Array.isArray(body) ? body : []) {
           if (d?.status !== 'approved') continue;
           const id = String(d.userId);
           telling.set(id, (telling.get(id) ?? 0) + 1);
         }
         setToestellenPerUser(telling);
-      } catch { /* zonder deze lijst blijft de kolom op 0 staan */ }
+        setToestellenStaat('geladen');
+      } catch { if (!cancelled) setToestellenStaat('mislukt'); /* de kolom toont dan "onbekend", geen 0 */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -109,10 +122,12 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     void (async () => {
       try {
         const res = await apiFetch('/api/push/subscribers');
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(String(res.status));
         const body = await res.json();
-        if (!cancelled && Array.isArray(body?.userIds)) setPushUserIds(new Set(body.userIds.map(String)));
-      } catch { /* zonder deze lijst tonen we simpelweg geen 'aan' */ }
+        if (cancelled) return;
+        if (Array.isArray(body?.userIds)) setPushUserIds(new Set(body.userIds.map(String)));
+        setPushStaat('geladen');
+      } catch { if (!cancelled) setPushStaat('mislukt'); /* de kolom toont dan "onbekend", geen "uit" */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -160,16 +175,19 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
           map[r.userId][r.soort] = r.validUntil;
         }
         setUserExpiries(map);
-      } catch { /* zonder vervaldata gewoon lege velden */ }
+        setVervaldataGeladen(true);
+      } catch { /* zonder vervaldata blijven de velden uitgeschakeld */ }
     })();
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
-    setVervalDraft(editingUser ? { ...(userExpiries[editingUser.id] ?? {}) } : {});
-    // Bewust alleen op de gebruikers-id: de draft mag niet resetten terwijl
-    // je typt doordat een fetch de kaart ververst.
+    // Zaaien zodra de gebruiker wisselt of de vervaldata (alsnog) binnen
+    // zijn. Typen kan pas nadat ze geladen zijn, dus dit zaait nooit over
+    // invoer heen. Bewust niet op userExpiries zelf: de draft mag niet
+    // resetten terwijl je typt doordat een save de kaart ververst.
+    setVervalDraft(editingUser && vervaldataGeladen ? { ...(userExpiries[editingUser.id] ?? {}) } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingUser?.id]);
+  }, [editingUser?.id, vervaldataGeladen]);
   const [viewingHistoryUser, setViewingHistoryUser] = useState<User | null>(null);
   const [viewingChangeLogUser, setViewingChangeLogUser] = useState<User | null>(null);
   const [documentsUser, setDocumentsUser] = useState<User | null>(null);
@@ -211,6 +229,18 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const actieveUsers = users.filter((u) => u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder');
   const pushTotaal = actieveUsers.length;
   const pushMetAan = actieveUsers.filter((u) => pushUserIds.has(String(u.id))).length;
+  /** Meldingen aan/uit per rij: tabel kaal ("Aan"), kaart stil ("Meldingen aan"). */
+  const meldingenBadge = (u: User, kaart: boolean) => {
+    const tekst = (t: string) => (kaart ? `Meldingen ${t}` : hoofdletter(t));
+    if (pushStaat === 'laden') return <Skeleton className={cn('h-4', kaart ? 'w-24' : 'w-8')} rounded="full" />;
+    if (pushStaat === 'mislukt') return <Badge tone="slate" kaal={!kaart} stil={kaart}>{tekst('onbekend')}</Badge>;
+    const aan = pushUserIds.has(String(u.id));
+    return <Badge tone={aan ? 'emerald' : 'slate'} kaal={!kaart} stil={kaart}>{tekst(aan ? 'aan' : 'uit')}</Badge>;
+  };
+  /** Aantal toestellen van een gebruiker, of een plaatshouder zolang de lijst er niet is. */
+  const toestellenTelling = (u: User) => (toestellenStaat === 'geladen'
+    ? toestellenPerUser.get(String(u.id)) ?? 0
+    : toestellenStaat === 'laden' ? <Skeleton className="inline-block h-4 w-6 align-middle" /> : 'onbekend');
   // Adoptie-zicht voor de uitrol (idee 47): hoeveel actieve chauffeurs hebben
   // ooit ingelogd? Wie nooit inlogde bereik je met niets wat het portaal stuurt
   // — dat is precies wie je nog persoonlijk moet meekrijgen.
@@ -279,7 +309,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const { vuil: nieuwVuil } = useVuil(newUser, showAddModal);
   const { vuil: bewerkUserVuil } = useVuil(editingUser, !!editingUser, editingUser?.id);
   const vervalBestaand = editingUser ? userExpiries[editingUser.id] ?? {} : {};
-  const vervalVuil = !!editingUser && Object.keys(EXPIRY_SOORT_LABELS).some((soort) => (vervalDraft[soort] ?? '').trim() !== (vervalBestaand[soort] ?? ''));
+  const vervalVuil = !!editingUser && vervaldataGeladen && Object.keys(EXPIRY_SOORT_LABELS).some((soort) => (vervalDraft[soort] ?? '').trim() !== (vervalBestaand[soort] ?? ''));
   const bewerkVuil = bewerkUserVuil || vervalVuil;
   // Naam-botsing-poort: de planning koppelt matrixcellen aan accounts op naam
   // (accent-/volgorde-ongevoelig), en bij twee accounts op dezelfde sleutel
@@ -365,9 +395,11 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     setIsSubmittingUser(true);
     const success = await onSaveUser(editingUser, bewerkF.zet).finally(() => setIsSubmittingUser(false));
     if (!success) return;
-    // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten.
+    // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten,
+    // en alleen als ze geladen zijn (anders is een lege draft geen wijziging
+    // maar onbekend, en zou elke soort op null gezet worden).
     const bestaand = userExpiries[editingUser.id] ?? {};
-    for (const soort of Object.keys(EXPIRY_SOORT_LABELS)) {
+    for (const soort of vervaldataGeladen ? Object.keys(EXPIRY_SOORT_LABELS) : []) {
       const nieuw = (vervalDraft[soort] ?? '').trim();
       const oud = bestaand[soort] ?? '';
       if (nieuw === oud) continue;
@@ -685,7 +717,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
           const dubbeleNamen = [...perToken.values()].filter((namen) => namen.length > 1).map((namen) => namen[0]);
           // De uitleg over bestaande accounts stond vroeger in een (i) naast
           // de importknop; nu de import in het "…"-menu zit, hoort ze hier.
-          const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die op naam worden bijgewerkt (hun wachtwoord blijft ongemoeid). Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
+          const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die op naam worden bijgewerkt (hun wachtwoord blijft ongemoeid). Wil je doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wil je deze toevoegen?`;
           setPendingImportUsers(newUsersList);
           setPendingImportMessage(dubbeleNamen.length > 0 ? `${basis} Let op: na deze import bestaan er meerdere accounts met dezelfde naam (${dubbeleNamen.join(', ')}), die namen zijn dan niet aan de planning te koppelen.` : basis);
         }
@@ -784,9 +816,15 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Uitrol-teller: hoeveel actieve medewerkers kunnen de
                       meldingen die de app verstuurt écht ontvangen? */}
-                  <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">
-                    {pushMetAan} van {pushTotaal} met meldingen
-                  </Badge>
+                  {pushStaat === 'geladen' ? (
+                    <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">
+                      {pushMetAan} van {pushTotaal} met meldingen
+                    </Badge>
+                  ) : pushStaat === 'laden' ? (
+                    <Skeleton className="h-6 w-44" rounded="full" />
+                  ) : (
+                    <Badge tone="slate" stil>Meldingen niet geladen</Badge>
+                  )}
                   {/* Adoptie: hoeveel chauffeurs logden ooit in? Rood zolang er
                       nog een groep is die je persoonlijk moet meekrijgen;
                       daarna een stille chip. */}
@@ -911,7 +949,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                                 tone="amber"
                                 icon={<CalendarOff size={12} />}
                                 title={laatsteInPlanning(u)
-                                  ? `Laatste dag in de planning: ${laatsteInPlanning(u)}, daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                                  ? `Laatste dag in de planning: ${formatDatumDMJ(laatsteInPlanning(u))}, daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
                                   : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor, nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
                               >
                                 Niet in planning
@@ -924,14 +962,10 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                     {voorkeur.zichtbaar('status') && <Td><AccountBadge actief={u.isActive !== false} kaal /></Td>}
                     {/* Zonder abonnement komt géén enkele melding aan. */}
                     {voorkeur.zichtbaar('meldingen') && (
-                      <Td>
-                        {pushUserIds.has(String(u.id))
-                          ? <Badge tone="emerald" kaal>Aan</Badge>
-                          : <Badge tone="slate" kaal>Uit</Badge>}
-                      </Td>
+                      <Td>{meldingenBadge(u, false)}</Td>
                     )}
                     {voorkeur.zichtbaar('laatst') && <Td nowrap>{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <><span className="text-slate-500">Nooit</span><UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</Td>}
-                    {voorkeur.zichtbaar('sessies') && <Td num className={(toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'text-slate-800' : 'text-slate-500'}>{toestellenPerUser.get(String(u.id)) ?? 0}</Td>}
+                    {voorkeur.zichtbaar('sessies') && <Td num className={toestellenStaat === 'geladen' && (toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'text-slate-800' : 'text-slate-500'}>{toestellenTelling(u)}</Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
                         <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
@@ -972,14 +1006,12 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <AccountBadge actief={u.isActive !== false} />
-                  {pushUserIds.has(String(u.id))
-                    ? <Badge tone="emerald" stil>Meldingen aan</Badge>
-                    : <Badge tone="slate" stil>Meldingen uit</Badge>}
+                  {meldingenBadge(u, true)}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 whitespace-nowrap text-sm font-semibold text-slate-700">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <>Nooit<UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</p></Card>
-                <Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700">{toestellenPerUser.get(String(u.id)) ?? 0}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700">{toestellenTelling(u)}</p></Card>
               </div>
               {/* Zelfde acties als de tabelrij: Bewerken + het rijmenu. De
                   losse iconknoppen misten pauzeren/activeren en de 2FA-reset. */}
@@ -1121,12 +1153,13 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                           <DateInput
                             id={`bewerk-verval-${soort}`}
                             value={vervalDraft[soort] ?? ''}
+                            disabled={!vervaldataGeladen}
                             onChange={(v) => setVervalDraft((d) => ({ ...d, [soort]: v }))}
                           />
                         </Field>
                       ))}
                     </div>
-                    <p className="text-xs text-slate-500">Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.</p>
+                    <p className="text-xs text-slate-500">{vervaldataGeladen ? 'Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.' : 'De vervaldata zijn nog niet geladen; de velden komen vrij zodra ze er zijn.'}</p>
                   </fieldset>
                 )}
               </div>
@@ -1158,7 +1191,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                   <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
                 </Card>
               )}
-              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{toestellenPerUser.get(String(editingUser.id)) ?? 0}</p></Card></div>
+              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{toestellenTelling(editingUser)}</p></Card></div>
               {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
                   daar geen slot voor, dus links in de knoppenrij (zelfde
                   gedrag, zelfde bescherming; controle-ronde 27-08). */}

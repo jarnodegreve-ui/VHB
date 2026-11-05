@@ -28,9 +28,17 @@ export function dienstGereden(
   vandaag: string,
   nuMin: number,
 ): boolean {
-  if (dienst.date < vandaag) return true;
   if (dienst.date > vandaag) return false;
   const eindes = dienst.delen.map((d) => eindtijdMinuten(d.endTime)).filter((n): n is number => n !== null);
+  if (dienst.date < vandaag) {
+    // Gisteren: een nachtdienst met een busvak-einde na middernacht (26:16)
+    // loopt om 01:00 nog; die telt pas als gereden zodra het einde, gerekend
+    // in minuten van de dienstdag, voorbij is (controle-ronde 04-11, punt 38).
+    // Eergisteren of ouder is altijd gereden; zonder leesbare eindtijd ook.
+    const gisteren = Date.parse(vandaag) - Date.parse(dienst.date) === 86_400_000;
+    if (!gisteren || eindes.length === 0) return true;
+    return Math.max(...eindes) <= nuMin + 24 * 60;
+  }
   // Zonder leesbare eindtijd weten we het niet: dan niet gereden (veilige kant:
   // de ruilknop blijft, de server laat het door zoals vroeger).
   if (eindes.length === 0) return false;

@@ -59,12 +59,16 @@ export function useNieuweVersie(showToast: (message: string, tone: Toast['tone']
       if (!reg || gestopt) return;
       registratie = reg;
       meldUpdate(reg);
-      reg.addEventListener('updatefound', () => {
-        const nieuwe = reg.installing;
+      // Ook een worker die bij het openen al aan het installeren is (de
+      // update-check van index.html vond hem net) volgen tot 'installed':
+      // anders kwam de melding pas bij de volgende terugkeer naar de app.
+      const volgInstallatie = (nieuwe: ServiceWorker | null) => {
         nieuwe?.addEventListener('statechange', () => {
           if (nieuwe.state === 'installed') meldUpdate(reg);
         });
-      });
+      };
+      volgInstallatie(reg.installing);
+      reg.addEventListener('updatefound', () => volgInstallatie(reg.installing));
       document.addEventListener('visibilitychange', bijZichtbaar);
     });
     return () => {

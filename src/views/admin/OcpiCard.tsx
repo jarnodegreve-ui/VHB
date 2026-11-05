@@ -5,6 +5,7 @@ import { apiFetch } from '../../lib/api';
 import { Badge, Button, Chip, MicroLabel } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { meldSchrijffout } from '../../lib/fouten';
+import { formatMomentDMJ } from '../../lib/format';
 
 type OcpiStatus = {
   registered: boolean;
@@ -147,7 +148,7 @@ export function OcpiCard() {
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-slate-600">Endpoints / sinds:</span>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
-                    {status.endpoints.length} · {status.registeredAt ? new Date(status.registeredAt).toLocaleString() : '—'}
+                    {status.endpoints.length} · {status.registeredAt ? formatMomentDMJ(status.registeredAt) : '—'}
                   </span>
                 </div>
                 {status.endpoints.length > 0 && (

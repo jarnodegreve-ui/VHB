@@ -27,9 +27,12 @@ import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, v
 import { valideerRecord } from "./valideer.js";
 import { brusselsDay, DAG_DMJ, PERIODE_DMJ, LEAVE_TYPE_LABEL, isActieveStaf } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, getAppSetting, setAppSetting } from "../storage.js";
+import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, schrijfLeaveAlsStatus, getAppSetting, setAppSetting } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
+
+/** Bovengrens van de vrije toelichting bij een aanvraag of ziekmelding. */
+const MAX_TOELICHTING = 1000;
 
 /**
  * Zoveel nieuwe aanvragen mag een niet-stafgebruiker in één verzoek indienen
@@ -93,7 +96,7 @@ export async function registreerZiekmeldingIntern(
     if (endDate > uitersteVerlofdag(todayLocal)) {
       return { fout: { status: 400, error: `Een ziekmelding kan tot en met ${DAG_DMJ(uitersteVerlofdag(todayLocal))} lopen.` } };
     }
-    const comment = String(invoer.comment ?? "").slice(0, 1000);
+    const comment = String(invoer.comment ?? "").slice(0, MAX_TOELICHTING);
 
     const users = await getUsersData();
     const target = users.find((u) => String(u.id) === forUserId);
@@ -290,8 +293,13 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
 
     const decidedAt = new Date().toISOString();
     const updated = { ...current, status, decidedAt, ...(reden ? { beslisReden: reden } : {}) };
+    // Voorwaardelijk schrijven op de gelezen status (zoals schrijfSwapAlsStatus):
+    // de controle hierboven zag een momentopname; besliste een collega in het
+    // venster ertussen, dan raakt deze schrijfactie geen rij en vertrekt er
+    // geen tweede mail. De verse status gaat mee in de 409.
+    let geschreven: boolean;
     try {
-      await saveLeaveData([updated], []);
+      geschreven = await schrijfLeaveAlsStatus(updated, ifStatus);
     } catch (err) {
       // Kolom beslisreden ontbreekt nog (migratie 2026-09-22 niet gedraaid):
       // de beslissing is dan NIET opgeslagen. Duidelijk melden i.p.v. een
@@ -300,6 +308,13 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
         return { fout: { status: 503, error: "De reden kan nog niet bewaard worden: de databasemigratie van 22-09 (kolom beslisreden) is nog niet gedraaid. Weiger voorlopig zonder reden." } };
       }
       throw err;
+    }
+    if (!geschreven) {
+      const vers = (await getLeaveData({ userId: String(current.userId) })).find((l) => String(l.id) === id);
+      if (!vers) {
+        return { fout: { status: 404, error: "Deze verlofaanvraag bestaat niet (meer), mogelijk net ingetrokken." } };
+      }
+      return { fout: { status: 409, error: `Deze aanvraag is intussen al '${vers.status}', de lijst is ververst.`, currentStatus: String(vers.status) } };
     }
 
     const users = await getUsersData();
@@ -631,6 +646,14 @@ export function mountVerlofRoutes(app: express.Express) {
         String(a.type) === String(b.type);
       for (const next of recordsToWrite) {
         const prev = previousById.get(String(next.id));
+        // Vrije tekst begrensd (05-11), zoals de ziekmelding: de toelichting
+        // komt in mails, pushes en het log terecht. Alleen voor een nieuwe of
+        // gewijzigde toelichting (een oude lange tekst blokkeert geen
+        // datumwijziging), en vóór de kortsluiting hieronder, want die kijkt
+        // alleen naar datums en type.
+        if ((!prev || String(prev.comment ?? "") !== String(next.comment ?? "")) && String(next.comment ?? "").length > MAX_TOELICHTING) {
+          return res.status(400).json({ error: `De toelichting is te lang (maximaal ${MAX_TOELICHTING} tekens).` });
+        }
         if (prev && ongewijzigd(prev, next)) continue;
         const start = String(next.startDate ?? "");
         const end = String(next.endDate ?? "");
@@ -664,10 +687,15 @@ export function mountVerlofRoutes(app: express.Express) {
 
       // Een reden hoort alleen bij een afwijzing (zelfde regel als de PATCH-
       // route); bij elke andere status valt hij weg, ook bij een stale echo.
+      // createdAt is van de server (05-11): nieuw = nu, bestaand = de
+      // opgeslagen waarde, nooit wat de client meestuurt.
+      const nu = new Date().toISOString();
       recordsToWrite = recordsToWrite.map((r) => {
-        if (String(r.status) !== "rejected") return { ...r, beslisReden: undefined };
+        const prev = previousById.get(String(r.id));
+        const basis = { ...r, createdAt: prev ? (prev.createdAt ?? nu) : nu };
+        if (String(r.status) !== "rejected") return { ...basis, beslisReden: undefined };
         const geparsed = parseBeslisReden(r.beslisReden);
-        return { ...r, beslisReden: "error" in geparsed ? undefined : geparsed.reden };
+        return { ...basis, beslisReden: "error" in geparsed ? undefined : geparsed.reden };
       });
       await saveLeaveData(recordsToWrite, leaveIdsToDelete, { alleenPending: !isStafRol(req.appUser!.role) });
 

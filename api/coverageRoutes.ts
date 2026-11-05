@@ -496,8 +496,9 @@ export function mountCoverageRoutes(app: express.Express) {
       await logActivity(req, "planning", "Dekkingsinstellingen bijgewerkt", "Dag-types, weekdag-toewijzing en/of uitzonderingen aangepast.", undefined);
       res.json({ success: true });
     } catch (err: any) {
-      console.error("Error saving coverage expectations:", err);
-      res.status(500).json({ error: err?.message || "Opslaan mislukt. Bestaat de tabel coverage_expectations al?" });
+      // De databasefout blijft in het log; naar de client gaat gebruikerstaal.
+      console.error("Dekkingsinstellingen opslaan is mislukt:", err?.message || err);
+      res.status(500).json({ error: "Dekkingsinstellingen opslaan is mislukt. Probeer het zo opnieuw." });
     }
   });
 

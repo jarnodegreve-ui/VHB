@@ -77,6 +77,11 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
   // Eén keer bij het opstarten bepaald: warme start = er is al een sessie.
   const [warmeStart] = useState(() => typeof window !== 'undefined' && heeftOpgeslagenSessie());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // De gebruiker op het moment van gebruik (de init loopt in de closure van de
+  // eerste render, zie de auth-listener): staat hij er al wanneer /api/me
+  // faalt, dan hoort de laadbeurt alsnog te starten.
+  const currentUserRef = useRef<User | null>(null);
+  currentUserRef.current = currentUser;
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   // Uitnodiging uit de mail (#uitnodiging=<code>, shared/uitnodiging.ts). De
   // code blijft in de adresbalk tot de landing geladen is (die haalt haar
@@ -634,6 +639,14 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
     } catch (error) {
       console.error('Error initializing app:', error);
       if (authUserId) { initializedUserIdRef.current = null; initializingUserIdRef.current = null; } // her-init toestaan bij een volgend auth-event
+      // Zette handleLogin de gebruiker al (hij loopt gelijk met deze init),
+      // dan stond de app tot 05-11 half open: geen gegevens, geen Foutkaart,
+      // en "Opnieuw proberen" deed niets omdat de laadbeurt nooit begon. Dan
+      // de laadbeurt alsnog starten met dat profiel (hetzelfde als /api/me
+      // geeft), zodat de gewone laadfout het overneemt: de toast met
+      // "Opnieuw proberen" en de Foutkaarten met hun herkansing.
+      const alAangemeld = currentUserRef.current;
+      if (alAangemeld) { void loadAppData(alAangemeld, accessToken); return; }
       setIsInitialLoad(false);
       showToast('Kon je profiel niet laden. Vernieuw de pagina of log opnieuw in.', 'error');
     }

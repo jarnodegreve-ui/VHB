@@ -6,7 +6,6 @@ import { dagNummer, ziektePeriode } from '../../shared/ziekteInzicht';
 // tellen op de server met dezelfde regels); bestaande imports blijven werken.
 export {
   beschikbareZiekteJaren, berekenZiekteInzicht, berekenZiektePeriode,
-  type ZiekteChauffeurInzicht, type ZiekteJaarInzicht, type ZiekteMaandInzicht,
 } from '../../shared/ziekteInzicht';
 
 /**

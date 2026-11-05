@@ -11,6 +11,7 @@
 
 import { getSupabaseAuthHeaders } from './ui';
 import { RELEASE } from './appVersion';
+import { isOnlineNu } from './useOnline';
 
 const MAX_REPORTS_PER_SESSION = 20;
 const MAX_FEEDBACK_PER_SESSION = 10;
@@ -90,7 +91,7 @@ function rapportContext() {
     release: RELEASE,
     view: currentView ?? undefined,
     role: currentRole ?? undefined,
-    online: typeof navigator === 'undefined' ? undefined : navigator.onLine,
+    online: isOnlineNu(),
     breadcrumbs: getBreadcrumbs(),
   };
 }
@@ -215,13 +216,33 @@ const opPrestatieScherm = () =>
   currentView === PRESTATIE_SCHERM
   || (typeof window !== 'undefined' && window.location.pathname.replace(/^\/+/, '').split('/')[0] === PRESTATIE_SCHERM);
 
+/** Welke interactie traag was, voor het INP-rapport: het eventtype en een
+ *  korte omschrijving van het doel. Zonder dat zei een rapport alleen "450
+ *  ms" en viel er niets te zoeken (05-11). */
+export type PrestatieDetail = { event?: string; doel?: string };
+
+/** Korte, veilige omschrijving van het doel van een interactie: tagnaam met
+ *  id, anders aria-label of role, hoogstens 60 tekens. Nooit tekstinhoud of
+ *  een ingevulde waarde: die kunnen persoonlijk zijn. */
+export function beschrijfDoel(doel: unknown): string | undefined {
+  if (!doel || typeof doel !== 'object') return undefined;
+  const el = doel as { tagName?: unknown; id?: unknown; getAttribute?: (naam: string) => string | null };
+  if (typeof el.tagName !== 'string') return undefined;
+  const tag = el.tagName.toLowerCase();
+  const id = typeof el.id === 'string' && el.id ? `#${el.id}` : '';
+  const label = typeof el.getAttribute === 'function' ? (el.getAttribute('aria-label') || el.getAttribute('role')) : null;
+  const tekst = `${tag}${id}${label ? ` [${label}]` : ''}`;
+  return tekst.length > 60 ? `${tekst.slice(0, 59)}…` : tekst;
+}
+
 /** Eén melding per metriek per sessie; geeft terug of er gemeld is. Los van de
  *  observers zodat de drempellogica in vitest te testen is. */
-export function beoordeelPrestatie(metriek: PrestatieMetriek, ms: number): boolean {
+export function beoordeelPrestatie(metriek: PrestatieMetriek, ms: number, detail?: PrestatieDetail): boolean {
   if (!(ms > PRESTATIE_DREMPELS[metriek]) || prestatieGemeld.has(metriek) || !opPrestatieScherm()) return false;
   prestatieGemeld.add(metriek);
+  const wat = detail ? `, ${detail.event || 'interactie'} op ${detail.doel || 'onbekend element'}` : '';
   send({
-    message: `Trage ${metriek} op ${PRESTATIE_SCHERM}: ${Math.round(ms)} ms (drempel ${PRESTATIE_DREMPELS[metriek]} ms)`,
+    message: `Trage ${metriek} op ${PRESTATIE_SCHERM}: ${Math.round(ms)} ms (drempel ${PRESTATIE_DREMPELS[metriek]} ms)${wat}`,
     source: 'prestatie',
   });
   return true;
@@ -240,8 +261,8 @@ function initPrestatieBewaking() {
       new PerformanceObserver((lijst) => {
         for (const entry of lijst.getEntries()) {
           // interactionId ontbreekt in oudere lib.dom-typen; 0 = geen interactie (bv. hover).
-          const interactie = (entry as PerformanceEntry & { interactionId?: number }).interactionId;
-          if (interactie) beoordeelPrestatie('INP', entry.duration);
+          const { interactionId: interactie, target } = entry as PerformanceEntry & { interactionId?: number; target?: unknown };
+          if (interactie) beoordeelPrestatie('INP', entry.duration, { event: entry.name, doel: beschrijfDoel(target) });
         }
       }).observe({ type: 'event', buffered: true, durationThreshold: 200 } as PerformanceObserverInit);
     }

@@ -80,12 +80,41 @@ export const hasShiftEnded = (
 };
 
 /**
+ * Een klokminuut van de dienstdag als echt tijdstip (epoch-ms). De
+ * Date-constructor rekent in de lokale kloktijd van het toestel (in België
+ * de Brusselse klok) en leest een kloktijd precies zoals shared/uurwissel.ts
+ * (`tijdstipBrussel`, de rustregel): busvak-minuten (1620 = 03:00 de nacht
+ * erna) zijn de klok van de volgende dag, een kloktijd die in de wisselnacht
+ * niet bestaat schuift een uur op en een dubbele is de eerste keer; 08:00 op
+ * zondag 28 maart 2027 ligt zo zeven uur na middernacht, niet acht.
+ * src/shiftTime.test.ts houdt de twee lezingen gelijk. Bewust niet de
+ * gedeelde helper importeren: die kost de chauffeur-warmup ±0,5 kB en Mijn
+ * dag zit op het budget. null voor wat geen ISO-dag is.
+ */
+const tijdstipOpDienstdag = (date: string, minuut: number): number | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date ?? ''));
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, minuut).getTime();
+};
+
+/** `now` op de minuut afgekapt (epoch, niet via de lokale klokvelden: in het
+ *  dubbele uur van de wintertijdwissel wijzen die twee keer dezelfde minuut
+ *  aan). De aftelling telt hele minuten. */
+const opDeMinuut = (now: Date): number => Math.floor(now.getTime() / 60000) * 60000;
+
+const minutenTussen = (van: number, tot: number): number => Math.round((tot - van) / 60000);
+
+/**
  * Hoeveel minuten loopt dit segment nog? null als de tijden ongeldig zijn of
- * het segment niet (meer) bezig is — de aanroeper toont dan gewoon niets.
+ * het segment niet (meer) bezig is, de aanroeper toont dan gewoon niets.
  *
- * Zelfde tijdframe als isShiftActiveAt: alles in minuten t.o.v. middernacht
- * van de dienstdag, zodat de busvak-notatie ("24:20" = 00:20 de nacht erna)
- * en een dienst van gisteren die nu nog loopt allebei goed uitkomen.
+ * Bezig-of-niet volgt isShiftActiveAt; de aftelling zelf rekent met echte
+ * tijdstippen (einde van het segment op de dienstdag, als Date) en niet met
+ * klokminuten plus een dagverschil: in de nacht waarin de klok verspringt
+ * (27 op 28 maart 2027, 23 uur) telde die een uur te veel, in oktober een
+ * uur te weinig (controle-ronde 04-11, punt 35). De busvak-notatie ("24:20"
+ * = 00:20 de nacht erna) en een dienst van gisteren die nu nog loopt komen
+ * allebei goed uit.
  */
 export const minutesUntilShiftEnd = (
   shift: { date: string; startTime: string; endTime: string },
@@ -96,22 +125,20 @@ export const minutesUntilShiftEnd = (
   const end = parseHHMM(shift.endTime);
   if (start === null || end === null) return null;
   const endNorm = end <= start ? end + 24 * 60 : end;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const dagVerschil = Math.round(
-    (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
-  );
-  const resterend = endNorm - (nowMin + dagVerschil * 24 * 60);
+  const einde = tijdstipOpDienstdag(shift.date, endNorm);
+  if (einde === null) return null;
+  const resterend = minutenTussen(opDeMinuut(now), einde);
   return resterend > 0 ? resterend : null;
 };
 
 /**
  * Hoeveel minuten tot dit segment begint? null als het al begonnen is (of de
- * starttijd ongeldig is) — de aanroeper toont dan een aftelling naar het einde
+ * starttijd ongeldig is), de aanroeper toont dan een aftelling naar het einde
  * of niets.
  *
- * Zelfde tijdframe als minutesUntilShiftEnd: alles in minuten t.o.v.
- * middernacht van de dienstdag, zodat een dienst van morgen die vanavond al in
- * beeld staat correct vooruit telt.
+ * Zelfde rekenwijze als minutesUntilShiftEnd: het begin als echt tijdstip op
+ * de dienstdag, zodat een dienst van morgen die vanavond al in beeld staat
+ * correct vooruit telt, ook over een uurwissel heen.
  */
 export const minutesUntilShiftStart = (
   shift: { date: string; startTime: string },
@@ -119,11 +146,9 @@ export const minutesUntilShiftStart = (
 ): number | null => {
   const start = parseHHMM(shift.startTime);
   if (start === null) return null;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const dagVerschil = Math.round(
-    (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
-  );
-  const tot = start - (nowMin + dagVerschil * 24 * 60);
+  const begin = tijdstipOpDienstdag(shift.date, start);
+  if (begin === null) return null;
+  const tot = minutenTussen(opDeMinuut(now), begin);
   return tot > 0 ? tot : null;
 };
 

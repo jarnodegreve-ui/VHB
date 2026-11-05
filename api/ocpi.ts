@@ -1035,7 +1035,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       res.json({ success: true, ...result });
     } catch (err: any) {
       console.error("[ocpi] registratie mislukt:", err?.message ?? err);
-      res.status(502).json({ error: "OCPI-registratie mislukt", details: err?.message ?? String(err) });
+      res.status(502).json({ error: "OCPI-registratie is mislukt. Kijk de serverlog na." });
     }
   });
 
@@ -1065,7 +1065,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       res.json({ success: summary.errors.length === 0, ...summary });
     } catch (err: any) {
       console.error("[ocpi] sync mislukt:", err?.message ?? err);
-      res.status(500).json({ error: "OCPI-sync mislukt", details: err?.message ?? String(err) });
+      res.status(500).json({ error: "OCPI-sync is mislukt. Kijk de serverlog na." });
     }
   });
 
@@ -1092,7 +1092,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       res.json({ success: summary.errors.length === 0, ...summary });
     } catch (err: any) {
       console.error(`[cron-ocpi:${which}] mislukt:`, err?.message ?? err);
-      res.status(500).json({ error: "OCPI-sync mislukt", details: err?.message ?? String(err) });
+      res.status(500).json({ error: "OCPI-sync is mislukt. Kijk de serverlog na." });
     }
   });
 
@@ -1482,7 +1482,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       });
     } catch (err: any) {
       console.error("[ocpi] dashboard mislukt:", err?.message ?? err);
-      res.status(500).json({ error: "OCPI-dashboard mislukt", details: err?.message ?? String(err) });
+      res.status(500).json({ error: "Het laadpalendashboard kon niet geladen worden. Kijk de serverlog na." });
     }
   });
 };

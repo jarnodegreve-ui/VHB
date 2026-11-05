@@ -17,6 +17,8 @@
  *   exporteert ze door), zodat beide nooit een andere uitkomst geven.
  */
 
+import { minutenTussenBrussel } from './uurwissel.js';
+
 export const MIN_RUST_UREN = 8;
 
 export type TijdRij = { startTime: string; endTime: string };
@@ -55,22 +57,33 @@ export const dagVenster = (rijen: readonly TijdRij[]): { start: number; eind: nu
   return start === null || eind === null ? null : { start, eind };
 };
 
+/** De twee dienstdagen waartussen de rust valt ('JJJJ-MM-DD'). */
+export type RustDagen = { eerder: string; later: string };
+
 /**
  * Rust in minuten tussen het einde van de vorige werkdag en het begin van de
- * dienst. Beide staan in minuten t.o.v. hun éigen dienstdag-middernacht; de
- * vorige dag ligt 24u eerder, vandaar de +24u op de start.
- * null = geen dienst de dag ervoor → de regel legt niets op.
+ * dienst. Beide staan in minuten t.o.v. hun éigen dienstdag-middernacht.
+ * Met `dagen` (de vorige dag en de dienstdag) rekent de functie in echte
+ * tijd op de Brusselse klok (shared/uurwissel.ts), dus ook goed in de nacht
+ * waarin de klok verspringt: van 27 op 28 maart 2027 is 22:00 tot 06:00 zeven
+ * uur, niet acht (controle-ronde 04-11, punt 35). Zonder dagen, of met een
+ * dag die geen ISO-dag is, een vlakke nacht van 24 uur zoals vroeger.
+ * null = geen dienst de dag ervoor, de regel legt dan niets op.
  */
-export const rustTovVorigeDag = (vorigeDag: readonly TijdRij[], dienstStart: number): number | null => {
+export const rustTovVorigeDag = (vorigeDag: readonly TijdRij[], dienstStart: number, dagen?: RustDagen): number | null => {
   const v = dagVenster(vorigeDag);
-  return v === null ? null : dienstStart + 24 * 60 - v.eind;
+  if (v === null) return null;
+  const echt = dagen ? minutenTussenBrussel(dagen.eerder, v.eind, dagen.later, dienstStart) : null;
+  return echt ?? dienstStart + 24 * 60 - v.eind;
 };
 
 /** Spiegelbeeld: rust tussen het einde van de dienst en de start van de
- *  dienst op de dag erna. */
-export const rustTovVolgendeDag = (volgendeDag: readonly TijdRij[], dienstEind: number): number | null => {
+ *  dienst op de dag erna; `dagen` = de dienstdag en de dag erna. */
+export const rustTovVolgendeDag = (volgendeDag: readonly TijdRij[], dienstEind: number, dagen?: RustDagen): number | null => {
   const v = dagVenster(volgendeDag);
-  return v === null ? null : v.start + 24 * 60 - dienstEind;
+  if (v === null) return null;
+  const echt = dagen ? minutenTussenBrussel(dagen.eerder, dienstEind, dagen.later, v.start) : null;
+  return echt ?? v.start + 24 * 60 - dienstEind;
 };
 
 /** "8u" / "7u53" — compacte urennotatie. */
@@ -157,8 +170,10 @@ export const beoordeelRuilRust = (ruil: RuilVoorRust, planning: readonly RustPla
   const regel = (wie: RuilRustRegel['wie'], persoon: string, datum: string, naam: string, rijen: RustPlanningRij[]): RuilRustRegel | null => {
     const venster = dagVenster(rijen);
     if (!venster) return null;
-    const rustVoor = rustTovVorigeDag(naRuil(persoon, dagErbij(datum, -1)), venster.start);
-    const rustNa = rustTovVolgendeDag(naRuil(persoon, dagErbij(datum, 1)), venster.eind);
+    const vorige = dagErbij(datum, -1);
+    const volgende = dagErbij(datum, 1);
+    const rustVoor = rustTovVorigeDag(naRuil(persoon, vorige), venster.start, { eerder: vorige, later: datum });
+    const rustNa = rustTovVolgendeDag(naRuil(persoon, volgende), venster.eind, { eerder: datum, later: volgende });
     return { wie, datum, dienst: naam, rustVoor, rustNa, teKort: (rustVoor !== null && rustVoor < grens) || (rustNa !== null && rustNa < grens) };
   };
 

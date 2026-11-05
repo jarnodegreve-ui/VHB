@@ -52,6 +52,27 @@ describe('een uitgeschakelde mail meldt niet dat hij verstuurd is (nr. 13)', () 
   });
 });
 
+describe('weekoverzicht: tijdsbudget (05-11)', () => {
+  it('na het budget verzamelt de cron niets meer, de mail vertrekt toch en noemt wat overgeslagen is', async () => {
+    process.env.ERROR_DIGEST_WEEKDAG = 'elke';
+    process.env.ERROR_DIGEST_BUDGET_MS = '0.001';
+    mem.hartslagen = [];
+    mem.emailsSent = [];
+    try {
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ success: true, alerted: true, afgekapt: ['documenten', 'voertuigen', 'openstaande diensten'] });
+      const mail = mem.emailsSent.find((e) => e.context === 'error-digest');
+      expect(mail?.text).toContain('Niet verzameld (tijd op)');
+      expect(mail?.text).toContain('documenten: overgeslagen');
+      expect(mem.hartslagen.at(-1)?.details).toContain('afgekapt: documenten, voertuigen, openstaande diensten');
+    } finally {
+      delete process.env.ERROR_DIGEST_WEEKDAG;
+      delete process.env.ERROR_DIGEST_BUDGET_MS;
+    }
+  });
+});
+
 describe('urgente-update-mail: ontvangers server-side', () => {
   it('negeert client-opgegeven adressen en stuurt alleen naar interne gebruikers', async () => {
     mem.emailsSent = [];
@@ -64,6 +85,38 @@ describe('urgente-update-mail: ontvangers server-side', () => {
     expect(sent).toBeTruthy();
     expect(sent!.to).not.toContain('attacker@evil.example');
     expect((sent!.to as string[]).every((addr) => addr.endsWith('@vhb.be'))).toBe(true);
+  });
+});
+
+describe('urgente-update-mail: fouten onderweg', () => {
+  it('een DB-fout bij het lezen van de gebruikers geeft een nette 500, geen hangend verzoek', async () => {
+    const storage = await import('../../api/storage.js');
+    const spion = vi.spyOn(storage, 'getUsersData').mockRejectedValueOnce(new Error('relation "users" does not exist'));
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
+      expect(res.status).toBe(500);
+      expect(res.json).toEqual({ error: 'Dringende update versturen is mislukt. Probeer het zo opnieuw.' });
+    } finally {
+      spion.mockRestore();
+      stil.mockRestore();
+    }
+  });
+
+  it('een pushdienst die weigert houdt de mail niet tegen: 200 en de mail is vertrokken', async () => {
+    const push = await import('../../api/push.js');
+    const spion = vi.spyOn(push, 'sendPushToUsers').mockRejectedValueOnce(new Error('push kapot'));
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mem.emailsSent = [];
+    try {
+      const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
+      expect(res.status).toBe(200);
+      expect(res.json.success).toBe(true);
+      expect(mem.emailsSent.some((e) => e.context === 'urgent-update')).toBe(true);
+    } finally {
+      spion.mockRestore();
+      stil.mockRestore();
+    }
   });
 });
 

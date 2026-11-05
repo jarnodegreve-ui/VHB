@@ -1,4 +1,5 @@
 import { notify } from './ui';
+import { isOnlineNu } from './useOnline';
 
 /**
  * Foutcopy met een vervolgstap (tranche 3A, 22-09-2026).
@@ -44,7 +45,10 @@ export const isVeiligeFouttekst = (tekst: string): boolean => tekst.length <= 24
 
 /** Leest status, servertekst en netwerkaard uit wat een save-pad gooit. */
 export function leesFout(err: unknown): FoutInfo {
-  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  // De online-store (met ping): navigator.onLine is op bus-wifi zonder internet
+  // waar. `=== false`: buiten de browser (Node, tests van lib-helpers) heeft de
+  // store geen antwoord, en dat is geen offline.
+  const offline = isOnlineNu() === false;
   if (err == null) return { netwerk: false, offline };
   if (typeof Response !== 'undefined' && err instanceof Response) return { status: err.status, netwerk: false, offline };
   const o = err as { status?: unknown; response?: { status?: unknown }; message?: unknown; name?: unknown };
@@ -97,6 +101,19 @@ const zin = (tekst: string) => (/[.!?]$/.test(tekst) ? tekst : `${tekst}.`);
 const HEEFT_VERVOLGSTAP = /\b(vernieuw|probeer)\b/i;
 
 /**
+ * Komt de algemene vervolgstap nog achter de reden van de server? Niet als
+ * die reden zelf al zegt wat je doet, en niet achter een 409 mét reden: in
+ * deze API is dat een regel over de inhoud (de dienst loopt al, de collega
+ * staat die dag niet vrij, het busnummer bestaat al), geen botsing met iemand
+ * anders. Een echte botsing (revisie, record) draagt altijd haar eigen stap
+ * ("Vernieuw de lijst en probeer opnieuw", api/_lib/collectie.ts). "Iemand
+ * anders heeft dit intussen gewijzigd" achter zo'n regel was onwaar en
+ * stuurde de chauffeur in een kringetje (dienstruil, 03-11-2026).
+ */
+export const vervolgstapNodig = (info: FoutInfo): boolean =>
+  !info.tekst || (info.status !== 409 && !HEEFT_VERVOLGSTAP.test(info.tekst));
+
+/**
  * "Opslaan is mislukt. <reden van de server.> <vervolgstap>"
  * `actie` is de werkwoordsvorm die de knop droeg: 'Opslaan', 'Verwijderen',
  * 'Ziek melden', 'Toewijzen'. Een `err` mag ontbreken (bv. `!res.ok` zonder
@@ -106,7 +123,7 @@ export function schrijffout(actie: string, err?: unknown): string {
   const info = leesFout(err);
   const delen = [`${actie} is mislukt.`];
   if (info.tekst) delen.push(zin(info.tekst));
-  if (!info.tekst || !HEEFT_VERVOLGSTAP.test(info.tekst)) delen.push(vervolgstap(info));
+  if (vervolgstapNodig(info)) delen.push(vervolgstap(info));
   return delen.join(' ');
 }
 

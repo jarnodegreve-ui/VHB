@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { leesFout, meldSchrijffout, vervolgstap } from './fouten';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { leesFout, meldSchrijffout, vervolgstap, vervolgstapNodig } from './fouten';
 
 /**
  * Autosave per cel (tranche 3A, 22-09-2026): Dagadministratie en de
@@ -38,7 +38,6 @@ export type AutosaveStaat<T> =
 
 let inVlucht = 0;
 const mislukt = new Set<number>();
-const luisteraars = new Set<() => void>();
 let volgendeCel = 0;
 
 export const autosaveOnrustig = () => inVlucht > 0 || mislukt.size > 0;
@@ -59,20 +58,12 @@ function meld() {
     else window.removeEventListener('beforeunload', onBeforeUnload);
     luistert = moet;
   }
-  luisteraars.forEach((l) => l());
 }
 function zetMislukt(cel: number, aan: boolean) {
   if (aan === mislukt.has(cel)) return;
   if (aan) mislukt.add(cel); else mislukt.delete(cel);
   meld();
 }
-const abonneer = (l: () => void) => { luisteraars.add(l); return () => { luisteraars.delete(l); }; };
-
-/** Loopt er ergens een save of staat er een mislukte cel? */
-export function useAutosaveOnrustig(): boolean {
-  return useSyncExternalStore(abonneer, autosaveOnrustig, autosaveOnrustig);
-}
-
 /** Alleen voor tests. */
 export function resetAutosaveVoorTest() {
   inVlucht = 0;
@@ -84,7 +75,7 @@ export function resetAutosaveVoorTest() {
 export function celFoutTekst(err: unknown): string {
   const info = leesFout(err);
   const zin = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
-  return ['Niet bewaard.', ...(info.tekst ? [zin(info.tekst)] : []), vervolgstap(info)].join(' ');
+  return ['Niet bewaard.', ...(info.tekst ? [zin(info.tekst)] : []), ...(vervolgstapNodig(info) ? [vervolgstap(info)] : [])].join(' ');
 }
 
 export function useAutosaveCel<T, R = unknown>(opties: {

@@ -840,6 +840,7 @@ export function PlannerDashboardWidgets({
         <div className="space-y-1.5">
           {updates.slice(0, 3).map((u) => (
             <OpsRow
+              key={u.id}
               tone={u.isUrgent ? 'red' : 'slate'}
               icon={<Bell size={16} />}
               primary={u.title}
@@ -904,10 +905,13 @@ export function PlannerDashboardWidgets({
     </OpsPanel>
   );
   const PANEEL: Record<string, ReactNode> = { 'open-taken': paneelOpenTaken, activiteit: paneelActiviteit, 'deze-week': paneelDezeWeek };
-  const [panelenLinks, ...panelenRechts] = zichtbareTegels
+  // Het id reist mee: "Dashboard aanpassen" herordent de panelen, en met de
+  // index als key hield React dan de staat van het ene paneel in het andere.
+  const [paneelLinks, ...panelenRechts] = zichtbareTegels
     .filter((t) => t.groep === 'panelen')
-    .map((t) => PANEEL[t.id])
-    .filter((el) => el !== undefined && el !== null && el !== false);
+    .map((t) => ({ id: t.id, el: PANEEL[t.id] }))
+    .filter((p) => p.el !== undefined && p.el !== null && p.el !== false);
+  const panelenLinks = paneelLinks?.el;
 
   return (
     <section className="space-y-5">
@@ -1017,7 +1021,7 @@ export function PlannerDashboardWidgets({
         {panelenLinks}
         {panelenRechts.length > 0 && (
           <div className="flex flex-col gap-4">
-            {panelenRechts.map((el, i) => <Fragment key={i}>{el}</Fragment>)}
+            {panelenRechts.map(({ id, el }) => <Fragment key={id}>{el}</Fragment>)}
           </div>
         )}
       </div>

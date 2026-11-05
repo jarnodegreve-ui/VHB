@@ -158,7 +158,7 @@ export function VerlofLimietenModal({ open, onClose, limieten, onSaved }: {
               ))}
             </div>
           )}
-          <p className="text-xs text-slate-500">Overlappen twee periodes, dan telt de vroegst beginnende.</p>
+          <p className="text-xs text-slate-500">Overlappen twee periodes, dan telt de kortste (bijvoorbeeld een bouwverlofweek binnen de zomer).</p>
         </div>
 
         {overig.length > 0 && (

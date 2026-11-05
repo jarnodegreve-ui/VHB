@@ -2,6 +2,22 @@ import { createElement, lazy, useState, type ComponentProps, type ComponentType,
 
 const RELOAD_FLAG = 'vhb-chunk-reload';
 
+/** De vlag tegen een herlaadlus, in sessionStorage. Safari met geblokkeerde
+ *  opslag gooit al bij het aanraken van `sessionStorage`, dus elke stap in
+ *  try/catch; zonder werkende opslag telt de vlag als gezet, want dan is er
+ *  geen rem op de lus en mag er niet herladen worden (05-11). */
+const vlag = {
+  staat(): boolean {
+    try { return sessionStorage.getItem(RELOAD_FLAG) !== null; } catch { return true; }
+  },
+  zet(): boolean {
+    try { sessionStorage.setItem(RELOAD_FLAG, '1'); return true; } catch { return false; }
+  },
+  wis(): void {
+    try { sessionStorage.removeItem(RELOAD_FLAG); } catch { /* geen opslag: niets te wissen */ }
+  },
+};
+
 /**
  * React.lazy met vangnet voor mislukte chunk-imports. Twee scenario's die in
  * een PWA anders in het hele-app-crashscherm eindigen:
@@ -85,25 +101,25 @@ export function metRetry<M>(
   return async () => {
     try {
       const mod = await factory();
-      sessionStorage.removeItem(RELOAD_FLAG);
+      vlag.wis();
       return mod;
     } catch (err) {
       try {
         await new Promise((resolve) => setTimeout(resolve, 800));
         const mod = await factory();
-        sessionStorage.removeItem(RELOAD_FLAG);
+        vlag.wis();
         return mod;
       } catch {
         if (opties.magHerladen && !opties.magHerladen()) throw err;
-        if (!sessionStorage.getItem(RELOAD_FLAG)) {
-          sessionStorage.setItem(RELOAD_FLAG, '1');
+        if (!vlag.staat() && vlag.zet()) {
           await forceerVerseShell();
           window.location.reload();
           // Reload is onderweg — laat de Suspense-fallback staan i.p.v. te crashen.
           return new Promise<M>(() => {});
         }
-        // Tweede keer mis: niet nog eens herladen (lus), wel uitleggen wat er
-        // aan de hand is in plaats van een leeg scherm achter te laten.
+        // Tweede keer mis (of geen opslag voor de vlag): niet nog eens
+        // herladen (lus), wel uitleggen wat er aan de hand is in plaats van
+        // een leeg scherm achter te laten.
         meldVastgelopenVersie();
         throw err;
       }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { registreerSchermWachter, useRecordParam, useRoute } from './router';
-import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { useHistoryDismiss } from '../lib/lagen';
 
 /**
  * Navigeren vanuit de mobiele zijbalk (melding Jarno 11-09: "wat ik ook

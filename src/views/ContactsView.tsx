@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Check, Copy, Phone, X } from 'lucide-react';
 import { ROL_LABELS } from '../../shared/schemas/constanten';
 import type { User } from '../types';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
+import { useCollectieStaat } from '../app/collectieStaat';
 import { Avatar } from '../components/Avatar';
 import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
@@ -30,6 +31,10 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
   const [selected, setSelected] = useState<User | null>(null);
   const [copied, setCopied] = useState(false);
   const lg = useMinWidth(1024);
+  // Laadfout ≠ leeg: `usersGeladen` zegt alleen dat de eerste poging rond is,
+  // ook na een fout. Nooit gelukt = Foutkaart met herkansing, geen "Geen
+  // contacten gevonden" (05-11).
+  const laad = useCollectieStaat('users');
 
   const copyNumber = async (phone: string) => {
     try {
@@ -98,7 +103,9 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
     </Card>
   );
 
-  const leeg = (
+  const leeg = laad.foutZonderData ? (
+    <Foutkaart boodschap={laad.fout ?? 'De gebruikerslijst kon niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />
+  ) : (
     <EmptyState
       illustratie={searchQuery ? <NietGevonden /> : <LegeLijst />}
       title="Geen contacten gevonden"

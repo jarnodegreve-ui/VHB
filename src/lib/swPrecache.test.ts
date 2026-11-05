@@ -113,3 +113,26 @@ describe('sw.js precache: ongewijzigde gehashte assets uit de oude cache', () =>
     expect(sw.nieuweCache().size).toBe(0);
   });
 });
+
+/**
+ * De twee fonts die index.html vooraf laadt (05-11): ongehasht, dus niet uit
+ * de oude cache gekopieerd maar wél in de precache. Zonder dat stond de app
+ * na een stille activatie zonder bereik even in de terugvalletter.
+ */
+describe('sw.js precache: de fonts uit index.html', () => {
+  const SHELL_MET_FONTS = `${SHELL}
+<link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin.woff2" crossorigin />
+<link rel="preload" as="font" type="font/woff2" href="/fonts/manrope-latin.woff2" crossorigin />`;
+  const font = (body: string) => new Response(body, { headers: { 'content-type': 'font/woff2' } });
+  const netwerkMetFonts = (pad: string) => (pad === '/' ? html(SHELL_MET_FONTS) : pad.startsWith('/fonts/') ? font(`vers:${pad}`) : js(`vers:${pad}`));
+
+  it('neemt de fonts mee in de nieuwe cache, altijd vers (geen hash, dus geen kopie uit de oude cache)', async () => {
+    const sw = installeer({ '/fonts/inter-latin.woff2': font('oud:inter') }, netwerkMetFonts);
+    await sw.klaar();
+    expect(sw.opgehaald).toContain('/fonts/inter-latin.woff2');
+    expect(sw.opgehaald).toContain('/fonts/manrope-latin.woff2');
+    const nieuw = sw.nieuweCache();
+    expect(await nieuw.get('/fonts/inter-latin.woff2')!.clone().text()).toBe('vers:/fonts/inter-latin.woff2');
+    expect(await nieuw.get('/fonts/manrope-latin.woff2')!.clone().text()).toBe('vers:/fonts/manrope-latin.woff2');
+  });
+});

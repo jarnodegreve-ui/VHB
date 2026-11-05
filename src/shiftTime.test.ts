@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatRemaining, formatStartsIn, minutesUntilShiftEnd, minutesUntilShiftStart } from './lib/shiftTime';
+import { tijdstipBrussel } from '../shared/uurwissel';
 
 /** Lokale tijd (geen UTC) — de helpers rekenen met getHours(). */
 const om = (iso: string, uur: number, minuut: number) =>
@@ -39,6 +40,59 @@ describe('minutesUntilShiftEnd', () => {
   it('geeft null bij onzin-tijden', () => {
     expect(minutesUntilShiftEnd({ date: '2026-08-02', startTime: 'x', endTime: '18:54' }, om('2026-08-02', 13, 0))).toBeNull();
     expect(minutesUntilShiftEnd({ date: '2026-08-02', startTime: '08:75', endTime: '18:54' }, om('2026-08-02', 13, 0))).toBeNull();
+  });
+});
+
+describe('aftelling over een uurwissel (controle-ronde 04-11, punt 35)', () => {
+  // vitest.config.ts pint TZ op Europe/Brussels; de nacht van 27 op 28 maart
+  // 2027 duurt 23 uur (02:00 wordt 03:00), die van 30 op 31 oktober 2027 25 uur.
+  it('naar de zomertijd: een nachtdienst 22:00-06:00 heeft om 00:30 nog 4u30, geen 5u30', () => {
+    const nacht = { date: '2027-03-27', startTime: '22:00', endTime: '06:00' };
+    expect(minutesUntilShiftEnd(nacht, om('2027-03-28', 0, 30))).toBe(270);
+    // Busvak-notatie: 27:00 = 03:00 de nacht erna, vanaf 23:00 nog 3 uur (de klok slaat 02:00 over).
+    expect(minutesUntilShiftEnd({ date: '2027-03-27', startTime: '20:00', endTime: '27:00' }, om('2027-03-27', 23, 0))).toBe(180);
+  });
+
+  it('naar de zomertijd: de vroege dienst van zondag is om 23:00 nog 6 uur weg, geen 7', () => {
+    expect(minutesUntilShiftStart({ date: '2027-03-28', startTime: '06:00' }, om('2027-03-27', 23, 0))).toBe(360);
+  });
+
+  it('leest een kloktijd zoals shared/uurwissel.ts (tijdstipBrussel), ook in de wisselnachten', () => {
+    // De aftelling rekent met de lokale Date (TZ Europe/Brussels in vitest), de
+    // rustregel met tijdstipBrussel; dezelfde lezing, hier vastgelegd.
+    // Via de aftelling naar het begin van een dienst op die kloktijd (ligt in
+    // elk geval hieronder in de toekomst): afgekapte `nu` plus de minuten.
+    const aftelling = (date: string, tijd: string, nu: Date) => {
+      const tot = minutesUntilShiftStart({ date, startTime: tijd }, nu);
+      return tot === null ? null : Math.floor(nu.getTime() / 60000) * 60000 + tot * 60000;
+    };
+    const nu = new Date('2027-03-27T20:00:00Z');
+    for (const [date, minuut, tijd] of [['2027-03-27', 27 * 60, '27:00'], ['2027-03-27', 26 * 60 + 30, '26:30'], ['2027-03-28', 6 * 60, '06:00']] as const) {
+      expect(aftelling(date, tijd, nu)).toBe(tijdstipBrussel(date, minuut));
+    }
+    const nuOkt = new Date('2027-10-30T20:00:00Z');
+    for (const [date, minuut, tijd] of [['2027-10-30', 26 * 60 + 30, '26:30'], ['2027-10-30', 27 * 60 + 30, '27:30'], ['2027-10-31', 6 * 60, '06:00']] as const) {
+      expect(aftelling(date, tijd, nuOkt)).toBe(tijdstipBrussel(date, minuut));
+    }
+  });
+
+  it('in het dubbele uur van de wintertijdwissel telt de echte klok (02:30 CET, de tweede keer)', () => {
+    // 2027-10-31T01:30Z = 02:30 wintertijd, de tweede doorgang; tot 06:00 CET (05:00Z) is 3u30.
+    const nu = new Date('2027-10-31T01:30:00Z');
+    expect(minutesUntilShiftEnd({ date: '2027-10-30', startTime: '22:00', endTime: '06:00' }, nu)).toBe(210);
+    expect(minutesUntilShiftStart({ date: '2027-10-31', startTime: '06:00' }, nu)).toBe(210);
+  });
+
+  it('naar de wintertijd: dezelfde nachtdienst heeft om 00:30 nog 6u30', () => {
+    const nacht = { date: '2027-10-30', startTime: '22:00', endTime: '06:00' };
+    expect(minutesUntilShiftEnd(nacht, om('2027-10-31', 0, 30))).toBe(390);
+    expect(minutesUntilShiftStart({ date: '2027-10-31', startTime: '06:00' }, om('2027-10-30', 23, 0))).toBe(480);
+  });
+
+  it('seconden tellen niet mee: de aftelling blijft in hele minuten', () => {
+    const dienst = { date: '2026-08-02', startTime: '12:08', endTime: '18:54' };
+    expect(minutesUntilShiftEnd(dienst, new Date('2026-08-02T17:22:45'))).toBe(92);
+    expect(minutesUntilShiftStart({ date: '2026-08-02', startTime: '12:08' }, new Date('2026-08-02T11:00:59'))).toBe(68);
   });
 });
 
