@@ -124,6 +124,17 @@ describe('dienstopbouw, rekenregels', () => {
     expect(nachtMinuten(8 * 60, 12 * 60)).toBe(0);
   });
 
+  it('nachtminuten na middernacht: 06:00 de volgende dag sluit de nacht ook dan af (controle-ronde 04-11, punt 38)', () => {
+    expect(nachtMinuten(22 * 60, 23 * 60)).toBe(60);
+    expect(nachtMinuten(23 * 60 + 30, 24 * 60 + 30)).toBe(60);
+    expect(nachtMinuten(5 * 60 + 30, 6 * 60 + 30)).toBe(30);
+    expect(nachtMinuten(29 * 60 + 30, 30 * 60 + 30)).toBe(30); // 05:30-06:30 de dag erna, niet 60
+    expect(nachtMinuten(30 * 60, 31 * 60)).toBe(0);
+    expect(nachtMinuten(10 * 60, 11 * 60)).toBe(0);
+    // Een ritdeel over het hele venster heen: 19:00-07:00 = 10 uur nacht.
+    expect(nachtMinuten(19 * 60, 31 * 60)).toBe(600);
+  });
+
   it('loonparameters: rijtijd, stationnement, onderbrekingen, administratie, nacht en tiktijden per dienstdeel', () => {
     const s = [
       seg({ volgorde: 1, type: 'AVO', startMin: 5 * 60, eindeMin: 5 * 60 + 5 }),

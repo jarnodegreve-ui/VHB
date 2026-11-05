@@ -29,16 +29,24 @@ export type LoonParameters = {
 
 const NACHT_EINDE = 6 * 60;
 const NACHT_BEGIN = 20 * 60;
+const ETMAAL = 24 * 60;
 
-/** Nachtminuten van één ritdeel (Access-formule: ≤ 06:00 en ≥ 20:00, klok loopt door na middernacht). */
-export const nachtMinuten = (start: number, einde: number): number => {
-  let n = 0;
-  if (einde <= NACHT_EINDE && start <= NACHT_EINDE) n += einde - start;
-  else if (start <= NACHT_EINDE && einde > NACHT_EINDE) n += NACHT_EINDE - start;
-  if (start >= NACHT_BEGIN && einde >= NACHT_BEGIN) n += einde - start;
-  else if (start < NACHT_BEGIN && einde >= NACHT_BEGIN) n += einde - NACHT_BEGIN;
-  return n;
-};
+/** De nachtvensters in minuten van de dienstdag: 00:00-06:00, 20:00-06:00 de
+ *  nacht erna en nog eens voor de tweede nacht (ritdelen lopen tot 47:59). */
+const NACHT_VENSTERS: ReadonlyArray<readonly [number, number]> = [
+  [0, NACHT_EINDE],
+  [NACHT_BEGIN, NACHT_EINDE + ETMAAL],
+  [NACHT_BEGIN + ETMAAL, NACHT_EINDE + 2 * ETMAAL],
+];
+
+/** Nachtminuten van één ritdeel: de doorsnede van [start, einde) met de
+ *  nachtvensters (Access-formule qry-rap LoonDiensten: ≤ 06:00 en ≥ 20:00, de
+ *  klok loopt door na middernacht). De letterlijke vertaling van die formule
+ *  telde een ritdeel ná 06:00 de volgende dag (29:30-30:30) volledig als
+ *  nacht, want start en einde lagen allebei ≥ 20:00 (controle-ronde 04-11,
+ *  punt 38). */
+export const nachtMinuten = (start: number, einde: number): number =>
+  NACHT_VENSTERS.reduce((n, [van, tot]) => n + Math.max(0, Math.min(einde, tot) - Math.max(start, van)), 0);
 
 export function loonParametersVanSegmenten(segments: Segment[]): LoonParameters {
   const gesorteerd = [...segments].sort((a, b) => a.volgorde - b.volgorde);
