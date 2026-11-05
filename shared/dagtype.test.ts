@@ -113,6 +113,17 @@ const eek6 = {
 };
 
 describe('tijdenOpDag', () => {
+  it('een opgeslagen variant op 41-45 of 28 wint van de vouw (exact eerst)', () => {
+    const d = { startTime: '06:00', endTime: '14:00', varianten: [
+      { dagtypes: ['31', '32'], startTime: '07:00', endTime: '15:00' },
+      { dagtypes: ['41'], startTime: '08:00', endTime: '16:00' },
+    ] };
+    expect(tijdenOpDag(d, '41')).toMatchObject({ startTime: '08:00', endTime: '16:00' }); // exact, niet de vouw naar 31
+    expect(tijdenOpDag(d, '42')).toMatchObject({ startTime: '07:00', endTime: '15:00' }); // 42 → 32
+    expect(tijdenOpDag(d, '43')).toMatchObject({ startTime: '06:00', endTime: '14:00' }); // 43 → 33, geen variant
+    expect(tijdenOpDag(d, '31')).toMatchObject({ startTime: '07:00', endTime: '15:00' });
+  });
+
   it('kiest de variant van het dagtype, anders de gewone tijden', () => {
     expect(tijdenOpDag(eek6, '23')).toEqual({ startTime: '07:10', endTime: '08:40', startTime2: '11:50', endTime2: '13:20' });
     expect(tijdenOpDag(eek6, '21')).toEqual({ startTime: '07:10', endTime: '08:40', startTime2: '15:20', endTime2: '16:50' });

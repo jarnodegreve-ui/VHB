@@ -293,7 +293,9 @@ export const variantVoor = (dienst: MetVarianten, dagtype: string | null | undef
  *  juli en augustus als schoolvakantie), anders de gewone tijden. Zonder
  *  dagtype altijd de gewone. */
 export function tijdenOpDag(dienst: MetVarianten, dagtype: string | null | undefined): DienstTijden {
-  const variant = variantVoor(dienst, dagtype ? dienstregelingCode(dagtype) : dagtype);
+  // Eerst de code zelf (een opgeslagen variant op 41-45 of 28 blijft zo
+  // bereikbaar), dan de dienstregeling die op dat dagtype rijdt.
+  const variant = dagtype ? (variantVoor(dienst, dagtype) ?? variantVoor(dienst, dienstregelingCode(dagtype))) : null;
   return tijdenVan(variant ?? dienst);
 }
 
