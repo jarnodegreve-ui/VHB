@@ -729,12 +729,19 @@ describe('wachtwoordminimum server-side (controle-ronde 27-08, nr. 32)', () => {
 });
 
 describe('wachtwoord resetten door beheer (POST /api/admin/users/reset-password)', () => {
+  // Welke Auth-lezingen de route deed: 'lijst' (listUsers) of 'id:<authId>'.
+  let lezingen: string[] = [];
   const authAttrap = () => {
     const gezet: Array<{ id: string; password?: string }> = [];
+    lezingen = [];
     mem.supabaseAdmin = {
       auth: {
         admin: {
-          listUsers: async () => ({ data: { users: [{ id: 'auth-a', email: 'a@vhb.be' }] }, error: null }),
+          listUsers: async () => { lezingen.push('lijst'); return { data: { users: [{ id: 'auth-a', email: 'a@vhb.be' }] }, error: null }; },
+          getUserById: async (id: string) => {
+            lezingen.push(`id:${id}`);
+            return id === 'auth-a' ? { data: { user: { id, email: 'a@vhb.be' } }, error: null } : { data: { user: null }, error: { status: 404, message: 'User not found' } };
+          },
           updateUserById: async (id: string, velden: { password?: string }) => { gezet.push({ id, password: velden.password }); return { data: {}, error: null }; },
         },
       },
@@ -771,6 +778,32 @@ describe('wachtwoord resetten door beheer (POST /api/admin/users/reset-password)
   it('blijft alleen voor admin (403 voor een planner)', async () => {
     authAttrap();
     expect((await api('POST', '/api/admin/users/reset-password', { token: 'tok-planner', body: { userId: '3', password: '1234567890' } })).status).toBe(403);
+  });
+
+  it('met een gekoppeld Auth-account (users.authid) leest hij dat account rechtstreeks, zonder de hele lijst (05-11)', async () => {
+    const gezet = authAttrap();
+    mem.users = mem.users.map((u) => (u.id === '3' ? { ...u, authId: 'auth-a' } : u));
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '1234567890' } });
+    expect(res.status).toBe(200);
+    expect(lezingen).toEqual(['id:auth-a']);
+    expect(gezet).toEqual([{ id: 'auth-a', password: '1234567890' }]);
+  });
+
+  it('een koppeling naar een verdwenen Auth-account is een 404, geen terugval op e-mail', async () => {
+    const gezet = authAttrap();
+    mem.users = mem.users.map((u) => (u.id === '3' ? { ...u, authId: 'auth-weg' } : u));
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '1234567890' } });
+    expect(res.status).toBe(404);
+    expect(res.json.error).toBe('Geen gekoppeld auth-account gevonden.');
+    expect(lezingen).toEqual(['id:auth-weg']);
+    expect(gezet).toEqual([]);
+  });
+
+  it('zonder koppeling (oud profiel) blijft de lijst-lookup op e-mail', async () => {
+    authAttrap();
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '1234567890' } });
+    expect(res.status).toBe(200);
+    expect(lezingen).toEqual(['lijst']);
   });
 });
 

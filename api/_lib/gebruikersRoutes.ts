@@ -239,22 +239,34 @@ export function mountGebruikersRoutes(app: express.Express) {
         return res.status(404).json({ error: "Gebruiker met e-mailadres niet gevonden." });
       }
 
-      const { data: authPage, error: authListError } = await supabaseAdmin.auth.admin.listUsers({
-        page: 1,
-        perPage: 1000,
-      });
-      if (authListError) throw authListError;
+      // Het Auth-account via de koppeling users.authid (05-11): één gerichte
+      // lezing in plaats van de hele Auth-lijst doorzoeken op e-mail. Alleen
+      // een oud profiel zonder koppeling valt nog terug op die lijst. Een
+      // koppeling die naar een verdwenen account wijst is een 404, geen
+      // terugval: dan hoort de koppeling hersteld, niet omzeild.
+      let authUserId: string | null = null;
+      if (targetUser.authId) {
+        const { data, error: leesFout } = await supabaseAdmin.auth.admin.getUserById(targetUser.authId);
+        if (leesFout && (leesFout as { status?: number }).status !== 404) throw leesFout;
+        authUserId = data?.user?.id ?? null;
+      } else {
+        const { data: authPage, error: authListError } = await supabaseAdmin.auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
+        if (authListError) throw authListError;
 
-      // Expliciete cast: Vercel's function-builder typeert authPage.users soms
-      // als never[] (striktere TS/supabase-types dan lokaal/CI) → bouwfout. De
-      // cast maakt de vorm versie-onafhankelijk.
-      const authUsers = (authPage?.users ?? []) as Array<{ id: string; email?: string | null }>;
-      const authUser = authUsers.find((user) => normalizeEmail(user.email) === normalizeEmail(targetUser.email));
-      if (!authUser) {
+        // Expliciete cast: Vercel's function-builder typeert authPage.users soms
+        // als never[] (striktere TS/supabase-types dan lokaal/CI) → bouwfout. De
+        // cast maakt de vorm versie-onafhankelijk.
+        const authUsers = (authPage?.users ?? []) as Array<{ id: string; email?: string | null }>;
+        authUserId = authUsers.find((user) => normalizeEmail(user.email) === normalizeEmail(targetUser.email))?.id ?? null;
+      }
+      if (!authUserId) {
         return res.status(404).json({ error: "Geen gekoppeld auth-account gevonden." });
       }
 
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password });
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(authUserId, { password });
       if (error) throw error;
 
       await logActivity(req, "auth", "Wachtwoord gereset", `Wachtwoord opnieuw ingesteld voor ${targetUser.name}.`, { type: "user", id: targetUser.id });
