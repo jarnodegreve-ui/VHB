@@ -77,6 +77,12 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   // formulier — geen halve saves bij Annuleren).
   const [userExpiries, setUserExpiries] = useState<Record<string, Record<string, string>>>({});
   const [vervalDraft, setVervalDraft] = useState<Record<string, string>>({});
+  // Pas na het antwoord van GET /api/user-expiries mag de draft gezaaid en
+  // bewaard worden: opende de planner Bewerken vóór de vervaldata binnen
+  // waren, dan bleef de draft leeg en stuurde Opslaan voor elke soort
+  // validUntil: null, de vervaldata werden stil gewist (controle 04-11).
+  // Tot dan staan de velden uit; mislukt de fetch, dan blijven ze uit.
+  const [vervaldataGeladen, setVervaldataGeladen] = useState(false);
   // Wie heeft meldingen aanstaan? Zonder abonnement komt er niets aan — bij de
   // uitrol is dat het verschil tussen "hij reageert niet" en "hij krijgt
   // niets". Best-effort: mislukt de call, dan blijft de kolom gewoon "uit".
@@ -160,16 +166,19 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
           map[r.userId][r.soort] = r.validUntil;
         }
         setUserExpiries(map);
-      } catch { /* zonder vervaldata gewoon lege velden */ }
+        setVervaldataGeladen(true);
+      } catch { /* zonder vervaldata blijven de velden uitgeschakeld */ }
     })();
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
-    setVervalDraft(editingUser ? { ...(userExpiries[editingUser.id] ?? {}) } : {});
-    // Bewust alleen op de gebruikers-id: de draft mag niet resetten terwijl
-    // je typt doordat een fetch de kaart ververst.
+    // Zaaien zodra de gebruiker wisselt of de vervaldata (alsnog) binnen
+    // zijn. Typen kan pas nadat ze geladen zijn, dus dit zaait nooit over
+    // invoer heen. Bewust niet op userExpiries zelf: de draft mag niet
+    // resetten terwijl je typt doordat een save de kaart ververst.
+    setVervalDraft(editingUser && vervaldataGeladen ? { ...(userExpiries[editingUser.id] ?? {}) } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingUser?.id]);
+  }, [editingUser?.id, vervaldataGeladen]);
   const [viewingHistoryUser, setViewingHistoryUser] = useState<User | null>(null);
   const [viewingChangeLogUser, setViewingChangeLogUser] = useState<User | null>(null);
   const [documentsUser, setDocumentsUser] = useState<User | null>(null);
@@ -279,7 +288,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const { vuil: nieuwVuil } = useVuil(newUser, showAddModal);
   const { vuil: bewerkUserVuil } = useVuil(editingUser, !!editingUser, editingUser?.id);
   const vervalBestaand = editingUser ? userExpiries[editingUser.id] ?? {} : {};
-  const vervalVuil = !!editingUser && Object.keys(EXPIRY_SOORT_LABELS).some((soort) => (vervalDraft[soort] ?? '').trim() !== (vervalBestaand[soort] ?? ''));
+  const vervalVuil = !!editingUser && vervaldataGeladen && Object.keys(EXPIRY_SOORT_LABELS).some((soort) => (vervalDraft[soort] ?? '').trim() !== (vervalBestaand[soort] ?? ''));
   const bewerkVuil = bewerkUserVuil || vervalVuil;
   // Naam-botsing-poort: de planning koppelt matrixcellen aan accounts op naam
   // (accent-/volgorde-ongevoelig), en bij twee accounts op dezelfde sleutel
@@ -365,9 +374,11 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     setIsSubmittingUser(true);
     const success = await onSaveUser(editingUser, bewerkF.zet).finally(() => setIsSubmittingUser(false));
     if (!success) return;
-    // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten.
+    // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten,
+    // en alleen als ze geladen zijn (anders is een lege draft geen wijziging
+    // maar onbekend, en zou elke soort op null gezet worden).
     const bestaand = userExpiries[editingUser.id] ?? {};
-    for (const soort of Object.keys(EXPIRY_SOORT_LABELS)) {
+    for (const soort of vervaldataGeladen ? Object.keys(EXPIRY_SOORT_LABELS) : []) {
       const nieuw = (vervalDraft[soort] ?? '').trim();
       const oud = bestaand[soort] ?? '';
       if (nieuw === oud) continue;
@@ -1121,12 +1132,13 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                           <DateInput
                             id={`bewerk-verval-${soort}`}
                             value={vervalDraft[soort] ?? ''}
+                            disabled={!vervaldataGeladen}
                             onChange={(v) => setVervalDraft((d) => ({ ...d, [soort]: v }))}
                           />
                         </Field>
                       ))}
                     </div>
-                    <p className="text-xs text-slate-500">Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.</p>
+                    <p className="text-xs text-slate-500">{vervaldataGeladen ? 'Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.' : 'De vervaldata zijn nog niet geladen; de velden komen vrij zodra ze er zijn.'}</p>
                   </fieldset>
                 )}
               </div>

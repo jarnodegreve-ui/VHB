@@ -281,3 +281,69 @@ describe('Gebruikers: uitnodigen', () => {
     window.removeEventListener('vhb-toast', opToast);
   });
 });
+
+// Vervaldata (Code 95, medische schifting) komen uit een aparte GET. Opende
+// de planner Bewerken vóór dat antwoord binnen was, dan bleef de draft leeg
+// en stuurde Opslaan voor elke soort validUntil: null: de vervaldata werden
+// stil gewist (controle 04-11). Nu staan de velden uit tot ze geladen zijn,
+// zaait de draft alsnog zodra ze binnen zijn, en slaat Opslaan ze over
+// zolang ze onbekend zijn.
+describe('Gebruikers: vervaldata die pas na het openen van Bewerken binnenkomen', () => {
+  const saveUser = () => (dataCtx as unknown as { saveUser: ReturnType<typeof vi.fn> }).saveUser;
+  const putsNaar = (pad: string) => apiFetchMock.mock.calls.filter(([url, init]) => url === pad && (init as RequestInit | undefined)?.method === 'PUT');
+  const bewerk = async (naam: string) => {
+    const rij = screen.getAllByText(naam).map((el) => el.closest('tr')).find((tr): tr is HTMLTableRowElement => tr !== null)!;
+    await act(async () => { fireEvent.click(within(rij).getByRole('button', { name: 'Bewerken' })); });
+    return screen.findByRole('dialog');
+  };
+  /** GET /api/user-expiries blijft hangen tot de test hem vrijgeeft. */
+  const vervaldataLaterMet = (rows: Array<{ userId: string; soort: string; validUntil: string }>) => {
+    let geef!: () => void;
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url === '/api/user-expiries') return new Promise<Response>((r) => { geef = () => r(Response.json(rows)); });
+      return Promise.resolve(new Response('[]', { status: 200 }));
+    });
+    return () => act(async () => { geef(); });
+  };
+
+  beforeEach(() => zetBreedte(1280));
+
+  it('de velden staan uit tot de vervaldata er zijn en tonen dan de bewaarde datum', async () => {
+    const geefVervaldata = vervaldataLaterMet([{ userId: CHAUFFEUR.id, soort: 'code95', validUntil: '2027-03-01' }]);
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(CHAUFFEUR.name);
+    const code95 = within(dialoog).getByLabelText('Code 95') as HTMLInputElement;
+    expect(code95.disabled).toBe(true);
+    expect(within(dialoog).getByText(/nog niet geladen/)).toBeTruthy();
+
+    await geefVervaldata();
+    await waitFor(() => expect(code95.disabled).toBe(false));
+    expect(code95.value).toBe('01/03/2027');
+  });
+
+  it('Opslaan vóór de vervaldata binnen zijn: de gebruiker wordt bewaard, de vervaldata blijven onaangeroerd', async () => {
+    vervaldataLaterMet([{ userId: CHAUFFEUR.id, soort: 'code95', validUntil: '2027-03-01' }]);
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(CHAUFFEUR.name);
+    await act(async () => { fireEvent.click(within(dialoog).getByRole('button', { name: 'Opslaan' })); });
+    await waitFor(() => expect(saveUser()).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // De lus over de soorten wordt overgeslagen zolang de vervaldata onbekend zijn.
+    expect(putsNaar('/api/user-expiries')).toHaveLength(0);
+  });
+
+  it('na het laden gaat alleen een echt gewijzigde soort naar de server (vroeger ook Code 95 met null)', async () => {
+    const geefVervaldata = vervaldataLaterMet([{ userId: CHAUFFEUR.id, soort: 'code95', validUntil: '2027-03-01' }]);
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(CHAUFFEUR.name);
+    await geefVervaldata();
+    const schifting = within(dialoog).getByLabelText('Medische schifting') as HTMLInputElement;
+    await waitFor(() => expect(schifting.disabled).toBe(false));
+    fireEvent.change(schifting, { target: { value: '15/06/2027' } });
+    fireEvent.blur(schifting);
+    await act(async () => { fireEvent.click(within(dialoog).getByRole('button', { name: 'Opslaan' })); });
+    await waitFor(() => expect(saveUser()).toHaveBeenCalled());
+    await waitFor(() => expect(putsNaar('/api/user-expiries')).toHaveLength(1));
+    expect(JSON.parse(String(putsNaar('/api/user-expiries')[0][1].body))).toEqual({ userId: CHAUFFEUR.id, soort: 'medische_schifting', validUntil: '2027-06-15' });
+  });
+});
