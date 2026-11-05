@@ -3,13 +3,18 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Modal } from './Modal';
 import { SlideOver } from './SlideOver';
 
-// Historiek heeft eigen integratietests; hier gaat het om de focus die
-// beide portals verplaatsen terwijl de app-scroll-root op slot staat.
-vi.mock('../lib/useHistoryDismiss', () => ({ useHistoryDismiss: () => {} }));
+// Historiek heeft eigen tests (src/lib/useHistoryDismiss.test.tsx); hier gaat
+// het om de focus die beide portals verplaatsen terwijl de app-scroll-root
+// op slot staat. De lagenstapel (src/lib/lagen.ts) draait dus echt mee: een
+// mock op het oude pad ../lib/useHistoryDismiss raakte Modal en SlideOver
+// al niet meer, die lezen useLaag rechtstreeks uit lagen.ts.
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   vi.restoreAllMocks();
+  // jsdom voert history.back() van de gesloten laag asynchroon uit: wachten
+  // tot de historiek schoon is, anders lekt een popstate in het volgende geval.
+  await vi.waitFor(() => expect(window.history.state?.vhbOverlay).toBeUndefined());
 });
 
 function Harnas({ soort, open }: { soort: 'modal' | 'paneel'; open: boolean }) {
