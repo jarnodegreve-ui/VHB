@@ -5,7 +5,7 @@
  * bewijzen; hier wel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDienstregeling, getServicesData, saveServicesData } from '../api/storage';
+import { createDienstregeling, getServicesData, saveServicesData } from '../api/_lib/storage';
 import { leegDatabase } from './hulp';
 
 beforeEach(leegDatabase);

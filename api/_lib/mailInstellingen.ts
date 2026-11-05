@@ -1,6 +1,6 @@
-import { getAppSetting } from "../storage.js";
+import { getAppSetting } from "./storage.js";
 import { isMailAan, MAIL_INSTELLINGEN_KEY, parseMailInstellingen, parseVerzendlijsten, STANDAARD_MAIL_INSTELLINGEN, VERZENDLIJSTEN_KEY, type MailInstellingen, type Verzendlijsten } from "../../shared/schemas/mail.js";
-import { bijUsersCacheWissel, epochStand, invalidateUsersCache } from "../userCache.js";
+import { bijUsersCacheWissel, epochStand, invalidateUsersCache } from "./userCache.js";
 import { maakSwrCache, SWR_STALE_MS } from "./swrCache.js";
 
 /**

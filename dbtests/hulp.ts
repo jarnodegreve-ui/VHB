@@ -1,10 +1,10 @@
 /**
  * Hulp voor de databasetests: een lege stand vóór elke test en kleine
- * bouwstenen. Alles loopt via de echte client uit api/db.ts (service role),
+ * bouwstenen. Alles loopt via de echte client uit api/_lib/db.ts (service role),
  * tegen de lokale Supabase uit vitest.db.config.ts.
  */
-import { db, supabaseAdmin } from '../api/db';
-import type { PlanningMatrixRow, ShiftRecord } from '../api/types';
+import { db, supabaseAdmin } from '../api/_lib/db';
+import type { PlanningMatrixRow, ShiftRecord } from '../api/_lib/types';
 
 /** Tabel + een kolom die nooit null is: PostgREST wist niet zonder filter. */
 const TE_LEGEN: Array<[tabel: string, kolom: string]> = [

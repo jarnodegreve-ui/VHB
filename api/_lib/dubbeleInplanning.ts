@@ -23,8 +23,8 @@
  * zet ze eerst in Planningscodes. Een lege cel, een cel met alleen leestekens
  * en de overname-codes (vrij, bv, tk, ta) zijn nooit bezet.
  */
-import { DAG_DMJ, isTakeoverCode, toLookupToken } from "../helpers.js";
-import { getShiftsOnDate, getSwapsData } from "../storage.js";
+import { DAG_DMJ, isTakeoverCode, toLookupToken } from "./helpers.js";
+import { getShiftsOnDate, getSwapsData } from "./storage.js";
 import { dienstOpBord } from "../../shared/bordBezetting.js";
 import { bordOpDag, laadBordVast, type BordVanDag, type BordVast, type BronLeeg } from "./codeDienst.js";
 

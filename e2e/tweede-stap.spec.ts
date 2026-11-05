@@ -23,7 +23,7 @@ const sessie = (aal: 'aal1' | 'aal2') => ({
   expires_at: Math.floor(Date.now() / 1000) + 3600, user: GEBRUIKER,
 });
 
-/** Wat de server ook op aal1 beantwoordt (MFA_EXEMPT in api/middleware.ts), plus
+/** Wat de server ook op aal1 beantwoordt (MFA_EXEMPT in api/_lib/middleware.ts), plus
  *  de bereikcontrole van useOnline (HEAD /api/health, zonder sessie). */
 const VRIJ = ['/api/auth/session', '/api/me', '/api/me/beveiliging', '/api/devices/register', '/api/client-errors', '/api/health'];
 

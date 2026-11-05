@@ -1,5 +1,5 @@
-import { isHandmatigeWissel, normalizeSwapType, toLookupToken } from "../helpers.js";
-import type { SwapRecord } from "../types.js";
+import { isHandmatigeWissel, normalizeSwapType, toLookupToken } from "./helpers.js";
+import type { SwapRecord } from "./types.js";
 
 /**
  * Goedgekeurde dienstruilen over het maandbeeld leggen.

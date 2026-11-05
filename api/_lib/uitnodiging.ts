@@ -1,9 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
-import { supabaseAdmin } from "../db.js";
-import { portalUrl } from "../email.js";
-import { normalizeEmail } from "../helpers.js";
-import type { AppUserIntern } from "../types.js";
+import { supabaseAdmin } from "./db.js";
+import { portalUrl } from "./email.js";
+import { normalizeEmail } from "./helpers.js";
+import type { AppUserIntern } from "./types.js";
 import {
   UITNODIGING_GELDIG_DAGEN,
   UITNODIGING_HASH,

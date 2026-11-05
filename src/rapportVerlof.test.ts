@@ -252,7 +252,7 @@ describe('gedeelde stukken', () => {
   });
 
   it('de labels lopen gelijk met de rest van het portaal', async () => {
-    const { LEAVE_TYPE_LABEL } = await import('../api/helpers');
+    const { LEAVE_TYPE_LABEL } = await import('../api/_lib/helpers');
     expect({ ...VERLOF_TYPE_LABEL, ziekte: 'Ziekte' }).toEqual(LEAVE_TYPE_LABEL);
     expect(VERLOF_STATUS_LABEL).toEqual({ approved: 'Goedgekeurd', pending: 'In behandeling', rejected: 'Afgewezen', cancelled: 'Geannuleerd' });
   });

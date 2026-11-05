@@ -1,5 +1,5 @@
-import { maakMailTransport, sendEmail, type MailTransport } from "../email.js";
-import { logMail, rondMailLogAf, startMailLog } from "../storage.js";
+import { maakMailTransport, sendEmail, type MailTransport } from "./email.js";
+import { logMail, rondMailLogAf, startMailLog } from "./storage.js";
 import { mailReeksReden } from "../../shared/mailLog.js";
 
 /**

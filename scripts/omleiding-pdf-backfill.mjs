@@ -8,7 +8,7 @@
  * een PDF op `<id>-<slot>.pdf` en zegt de kolom `bijlagen` wat er hangt. Een
  * oude rij verhuist pas bij de eerstvolgende upload of verwijdering op die
  * omleiding, dus omleidingen die niemand aanraakt houden de overgangslaag in
- * de code (omleidingBijlagen, de legacy-parameter in api/storage.ts) eeuwig
+ * de code (omleidingBijlagen, de legacy-parameter in api/_lib/storage.ts) eeuwig
  * in leven. Dit script verhuist ze in één keer.
  *
  * Per omleiding met een oude PDF:
@@ -19,7 +19,7 @@
  *   3. "pdfUrl" gaat op null.
  * Met de functies die het portaal zelf gebruikt
  * (verplaatsDiversionLegacyBijlage en zetDiversionBijlagen uit
- * api/storage.ts), niet met een kopie ervan. De chauffeur ziet vóór en na
+ * api/_lib/storage.ts), niet met een kopie ervan. De chauffeur ziet vóór en na
  * dezelfde bijlage met dezelfde naam.
  *
  * STANDAARD EEN DROGE RUN: het script telt en toont wat er zou gebeuren en
@@ -29,7 +29,7 @@
  * tussen stap 1 en 2, dan ziet de volgende run "lijst-herstellen" en maakt
  * hij het af.
  *
- * Draaien (tsx, want api/storage.ts is TypeScript). De sleutels komen uit de
+ * Draaien (tsx, want api/_lib/storage.ts is TypeScript). De sleutels komen uit de
  * env, nooit uit een argument; van de URL toont het script alleen de host.
  *
  *   Staging, droog en daarna echt:
@@ -102,15 +102,15 @@ if (!staging && !url.includes(PRODUCTIE_REF)) {
   process.exit(2);
 }
 
-// api/db.ts leest SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY bij het laden:
+// api/_lib/db.ts leest SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY bij het laden:
 // eerst de gekozen omgeving zetten, dan pas de portaalcode importeren.
 process.env.SUPABASE_URL = url;
 process.env.SUPABASE_SERVICE_ROLE_KEY = key;
-// api/db.ts meldt "configuration missing" als de anon-sleutel ontbreekt. Het
+// api/_lib/db.ts meldt "configuration missing" als de anon-sleutel ontbreekt. Het
 // script werkt altijd met de service-role-client (db = supabaseAdmin), dus
 // die melding zou hier alleen verwarren.
 process.env.SUPABASE_ANON_KEY ||= key;
-const { DIVERSIONS_BUCKET, getDiversionsData, lijstBijlageBestandenVolledig, telRijen, verplaatsDiversionLegacyBijlage, zetDiversionBijlagen } = await import('../api/storage.ts');
+const { DIVERSIONS_BUCKET, getDiversionsData, lijstBijlageBestandenVolledig, telRijen, verplaatsDiversionLegacyBijlage, zetDiversionBijlagen } = await import('../api/_lib/storage.ts');
 
 const host = (() => { try { return new URL(url).host; } catch { return 'onbekende host'; } })();
 console.log(`Omleidings-PDF's naar de bijlagenlijst, ${omgeving} (${host})`);

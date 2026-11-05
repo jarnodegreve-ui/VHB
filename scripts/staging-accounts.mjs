@@ -9,7 +9,7 @@
  *   - bestaat er nog geen Auth-account op dat adres → aanmaken (e-mail
  *     bevestigd, geen mail);
  *   - bestaat het al → wachtwoord opnieuw zetten;
- *   - users.authid = de Auth-uid (zoals api/middleware.ts bij de eerste
+ *   - users.authid = de Auth-uid (zoals api/_lib/middleware.ts bij de eerste
  *     aanmelding zou doen; de RLS-helpers uit 2026-09-05_users_authid.sql
  *     kijken hier eerst naar).
  * Idempotent: nogmaals draaien verandert niets, behalve dat het wachtwoord

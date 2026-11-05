@@ -9,23 +9,23 @@
  */
 
 import express from "express";
-import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "../types.js";
-import { supabaseAdmin } from "../db.js";
-import { isStafRol, authenticate, requireRole } from "../middleware.js";
+import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
+import { supabaseAdmin } from "./db.js";
+import { isStafRol, authenticate, requireRole } from "./middleware.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { uitnodigenSchema, userBodySchema, userLijstSchema, wachtwoordResetSchema } from "../../shared/schemas/user.js";
 import { valideerLijst, valideerRecord } from "./valideer.js";
 import { userRecordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkUsersOpslag, trekToegangIn, type ToegangIngetrokken } from "./recordWrites.js";
-import { DAG_DMJ, brusselsDay, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, EXPIRY_SOORT_LABEL } from "../helpers.js";
-import { bouwUitnodigingMail, portalUrl } from "../email.js";
+import { DAG_DMJ, brusselsDay, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, EXPIRY_SOORT_LABEL } from "./helpers.js";
+import { bouwUitnodigingMail, portalUrl } from "./email.js";
 import { reeksAntwoord, verstuurMailReeks } from "./mailReeks.js";
-import { uitnodigenRateLimit, uitnodigingOpenenRateLimit } from "../rateLimit.js";
+import { uitnodigenRateLimit, uitnodigingOpenenRateLimit } from "./rateLimit.js";
 import { OPEN_REDEN_TEKST, UITNODIGING_SOORT, kiesOntvangers, maakUitnodiging, openUitnodiging, rondUitnodigingAf, uitnodigingenPerGebruiker, zetUitnodigingTerug } from "./uitnodiging.js";
 import { UITNODIGING_GELDIG_DAGEN, UITNODIGING_HASH, beschrijfOvergeslagen, leesUitnodigingCode } from "../../shared/uitnodiging.js";
-import { getUsersCached } from "../userCache.js";
+import { getUsersCached } from "./userCache.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { isIsoDag } from "../../shared/rapporten/periode.js";
-import { getUsersData, EmailInGebruikError, MigratieOntbreektError, logActivity, getUserExpiries, saveUserExpiry, deleteUserExpiry } from "../storage.js";
+import { getUsersData, EmailInGebruikError, MigratieOntbreektError, logActivity, getUserExpiries, saveUserExpiry, deleteUserExpiry } from "./storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse } from "./collectie.js";
 
 /** Revisie van de gebruikerslijst ZONDER de sessie-velden. lastLogin en

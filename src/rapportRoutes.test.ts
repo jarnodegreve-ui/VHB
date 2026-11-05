@@ -24,12 +24,12 @@ const TESTRAPPORT: RapportDefinitie = {
   bronNaam: 'testgegevens',
 };
 
-vi.mock('../api/middleware.js', () => ({
+vi.mock('../api/_lib/middleware.js', () => ({
   authenticate: (_req: unknown, _res: unknown, next: () => void) => next(),
   requireRole: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
-vi.mock('../api/deviceGate.js', () => ({ isMissingTableError: () => false }));
-vi.mock('../api/storage.js', () => ({
+vi.mock('../api/_lib/deviceGate.js', () => ({ isMissingTableError: () => false }));
+vi.mock('../api/_lib/storage.js', () => ({
   getAppSetting: async () => null,
   getLeaveData: async () => [],
   getUsersData: async () => [],

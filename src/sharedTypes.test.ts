@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { User, ActivityCategory as ClientActivityCategory } from './types';
-import type { AppUser, ActivityCategory as ApiActivityCategory } from '../api/types';
+import type { AppUser, ActivityCategory as ApiActivityCategory } from '../api/_lib/types';
 
 /**
  * Drift-bewaking tussen de bewust gedupliceerde interfaces in src/types.ts en
- * api/types.ts (de repo-conventie verbiedt cross-imports tussen api/ en src/
+ * api/_lib/types.ts (de repo-conventie verbiedt cross-imports tussen api/ en src/
  * in productie-code — een test mag wél beide zien). Bewezen drift-geval:
  * ActivityCategory miste 'system' client-side → lege badge bij restore-events.
  *
@@ -34,12 +34,12 @@ describe('gedeelde types blijven synchroon (src/types ↔ api/types)', () => {
     // deze runtime-check bewaakt dat de twee kopieën gelijk blijven — een
     // label dat maar aan één kant wijzigt gaf eerder rauwe enum-waarden in
     // mails of UI.
-    const { LEAVE_TYPE_LABEL } = await import('../api/helpers');
+    const { LEAVE_TYPE_LABEL } = await import('../api/_lib/helpers');
     const { LEAVE_TYPE_LABELS } = await import('./lib/format');
     expect(LEAVE_TYPE_LABELS).toEqual(LEAVE_TYPE_LABEL);
   });
   it('vervaldata-labels zijn identiek (api/helpers ↔ src/lib/format)', async () => {
-    const { EXPIRY_SOORT_LABEL } = await import('../api/helpers');
+    const { EXPIRY_SOORT_LABEL } = await import('../api/_lib/helpers');
     const { EXPIRY_SOORT_LABELS } = await import('./lib/format');
     expect(EXPIRY_SOORT_LABELS).toEqual(EXPIRY_SOORT_LABEL);
   });

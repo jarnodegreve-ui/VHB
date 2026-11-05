@@ -14,7 +14,7 @@
 export type BordCel = { code: string; kind: string; hiddenService?: string; /** Omschrijving uit de planningscodes of "Dienst X" (OverlayCel). */ label?: string };
 
 /** De codes waarop iemand een dienst mag overnemen (zelfde lijst als
- *  TAKEOVER_CODES in api/helpers.ts; de drift-test houdt ze gelijk). */
+ *  TAKEOVER_CODES in api/_lib/helpers.ts; de drift-test houdt ze gelijk). */
 export const OVERNAME_CODES = ['vrij', 'bv', 'tk', 'ta'] as const;
 
 const token = (v: unknown) =>

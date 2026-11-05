@@ -8,7 +8,7 @@
  * PGRST204 geeft zolang de kolom "ontbreekt".
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IncomingUser } from '../api/types';
+import type { IncomingUser } from '../api/_lib/types';
 
 const mem = vi.hoisted(() => ({
   rijen: [] as any[],
@@ -16,7 +16,7 @@ const mem = vi.hoisted(() => ({
   upserts: [] as any[][],
 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const tabel = () => {
     const b: any = {
       select: () => b,
@@ -45,7 +45,7 @@ vi.mock('../api/db.js', () => {
   return { supabase: client, supabaseAdmin, db: supabaseAdmin };
 });
 
-const { saveUsersData, getUsersData, MigratieOntbreektError } = await import('../api/storage.js');
+const { saveUsersData, getUsersData, MigratieOntbreektError } = await import('../api/_lib/storage.js');
 
 const invoer = (extra: Record<string, Partial<IncomingUser>> = {}): IncomingUser[] => ([
   { id: '1', name: 'Annelies Admin', role: 'admin', employeeId: 'VHB-1', isActive: true },

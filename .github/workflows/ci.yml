@@ -68,7 +68,7 @@ jobs:
         run: npm run db:controle
 
       # Lagen uit elkaar (05-10): shared op zichzelf, geen server-code in de
-      # browser, de opslaglaag alleen via api/storage.ts. Zie het script.
+      # browser, de opslaglaag alleen via api/_lib/storage.ts. Zie het script.
       - name: Grenzen-lint
         run: npm run lint:grenzen
 

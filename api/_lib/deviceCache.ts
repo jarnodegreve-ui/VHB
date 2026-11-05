@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { getDevice, listRevokedSessionIds, type UserDevice } from "../storage.js";
-import { bijUsersCacheWissel, invalidateUsersCache } from "../userCache.js";
+import { getDevice, listRevokedSessionIds, type UserDevice } from "./storage.js";
+import { bijUsersCacheWissel, invalidateUsersCache } from "./userCache.js";
 
 type Clock = () => number;
 
@@ -11,7 +11,7 @@ type Clock = () => number;
 // een volledige DB-trip vóór de handler begint.
 //
 // AFWEGING: een cache op een toegangsbesluit maakt intrekken in principe
-// trager. Daarom dezelfde opzet als de users-cache (api/userCache.ts):
+// trager. Daarom dezelfde opzet als de users-cache (api/_lib/userCache.ts):
 //  - per instantie, sleutel = gebruiker + toesteltoken, TTL 30 s, begrensd;
 //  - elke schrijfactie op user_devices (registreren, status, verwijderen,
 //    alles intrekken) wist de cache lokaal én verhoogt de gedeelde

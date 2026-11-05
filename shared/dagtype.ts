@@ -135,7 +135,7 @@ const WEEKDAGEN_SLEUTEL = '__weekdagen__';
 const UITZONDERINGEN_SLEUTEL = '__uitzonderingen__';
 
 /** De kalender uit de opgeslagen dekkingsconfig (coverage_expectations):
- *  dezelfde gereserveerde sleutels als api/coverageRoutes.ts. */
+ *  dezelfde gereserveerde sleutels als api/_lib/coverageRoutes.ts. */
 export function kalenderUitDekking(stored: Record<string, unknown>): DagtypeKalender {
   const weekdaysRaw = stored[WEEKDAGEN_SLEUTEL];
   const weekdays = Array.isArray(weekdaysRaw) && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? '')) : [...DEFAULT_WEEKDAYS];

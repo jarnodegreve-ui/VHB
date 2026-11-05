@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { toPublicService, toDatabaseService } from '../api/helpers';
+import { toPublicService, toDatabaseService } from '../api/_lib/helpers';
 
 /**
  * De mappers zitten tussen de database en zowel de API-respons als de

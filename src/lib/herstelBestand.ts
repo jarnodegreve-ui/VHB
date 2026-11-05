@@ -8,7 +8,7 @@ import { HERSTEL_LIJSTEN } from '../../shared/herstelPlan';
  * ±29 kB per dag, dus rond half december paste hij niet meer in één verzoek
  * en gaf het herstel 413 "te groot". Driekwart van het bestand is het
  * activiteitenlog, dat een herstel bewust nooit terugzet (restoreFromBackup in
- * api/storage.ts: geschiedenis, geen staat), en ook de referentie-exports
+ * api/_lib/storage.ts: geschiedenis, geen staat), en ook de referentie-exports
  * (authUsers, ocpiRegistration, userDocuments, ritblaadje) leest de route niet.
  * Daarom gaat alleen mee wat het herstel kent: de lijsten van HERSTEL_LIJSTEN
  * en de dekkingsverwachting. Een collectie die niet in het bestand zit blijft

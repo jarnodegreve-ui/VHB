@@ -2,7 +2,7 @@ import { isStafRol } from "./types.js";
 import type { Role } from "./types.js";
 
 // --- Toestel-whitelist: pure beslissingslogica (zie supabase/user_devices.sql
-// + api/middleware.ts voor de wiring) ---
+// + api/_lib/middleware.ts voor de wiring) ---
 // Bewust een eigen module zónder db/express-afhankelijkheden, zodat de gate-
 // logica los te unit-testen is (src/deviceGate.test.ts).
 

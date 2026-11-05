@@ -1,8 +1,8 @@
 import type express from "express";
-import { authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { getAppSetting, logActivity, setAppSetting } from "../storage.js";
-import type { AuthenticatedRequest } from "../types.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
+import { getAppSetting, logActivity, setAppSetting } from "./storage.js";
+import type { AuthenticatedRequest } from "./types.js";
 import { FILMNUMMERS_KEY, LEGE_FILMNUMMERLIJST, filmnummerTelling, normaliseerFilmnummers, parseFilmnummerLijst, type FilmnummerLijst } from "../../shared/filmnummers.js";
 import { filmnummersSchema } from "../../shared/schemas/filmnummers.js";
 import { valideerLijst } from "./valideer.js";

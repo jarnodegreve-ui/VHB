@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bouwMaandoverzichtAoa, dienstMinuten, formatMinutenAlsUren } from '../api/helpers';
+import { bouwMaandoverzichtAoa, dienstMinuten, formatMinutenAlsUren } from '../api/_lib/helpers';
 
 /** Maandoverzicht-tabblad in de xlsx-export: per-chauffeur maandtelling. */
 describe('dienstMinuten', () => {
@@ -58,7 +58,7 @@ describe('bouwMaandoverzichtAoa', () => {
 
 describe('berekenMaandoverzicht', () => {
   it('levert dezelfde telling als het xlsx-tabblad, maar als data (voor het Overzicht-venster)', async () => {
-    const { berekenMaandoverzicht } = await import('../api/helpers');
+    const { berekenMaandoverzicht } = await import('../api/_lib/helpers');
     const services = [{ serviceNumber: '2101', startTime: '06:00', endTime: '14:00' }];
     const planningCodes = [{ code: 'vrij', countsAsShift: false, isPaidAbsence: false, isDayOff: true }];
     const cells = {
@@ -78,7 +78,7 @@ describe('berekenMaandoverzicht', () => {
 
 describe('berekenMaandoverzicht met dienstregelingversies (13-10)', () => {
   it('telt de uren van een dag uit de versie die op die dag geldt', async () => {
-    const { berekenMaandoverzicht } = await import('../api/helpers');
+    const { berekenMaandoverzicht } = await import('../api/_lib/helpers');
     const oud = [{ serviceNumber: '2101', startTime: '06:00', endTime: '14:00' }];
     const nieuw = [{ serviceNumber: '2101', startTime: '06:00', endTime: '15:00' }];
     const versies = [{ id: 'v-sep', geldigVanaf: '2026-09-01', services: oud }, { id: 'v-nov', geldigVanaf: '2026-11-09', services: nieuw }];

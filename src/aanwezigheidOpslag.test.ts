@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Opslagkant van de aanwezigheid (api/storage.ts › noteerAanwezigheid), met
+ * Opslagkant van de aanwezigheid (api/_lib/storage.ts › noteerAanwezigheid), met
  * de plaats van aanmelden erbij.
  *
  * De eis die hier bewaakt wordt: Jarno draait migraties met de hand, dus de
@@ -26,7 +26,7 @@ const mem = vi.hoisted(() => ({
 const BASIS = ['id', 'user_id', 'role', 'started_at', 'last_seen_at'];
 const MET_PLAATS = [...BASIS, 'land', 'regio', 'stad'];
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const controleer = (payload: Record<string, unknown>): { code: string; message: string } | null => {
     for (const kolom of Object.keys(payload)) {
       if (!mem.kolommen.has(kolom)) {
@@ -75,7 +75,7 @@ vi.mock('../api/db.js', () => {
   return { supabase: client, supabaseAdmin: client, db: client };
 });
 
-const { noteerAanwezigheid, vergeetPresenceLocatie } = await import('../api/storage.js');
+const { noteerAanwezigheid, vergeetPresenceLocatie } = await import('../api/_lib/storage.js');
 
 const GENT = { land: 'BE', regio: 'VOV', stad: 'Gent' };
 const LILLE = { land: 'FR', regio: 'HDF', stad: 'Lille' };

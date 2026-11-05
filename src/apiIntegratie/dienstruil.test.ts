@@ -2031,7 +2031,7 @@ describe('aanvraag bekeken door de collega (POST /api/swaps/:id/bekeken)', () =>
   });
 
   it('telt niet mee als uitgevoerde wissel (weekoverzicht en weekrapport)', async () => {
-    const { SWAP_UITVOERING_ACTIES } = await import('../../api/helpers');
+    const { SWAP_UITVOERING_ACTIES } = await import('../../api/_lib/helpers');
     expect(SWAP_UITVOERING_ACTIES).not.toContain('Dienstruil bekeken');
   });
 });

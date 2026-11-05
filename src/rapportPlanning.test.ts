@@ -6,7 +6,7 @@
  * zijn de som van hun maandoverzichten.
  */
 import { describe, expect, it } from 'vitest';
-import { berekenMaandoverzicht, telMaandoverzichtenOp } from '../api/helpers';
+import { berekenMaandoverzicht, telMaandoverzichtenOp } from '../api/_lib/helpers';
 import { berekenCelWaarheid } from '../api/_lib/celWaarheid';
 import { bouwDienstenPerDag, bouwOpenstaandeDiensten, bouwOverzichtPerChauffeur, maandoverzichtVan, type DienstenBron, type OverzichtBron } from '../api/_lib/rapporten/planning';
 import { rapportVan } from '../shared/rapporten/register';

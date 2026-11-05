@@ -34,7 +34,7 @@ const mem = vi.hoisted(() => ({
   lezingen: [] as Array<{ tabel: string; gericht: boolean }>,
 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const tabel = (naam: string) => {
     let rijen = [...(mem.tabellen[naam] ?? [])];
     const volgorde: Array<{ kolom: string; oplopend: boolean }> = [];
@@ -118,7 +118,7 @@ vi.mock('../api/db.js', () => {
   return { supabase: client, supabaseAdmin: client, db: client };
 });
 
-const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, lijstBijlageBestandenVolledig, telRijen, getDiversionsData, bestaandeRecordIds, logregelsVanEntiteiten, GERICHTE_LEZING_MAX } = await import('../api/storage.js');
+const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, lijstBijlageBestandenVolledig, telRijen, getDiversionsData, bestaandeRecordIds, logregelsVanEntiteiten, GERICHTE_LEZING_MAX } = await import('../api/_lib/storage.js');
 const { laatsteVerwijdering } = await import('../api/_lib/bijlagenActies.js');
 const { begrensBeurt, kandidaatBijlagen, kiesWeesBijlagen, mogelijkeEigenaars, opruimBudget, ruimWeesBijlagenOp, WEES_BUDGET_MS, WEES_MARGE_MS, WEES_MAX_PER_BEURT } = await import('../api/_lib/bijlagenOpruim.js');
 

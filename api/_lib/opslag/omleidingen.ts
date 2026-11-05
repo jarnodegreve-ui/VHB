@@ -1,8 +1,8 @@
 import { MAX_OMLEIDING_BIJLAGEN } from "../../../shared/schemas/diversion.js";
-import type { ActivityLogRow } from "../../types.js";
-import { toDatabaseDiversion, toPublicDiversion } from "../../helpers.js";
+import type { ActivityLogRow } from "../types.js";
+import { toDatabaseDiversion, toPublicDiversion } from "../helpers.js";
 import { uploadMoment } from "../bijlagenActies.js";
-import { db, supabaseAdmin } from "../../db.js";
+import { db, supabaseAdmin } from "../db.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 import { isMissingColumnError } from "./fouten.js";

@@ -7,7 +7,7 @@
  * mag niet van de tijdzone van de server afhangen.
  */
 import { describe, expect, it } from 'vitest';
-import { SWAP_UITVOERING_ACTIES } from '../api/helpers';
+import { SWAP_UITVOERING_ACTIES } from '../api/_lib/helpers';
 import { bouwRuilaanvragen, bouwRuilenPerChauffeur, bouwUitgevoerdeWissels, type RuilBron, type RuilRij } from '../api/_lib/rapporten/ruilen';
 import { MAX_UITVOERING_DAGEN, brusselseDagVan, laatsteUitvoeringPerRuil, uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from '../api/_lib/ruilUitvoeringen';
 import { rapportVan } from '../shared/rapporten/register';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { vindOngeregistreerdeZiekte } from '../api/helpers';
+import { vindOngeregistreerdeZiekte } from '../api/_lib/helpers';
 
 /**
  * "ziek" in de planning-matrix zonder geregistreerde ziekteperiode (case

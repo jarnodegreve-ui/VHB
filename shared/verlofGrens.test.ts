@@ -27,7 +27,7 @@ describe('uiterste einddatum van verlof', () => {
   });
 
   it('de server (brusselsDay) en het scherm (vandaagBrussel) geven dezelfde dag, ook rond de jaarwissel', async () => {
-    const { brusselsDay } = await import('../api/helpers');
+    const { brusselsDay } = await import('../api/_lib/helpers');
     const { vandaagBrussel } = await import('../src/lib/brussel');
     for (const moment of ['2026-12-31T22:30:00Z', '2026-12-31T23:30:00Z', '2027-01-01T00:30:00Z', '2027-06-30T22:01:00Z']) {
       const nu = new Date(moment);

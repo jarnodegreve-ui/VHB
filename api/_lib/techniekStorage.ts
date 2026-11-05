@@ -1,5 +1,5 @@
-import { db } from "../db.js";
-import { paginatedFetch } from "../storage.js";
+import { db } from "./db.js";
+import { paginatedFetch } from "./storage.js";
 import type {
   Defect, DefectPatch, DefectMeldingBody, Vehicle, VehicleBody, VehicleExpiry, Werkprestatie, WerkprestatieBody,
 } from "../../shared/schemas/techniek.js";

@@ -10,27 +10,27 @@
 
 import { bouwHerstelPlan } from "../../shared/herstelPlan.js";
 import express from "express";
-import { sendEmail, sendExpiryReminderEmail, escapeHtml } from "../email.js";
+import { sendEmail, sendExpiryReminderEmail, escapeHtml } from "./email.js";
 import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwOverzichtMail, bouwRestoreProefMail } from "./mailTeksten.js";
-import { sendPushToUsers } from "../push.js";
-import type { AuthenticatedRequest } from "../types.js";
-import { supabaseAdmin } from "../db.js";
-import { authenticate, requireRole, isCronAuthorized } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { encryptOpensslCompatible } from "../backupCrypto.js";
-import { symbolicateTopFrame } from "../symbolicate.js";
-import { getOcpiRegistration } from "../ocpi.js";
+import { sendPushToUsers } from "./push.js";
+import type { AuthenticatedRequest } from "./types.js";
+import { supabaseAdmin } from "./db.js";
+import { authenticate, requireRole, isCronAuthorized } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
+import { encryptOpensslCompatible } from "./backupCrypto.js";
+import { symbolicateTopFrame } from "./symbolicate.js";
+import { getOcpiRegistration } from "./ocpi.js";
 import { getVehicleExpiries, getVehicles } from "./techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../../shared/schemas/techniek.js";
 import { isTechnieker } from "../../shared/toegang.js";
 import { verstuurRoosterMeldingen } from "./planningHeropbouw.js";
-import { stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT } from "../telegram.js";
-import { berekenDekkingsGaten, berekenCoverageAdvies } from "../coverageRoutes.js";
-import { invalidateUsersCache } from "../userCache.js";
+import { stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT } from "./telegram.js";
+import { berekenDekkingsGaten, berekenCoverageAdvies } from "./coverageRoutes.js";
+import { invalidateUsersCache } from "./userCache.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { addDagenIso, brusselsDay, DAG_DMJ, isDigestRuis, SWAP_UITVOERING_ACTIES, EXPIRY_SOORT_LABEL, isActieveStaf } from "../helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, isDigestRuis, SWAP_UITVOERING_ACTIES, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { MigratieOntbreektError, getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesAlle, getDienstregelingen, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, getRitbladRijen, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "../storage.js";
+import { MigratieOntbreektError, getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesAlle, getDienstregelingen, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, getRitbladRijen, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "./storage.js";
 import { viewUrl } from "./collectie.js";
 import { opruimBudget, ruimWeesBijlagenOp } from "./bijlagenOpruim.js";
 

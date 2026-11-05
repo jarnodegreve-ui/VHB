@@ -391,7 +391,7 @@ describe('beveiliging (controleronde 16-08)', () => {
   });
 
   it('C2, de registratielimiet telt alleen voor een nieuw token, een bekend token raakt Upstash niet (05-11)', async () => {
-    const { deviceRegisterRateLimit } = await import('../../api/rateLimit.js');
+    const { deviceRegisterRateLimit } = await import('../../api/_lib/rateLimit.js');
     const toets = vi.spyOn(deviceRegisterRateLimit, 'toets');
     try {
       // Een bekend token (elke app-start): de limiet wordt niet eens bevraagd,

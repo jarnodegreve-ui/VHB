@@ -1,8 +1,8 @@
 import type express from "express";
-import { authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { logActivity, setAppSetting } from "../storage.js";
-import type { AuthenticatedRequest } from "../types.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
+import { logActivity, setAppSetting } from "./storage.js";
+import type { AuthenticatedRequest } from "./types.js";
 import { onderhoudBodySchema, type OnderhoudPubliek } from "../../shared/schemas/onderhoud.js";
 import { valideerRecord } from "./valideer.js";
 import { getOnderhoud, meldOnderhoudWijziging } from "./onderhoud.js";

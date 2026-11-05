@@ -3,7 +3,7 @@
  * met de upsert op datum (een tweede import overschrijft alleen haar dagen).
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { getDagtypeKalender, schrijfDagtypeKalender } from '../api/storage';
+import { getDagtypeKalender, schrijfDagtypeKalender } from '../api/_lib/storage';
 import { leegDatabase } from './hulp';
 
 beforeEach(leegDatabase);

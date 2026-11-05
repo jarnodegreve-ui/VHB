@@ -1,5 +1,5 @@
-import { db } from "../db.js";
-import { paginatedFetch } from "../storage.js";
+import { db } from "./db.js";
+import { paginatedFetch } from "./storage.js";
 import { QUAL_VLAGGEN, loonCodeSleutel, type QualVlag } from "../../shared/loon.js";
 import type { DagPrestatie, DagPrestatieBody, LoonCode, LoonCodeBody, LoonMedewerker } from "../../shared/schemas/loon.js";
 
@@ -65,7 +65,7 @@ export const toDatabaseLoonCode = (code: string, b: LoonCodeBody, updatedBy: str
 });
 
 // PostgREST kapt af op 1000 rijen per antwoord; alle lijst-selects in deze
-// module lopen daarom door paginatedFetch (api/storage.ts, zie het
+// module lopen daarom door paginatedFetch (api/_lib/storage.ts, zie het
 // "eind mei verdwijnt"-incident daar). Een kale .select() of .limit() zou
 // stil rijen laten vallen zodra een tabel de cap overschrijdt.
 export const getLoonCodes = async (): Promise<LoonCode[]> => {

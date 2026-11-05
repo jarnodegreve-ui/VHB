@@ -1,6 +1,6 @@
 import type express from "express";
-import { authenticate, requireRole } from "../middleware.js";
-import type { AuthenticatedRequest } from "../types.js";
+import { authenticate, requireRole } from "./middleware.js";
+import type { AuthenticatedRequest } from "./types.js";
 import { rapportVan } from "../../shared/rapporten/register.js";
 import { filterSchemaVoor } from "../../shared/rapporten/filterSchema.js";
 import { totalenVoor } from "../../shared/rapporten/opmaak.js";

@@ -17,16 +17,16 @@ const mem = vi.hoisted(() => ({
   meldToestelWijziging: vi.fn(),
 }));
 
-vi.mock('../api/db.js', () => ({ db: null, supabase: null, supabaseAdmin: null }));
-vi.mock('../api/email.js', () => ({ sendWelcomeEmail: vi.fn() }));
-vi.mock('../api/push.js', () => ({
+vi.mock('../api/_lib/db.js', () => ({ db: null, supabase: null, supabaseAdmin: null }));
+vi.mock('../api/_lib/email.js', () => ({ sendWelcomeEmail: vi.fn() }));
+vi.mock('../api/_lib/push.js', () => ({
   sendPushToUsers: vi.fn(),
   deletePushSubscriptionsForUser: (id: string) => mem.deletePush(id),
 }));
-vi.mock('../api/userCache.js', () => ({ invalidateUsersCache: vi.fn() }));
+vi.mock('../api/_lib/userCache.js', () => ({ invalidateUsersCache: vi.fn() }));
 // Toestel-cache (ronde 3): intrekken moet de cache wissen + de epoch verhogen.
 vi.mock('../api/_lib/deviceCache.js', () => ({ meldToestelWijziging: () => mem.meldToestelWijziging() }));
-vi.mock('../api/storage.js', () => ({
+vi.mock('../api/_lib/storage.js', () => ({
   deleteAllDocumentsForUser: vi.fn(async () => 0),
   diffDiversionChanges: vi.fn(),
   diffUpdateChanges: vi.fn(),

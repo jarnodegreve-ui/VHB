@@ -35,7 +35,7 @@ const staat = vi.hoisted(() => ({
   pushes: [] as Array<{ ontvangers: string[]; titel: string; url?: string }>,
 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const from = (tabel: string) => {
     if (tabel !== 'vehicle_defects') throw new Error(`nep-db: onbekende tabel ${tabel}`);
     const q: any = {
@@ -61,8 +61,8 @@ vi.mock('../api/db.js', () => {
   };
   return { db: { from }, supabase: null, supabaseAdmin: null };
 });
-vi.mock('../api/middleware.js', async (origineel) => {
-  const echt = await origineel<typeof import('../api/middleware')>();
+vi.mock('../api/_lib/middleware.js', async (origineel) => {
+  const echt = await origineel<typeof import('../api/_lib/middleware')>();
   return {
     ...echt,
     authenticate: (req: express.Request & { appUser?: unknown }, _res: express.Response, next: express.NextFunction) => {
@@ -72,14 +72,14 @@ vi.mock('../api/middleware.js', async (origineel) => {
     },
   };
 });
-vi.mock('../api/storage.js', async (origineel) => ({
-  ...(await origineel<typeof import('../api/storage')>()),
+vi.mock('../api/_lib/storage.js', async (origineel) => ({
+  ...(await origineel<typeof import('../api/_lib/storage')>()),
   getUsersData: async () => staat.users,
   logActivity: async (req: { appUser?: { id?: string } }, _domein: string, actie: string) => {
     staat.log.push({ actie, door: String(req.appUser?.id ?? '') });
   },
 }));
-vi.mock('../api/push.js', () => ({
+vi.mock('../api/_lib/push.js', () => ({
   sendPushToUsers: async (ontvangers: string[], payload: { title: string; url?: string }) => {
     staat.pushes.push({ ontvangers: [...ontvangers].sort(), titel: payload.title, url: payload.url });
   },

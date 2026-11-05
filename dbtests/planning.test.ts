@@ -6,8 +6,8 @@
  * opslaglaag is dat niet te bewijzen, hier wel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '../api/db';
-import { getPlanningData, getPlanningMatrixRows, replacePlanningAndMatrix, replacePlanningData } from '../api/storage';
+import { db } from '../api/_lib/db';
+import { getPlanningData, getPlanningMatrixRows, replacePlanningAndMatrix, replacePlanningData } from '../api/_lib/storage';
 import { dienst, leegDatabase, matrixRij, planningKort, planningVersie } from './hulp';
 
 beforeEach(leegDatabase);

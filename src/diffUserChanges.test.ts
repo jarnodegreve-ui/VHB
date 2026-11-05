@@ -6,7 +6,7 @@
  * zonder nummer.
  */
 import { describe, it, expect } from 'vitest';
-import { diffUserChanges } from '../api/storage';
+import { diffUserChanges } from '../api/_lib/storage';
 
 const basis = { id: '1', name: 'Test Chauffeur', role: 'chauffeur' as const, employeeId: 'VHB-000001', isActive: true };
 

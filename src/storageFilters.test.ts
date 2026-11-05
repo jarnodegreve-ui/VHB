@@ -14,7 +14,7 @@ const stappen = vi.hoisted(() => ({
   antwoord: null as null | ((query: Array<[string, ...unknown[]]>) => unknown),
 }));
 
-vi.mock('../api/db.js', () => {
+vi.mock('../api/_lib/db.js', () => {
   const keten = (query: Stap[]): any => new Proxy({}, {
     get: (_t, naam: string) => {
       if (naam === 'then') return (ok: (v: unknown) => void) => ok(stappen.antwoord?.(query) ?? { data: [], error: null, count: 0 });
@@ -29,7 +29,7 @@ vi.mock('../api/db.js', () => {
   return { db: { from: (tabel: string) => { stappen.lijst.push(['from', tabel]); return keten([['from', tabel]]); } }, supabase: null, supabaseAdmin: null };
 });
 
-const { getSwapsData, getLeaveData, registerDevice, listDevicesForUser, listRevokedSessionIds } = await import('../api/storage.js');
+const { getSwapsData, getLeaveData, registerDevice, listDevicesForUser, listRevokedSessionIds } = await import('../api/_lib/storage.js');
 
 beforeEach(() => { stappen.lijst = []; stappen.antwoord = null; });
 

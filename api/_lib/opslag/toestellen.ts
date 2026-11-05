@@ -1,4 +1,4 @@
-import type { DeviceStatus, UserDevice } from "../../types.js";
+import type { DeviceStatus, UserDevice } from "../types.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 import { isMissingColumnError } from "./fouten.js";
 
@@ -7,7 +7,7 @@ import { isMissingColumnError } from "./fouten.js";
 // supabase/user_devices.sql. Eerste toestel van een chauffeur = auto-approved,
 // elk volgend toestel = pending tot de admin goedkeurt. Planner/admin-
 // toestellen zijn altijd approved (alleen zichtbaarheid, nooit uitsluiting).
-// De types zelf staan in api/types.ts (AuthenticatedRequest.device verwijst ernaar).
+// De types zelf staan in api/_lib/types.ts (AuthenticatedRequest.device verwijst ernaar).
 
 const toPublicDevice = (row: any): UserDevice => ({
   userId: String(row.user_id),

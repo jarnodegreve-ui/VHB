@@ -10,13 +10,13 @@
 
 import { variantenTekst } from "../../shared/dagtype.js";
 import express from "express";
-import { sendEmail, MAIL_UIT_MELDING } from "../email.js";
+import { sendEmail, MAIL_UIT_MELDING } from "./email.js";
 import { bouwDringendeUpdateMail } from "./mailTeksten.js";
-import { sendPushToUsers } from "../push.js";
-import type { AuthenticatedRequest } from "../types.js";
-import { authenticate, requireRole } from "../middleware.js";
-import { isMissingColumnError } from "../deviceGate.js";
-import { urgentEmailRateLimit } from "../rateLimit.js";
+import { sendPushToUsers } from "./push.js";
+import type { AuthenticatedRequest } from "./types.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { isMissingColumnError } from "./deviceGate.js";
+import { urgentEmailRateLimit } from "./rateLimit.js";
 import { dienstenVerschillenVoorPlanning, heropbouwNaDienstoverzicht, planningUitkomstVoorAntwoord } from "./planningHeropbouw.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { MAX_OMLEIDING_BIJLAGEN, diversionBodySchema, diversionLijstSchema } from "../../shared/schemas/diversion.js";
@@ -25,9 +25,9 @@ import { versieLabel } from "../../shared/dienstregeling.js";
 import { recordUrl } from "./meldingen.js";
 import { valideerLijst, valideerRecord } from "./valideer.js";
 import { recordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkDiversionsOpslag, verwerkUpdatesOpslag } from "./recordWrites.js";
-import { bijlagenUitKolom, omleidingBijlagen } from "../helpers.js";
+import { bijlagenUitKolom, omleidingBijlagen } from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { DienstregelingOnbekend, MigratieOntbreektError, getDienstregelingen, getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlagen, diversionBijlagePad, diversionLegacyPad, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
+import { DienstregelingOnbekend, MigratieOntbreektError, getDienstregelingen, getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlagen, diversionBijlagePad, diversionLegacyPad, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "./storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { herstelBewezen, herstelOmleidingBijlagen, herstelUpdateBijlagen } from "./bijlagenHerstel.js";
 
@@ -40,7 +40,7 @@ import { herstelBewezen, herstelOmleidingBijlagen, herstelUpdateBijlagen } from 
 // zodat een planner geen externe link als "de PDF van deze omleiding" kan
 // laten doorgaan (controle 05-09, nr. 28). Een PDF van vóór 25-09 hangt op
 // `<id>.pdf` en telt als slot 1 zolang de rij geen lijst heeft
-// (omleidingBijlagen in api/helpers.ts).
+// (omleidingBijlagen in api/_lib/helpers.ts).
 
 /** Elke bijlage een verse, ondertekende URL geven; wat niet te ondertekenen
  *  is (bestand weg) valt uit de lijst in plaats van als dode link mee te
@@ -739,7 +739,7 @@ export function mountCommunicatieRoutes(app: express.Express) {
         return res.json({ success: true, message: "No recipients with email found" });
       }
 
-      // Via de gedeelde sendEmail-helper (api/email.ts): één SMTP-configuratie
+      // Via de gedeelde sendEmail-helper (api/_lib/email.ts): één SMTP-configuratie
       // en één mock-pad i.p.v. een eigen transporter per route. Op de vaste
       // lay-out; de knop landt op het bericht zelf zodra er een id is.
       // sendEmail gooit zelf nooit: een mislukte verzending komt als ok=false.

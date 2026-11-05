@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applySwapsToPlanningRows, swapRaaktBereik } from '../api/storage.js';
+import { applySwapsToPlanningRows, swapRaaktBereik } from '../api/_lib/storage.js';
 
 /**
  * Pure heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op vers

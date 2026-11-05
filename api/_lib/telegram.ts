@@ -1,10 +1,10 @@
-import { variantTekst, variantenSchoon } from "../shared/dagtype.js";
+import { variantTekst, variantenSchoon } from "../../shared/dagtype.js";
 import type express from "express";
 import { timingSafeEqual } from "node:crypto";
 import { escapeHtml } from "./email.js";
 import { getLeaveData, getPlanningData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getUsersData } from "./storage.js";
 import { addDagenIso, brusselsDay, matrixCodesForDate, toLookupToken } from "./helpers.js";
-import type { DayGap } from "../shared/coverageGaps.js";
+import type { DayGap } from "../../shared/coverageGaps.js";
 
 /**
  * Telegram-koppeling voor de planner — het beproefde patroon uit Jarno's

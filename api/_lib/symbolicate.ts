@@ -19,7 +19,7 @@ const MAX_MAP_BYTES = 15 * 1024 * 1024; // ruim boven onze grootste bundel-map
  *  was elke `https://<wat-dan-ook>/assets/x.js:1:1` in een stack een blinde
  *  outbound-fetch-primitive (incl. interne hosts) vanuit de digest-cron.
  *  Alleen onze eigen deploy-hosts, alleen https, en géén redirects volgen
- *  (zelfde regel als api/ocpi.ts). */
+ *  (zelfde regel als api/_lib/ocpi.ts). */
 const eigenDeployHost = (jsUrl: string): boolean => {
   try {
     const u = new URL(jsUrl);

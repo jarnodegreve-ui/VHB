@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
  * fingerprint = hash(bron | genormaliseerde melding | top-frame bestand:regel)
  *  - getallen, uuid's en hex-id's in de melding worden `#` (een "dienst 2515"
  *    en "dienst 2607" zijn dezelfde fout);
- *  - het top-frame komt uit de symbolicatie (api/symbolicate.ts) en verliest
+ *  - het top-frame komt uit de symbolicatie (api/_lib/symbolicate.ts) en verliest
  *    zijn functienaam — bestand + regel volstaan;
  *  - zonder stack telt alleen de melding.
  *

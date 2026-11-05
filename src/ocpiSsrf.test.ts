@@ -14,7 +14,7 @@ process.env.OCPI_CPO_VERSIONS_URL = 'https://cpo.example.com/ocpi/versions';
 let assertSafeOcpiUrl: (raw: string, wat: string) => string;
 
 beforeAll(async () => {
-  ({ assertSafeOcpiUrl } = await import('../api/ocpi.js'));
+  ({ assertSafeOcpiUrl } = await import('../api/_lib/ocpi.js'));
 });
 
 const geweigerd = (url: string) => expect(() => assertSafeOcpiUrl(url, 'test-URL')).toThrow();

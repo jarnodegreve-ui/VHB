@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { makeUserCache } from '../api/userCache';
-import type { AppUser } from '../api/types';
+import { makeUserCache } from '../api/_lib/userCache';
+import type { AppUser } from '../api/_lib/types';
 
 const users = (n: number): AppUser[] =>
   Array.from({ length: n }, (_, i) => ({ id: String(i), name: `U${i}`, email: `u${i}@x.be`, role: 'chauffeur', employeeId: `E${i}` } as AppUser));

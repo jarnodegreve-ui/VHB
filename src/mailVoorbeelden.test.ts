@@ -2,7 +2,7 @@
 /**
  * De voorbeelden in Beheer › Mails mogen niet stil afwijken van de echte
  * mails (nr. 34, 29-09). Vroeger was api/_lib/mailVoorbeelden.ts een
- * handgeschreven kopie van de teksten in api/email.ts en de routes; het
+ * handgeschreven kopie van de teksten in api/_lib/email.ts en de routes; het
  * weekoverzicht linkte in het voorbeeld al naar een ander adres dan de echte
  * mail. Nu heeft elke mail één bouwer, en het voorbeeld is die bouwer met
  * vaste gegevens. Deze tests bewaken dat het zo blijft:
@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { voorbeeldMail } from '../api/_lib/mailVoorbeelden';
-import { bouwVerlofBeslissingMail, portalUrl } from '../api/email';
+import { bouwVerlofBeslissingMail, portalUrl } from '../api/_lib/email';
 import { bouwBackupWeekkopieMail, bouwZiekmeldingMail } from '../api/_lib/mailTeksten';
 import { MAIL_SOORTEN } from '../shared/schemas/mail';
 import { MAILS } from '../scripts/auth-mails.mjs';
@@ -58,14 +58,14 @@ describe('voorbeelden van de mails', () => {
     // mailRoutes.ts bouwt de twee mails die een mens zelf schrijft (eigen
     // mail, omleiding mailen); die hebben geen voorbeeld in de lijst, hun
     // voorbeeld is de droge run vóór het versturen.
-    const MAG = new Set(['api/email.ts', 'api/_lib/mailTeksten.ts', 'api/_lib/mailLayout.ts', 'api/_lib/mailRoutes.ts']);
+    const MAG = new Set(['api/_lib/email.ts', 'api/_lib/mailTeksten.ts', 'api/_lib/mailLayout.ts', 'api/_lib/mailRoutes.ts']);
     const zelf = loop('api').filter((p) => !MAG.has(p) && BOUWT_ZELF.test(lees(p)));
     expect(zelf).toEqual([]);
   });
 
   it('elke bouwer wordt door een voorbeeld gebruikt', () => {
     const voorbeelden = lees('api/_lib/mailVoorbeelden.ts');
-    const bouwers = [...`${lees('api/email.ts')}\n${lees('api/_lib/mailTeksten.ts')}`.matchAll(/^export const (bouw\w+Mail)\b/gm)].map((m) => m[1]!);
+    const bouwers = [...`${lees('api/_lib/email.ts')}\n${lees('api/_lib/mailTeksten.ts')}`.matchAll(/^export const (bouw\w+Mail)\b/gm)].map((m) => m[1]!);
     expect(bouwers.length).toBeGreaterThanOrEqual(11);
     expect(bouwers.filter((b) => !new RegExp(`\\b${b}\\(`).test(voorbeelden))).toEqual([]);
   });

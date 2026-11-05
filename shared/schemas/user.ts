@@ -5,7 +5,7 @@ import { dashboardVoorkeurenSchema } from './dashboardVoorkeuren.js';
 import { verlofBudgettenGeldig } from '../verlofSaldo.js';
 
 /**
- * Gebruiker — spiegel van `AppUser`/`IncomingUser` (api/types.ts) en
+ * Gebruiker — spiegel van `AppUser`/`IncomingUser` (api/_lib/types.ts) en
  * `User` (src/types.ts). Drift valt op in shared/schemas/schemas.test.ts
  * (type-asserties: het afgeleide type moet veld-voor-veld gelijk zijn).
  *
@@ -67,7 +67,7 @@ const userVelden = {
    *  andere rol (sanitizeIncomingUser). Zie shared/toegang.ts. */
   ookTechnieker: optioneel(z.boolean()),
   /** Eigen dashboardindeling (alleen via PATCH /api/me/voorkeuren geschreven;
-   *  de gebruikers-save negeert dit veld — zie api/helpers.ts toDatabaseUser). */
+   *  de gebruikers-save negeert dit veld — zie api/_lib/helpers.ts toDatabaseUser). */
   dashboardVoorkeuren: optioneel(dashboardVoorkeurenSchema),
   /** Nieuw of reset; leeg = geen wijziging. */
   password: optioneel(wachtwoordSchema),

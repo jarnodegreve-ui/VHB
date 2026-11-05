@@ -1,4 +1,4 @@
-import { isMissingTableError } from "../../deviceGate.js";
+import { isMissingTableError } from "../deviceGate.js";
 import type { DagtypeKalenderDag } from "../../../shared/dagtypeKalender.js";
 import { isEchteIsoDag, paginatedFetch, requireDb } from "./basis.js";
 

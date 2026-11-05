@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateDeviceGate, isMissingTableError } from '../api/deviceGate';
+import { evaluateDeviceGate, isMissingTableError } from '../api/_lib/deviceGate';
 
 const approved = { status: 'approved' };
 const pending = { status: 'pending' };

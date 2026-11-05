@@ -2,7 +2,7 @@ import type { User, SwapRequest } from '../types';
 
 /**
  * Authorization-helper voor de UI (knoppen tonen/verbergen). De API enforced
- * dezelfde regels via `requireRole(...)` in `api/middleware.ts` — dit predicate
+ * dezelfde regels via `requireRole(...)` in `api/_lib/middleware.ts` — dit predicate
  * is dus puur voor de UX, niet voor security.
  *
  * De bredere set rol-predicates die hier ooit stond (canApproveLeave,

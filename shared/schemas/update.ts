@@ -3,7 +3,7 @@ import { optioneel, verplichteTekst } from './basis.js';
 
 /**
  * Update (nieuwsbericht) — spiegel van `Update` (src/types.ts); de API kent
- * er geen eigen interface voor (toPublicUpdate in api/helpers.ts).
+ * er geen eigen interface voor (toPublicUpdate in api/_lib/helpers.ts).
  * `date` is vrije tekst: de UI schrijft een nl-BE-datum ('3/9/2026'),
  * oudere rijen een ISO-dag — beide blijven geldig.
  */

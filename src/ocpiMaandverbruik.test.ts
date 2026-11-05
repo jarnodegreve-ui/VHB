@@ -1,18 +1,18 @@
 // @vitest-environment node
 /**
  * Verbruik per laadpunt (27-08-2026): de zuivere rekenhelpers uit
- * api/ocpi.ts. De dag-/maandgrens is het verraderlijke stuk: depotladen
+ * api/_lib/ocpi.ts. De dag-/maandgrens is het verraderlijke stuk: depotladen
  * start 's avonds laat, dus een sessie die om 00:30 Brusselse tijd begint
  * staat in UTC nog op de vorige kalenderdag.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// Vóór de import: api/ocpi.ts leidt zijn host-allowlist bij module-load af.
+// Vóór de import: api/_lib/ocpi.ts leidt zijn host-allowlist bij module-load af.
 process.env.OCPI_CPO_VERSIONS_URL = 'https://cpo.example.com/ocpi/versions';
 
-let ocpi: typeof import('../api/ocpi.js');
+let ocpi: typeof import('../api/_lib/ocpi.js');
 beforeAll(async () => {
-  ocpi = await import('../api/ocpi.js');
+  ocpi = await import('../api/_lib/ocpi.js');
 });
 
 const evses = [

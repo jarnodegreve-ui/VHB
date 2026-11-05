@@ -6,7 +6,7 @@
  * pagina tot hun grens.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '../api/db';
+import { db } from '../api/_lib/db';
 import { getDefecten, getWerkprestaties } from '../api/_lib/techniekStorage';
 import { leegDatabase } from './hulp';
 

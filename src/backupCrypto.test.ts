@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { encryptOpensslCompatible, decryptOpensslCompatible } from '../api/backupCrypto';
+import { encryptOpensslCompatible, decryptOpensslCompatible } from '../api/_lib/backupCrypto';
 
 describe('back-upversleuteling (OpenSSL-compatibel)', () => {
   const geheim = 'test-zin-alleen-voor-deze-test';

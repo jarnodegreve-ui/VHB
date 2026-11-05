@@ -1,8 +1,8 @@
 import type express from "express";
-import { authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { logActivity } from "../storage.js";
-import type { AuthenticatedRequest } from "../types.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
+import { logActivity } from "./storage.js";
+import type { AuthenticatedRequest } from "./types.js";
 import { laadXlsx } from "./matrixXlsx.js";
 import { dagtypeCodeBodySchema, segmentImportBodySchema } from "../../shared/schemas/dienst.js";
 import { parseImportET } from "../../shared/dienst/importET.js";

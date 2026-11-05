@@ -42,7 +42,7 @@ const DEFAULT_EPOCH_CHECK_MS = num(process.env.USER_CACHE_EPOCH_CHECK_MS, 2_000)
  *
  *  recent() (optioneel) = een waarde die iemand anders nét al ophaalde, met
  *  het tijdstip erbij. De rate-limiter leest de epoch mee in zijn ene
- *  pipeline-aanroep per request (api/rateLimit.ts); is die waarneming verser
+ *  pipeline-aanroep per request (api/_lib/rateLimit.ts); is die waarneming verser
  *  dan onze laatste check, dan nemen we haar over en doet de cache GEEN eigen
  *  geawaite Upstash-call. Zonder verse waarneming (tests, buiten /api, store
  *  weg) blijft het bij lees(), hooguit één keer per EPOCH_CHECK_MS. */

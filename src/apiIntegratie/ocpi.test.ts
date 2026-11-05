@@ -37,18 +37,18 @@ describe('OCPI 2.2.1, gehoste endpoints + handshake-auth', () => {
 
 describe('OCPI-client, paginatie (parseNextLink)', () => {
   it('haalt de next-URL uit de Link-header', async () => {
-    const { parseNextLink } = await import('../../api/ocpi');
+    const { parseNextLink } = await import('../../api/_lib/ocpi');
     expect(parseNextLink('<https://kempower.io/api/ocpi/2.2.1/locations?offset=100&limit=100>; rel="next"'))
       .toBe('https://kempower.io/api/ocpi/2.2.1/locations?offset=100&limit=100');
   });
   it('geeft null als er geen next is', async () => {
-    const { parseNextLink } = await import('../../api/ocpi');
+    const { parseNextLink } = await import('../../api/_lib/ocpi');
     expect(parseNextLink('<https://x/y?offset=0>; rel="prev"')).toBeNull();
     expect(parseNextLink(null)).toBeNull();
     expect(parseNextLink('')).toBeNull();
   });
   it('kiest de next-link uit meerdere', async () => {
-    const { parseNextLink } = await import('../../api/ocpi');
+    const { parseNextLink } = await import('../../api/_lib/ocpi');
     expect(parseNextLink('<https://a>; rel="prev", <https://b>; rel="next"')).toBe('https://b');
   });
 });
@@ -106,7 +106,7 @@ describe('OCPI-dashboard, autorisatie', () => {
 
 describe('OCPI leesPeriode / vorigePeriode (zuiver)', () => {
   it('leest maand, vrije periode en de standaard (lopende maand)', async () => {
-    const { leesPeriode, vorigePeriode } = await import('../../api/ocpi');
+    const { leesPeriode, vorigePeriode } = await import('../../api/_lib/ocpi');
     const q = (o: Record<string, string>) => (k: string) => o[k] ?? '';
     expect(leesPeriode(q({ maand: '2026-08' }))).toEqual({ ok: true, van: '2026-08-01', tot: '2026-08-31', maand: '2026-08' });
     expect(leesPeriode(q({ van: '2026-08-01', tot: '2026-08-31' }))).toEqual({ ok: true, van: '2026-08-01', tot: '2026-08-31', maand: '2026-08' });
@@ -118,7 +118,7 @@ describe('OCPI leesPeriode / vorigePeriode (zuiver)', () => {
     expect(vorigePeriode('2026-08-04', '2026-08-05', null)).toEqual({ van: '2026-08-02', tot: '2026-08-03', maand: null });
   });
   it('vergelijkt een lopende maand met dezelfde dagen van de vorige maand', async () => {
-    const { vorigePeriode } = await import('../../api/ocpi');
+    const { vorigePeriode } = await import('../../api/_lib/ocpi');
     // Halverwege september: vergelijk met 1 t/m 15 augustus, niet met heel augustus.
     expect(vorigePeriode('2026-09-01', '2026-09-30', '2026-09', '2026-09-15')).toEqual({ van: '2026-08-01', tot: '2026-08-15', maand: null });
     // Ook op de laatste dag van de lopende maand blijft de basis even lang (1 t/m 30 augustus).

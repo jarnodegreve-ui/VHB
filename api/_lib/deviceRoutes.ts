@@ -15,7 +15,7 @@ import {
   setAppSetting,
 } from "./storage.js";
 import { deviceRegisterRateLimit } from "./rateLimit.js";
-import { meldToestelWijziging } from "./_lib/deviceCache.js";
+import { meldToestelWijziging } from "./deviceCache.js";
 import type { AuthenticatedRequest } from "./types.js";
 
 // Harde bovengrens op het aantal toestellen per gebruiker: een normale

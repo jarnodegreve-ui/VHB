@@ -230,7 +230,7 @@ export const OVERZICHT_KOLOMMEN = [
   ['dagen', 'Dagen'],
 ] as const;
 
-// Kopie van formatMinutenAlsUren (api/helpers.ts) — de client mag niet
+// Kopie van formatMinutenAlsUren (api/_lib/helpers.ts) — de client mag niet
 // uit api/ importeren; houd het formaat gelijk.
 export const urenLabel = (minuten: number) => `${Math.floor(minuten / 60)}:${String(Math.round(minuten) % 60).padStart(2, '0')}`;
 

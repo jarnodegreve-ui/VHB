@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bouwPlanningUitMatrix } from '../api/storage';
+import { bouwPlanningUitMatrix } from '../api/_lib/storage';
 
 /**
  * Dienstregelingversies in de planning-opbouw (08-10): per matrixdag telt de

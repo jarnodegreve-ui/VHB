@@ -1,7 +1,7 @@
-import { getAppSetting } from "../storage.js";
+import { getAppSetting } from "./storage.js";
 import { GEEN_ONDERHOUD, parseOnderhoud, type Onderhoud } from "../../shared/schemas/onderhoud.js";
 import { effectiefOnderhoud, ONDERHOUD_SETTING_KEY } from "./onderhoudRegels.js";
-import { bijUsersCacheWissel, epochStand, invalidateUsersCache } from "../userCache.js";
+import { bijUsersCacheWissel, epochStand, invalidateUsersCache } from "./userCache.js";
 import { maakSwrCache, SWR_STALE_MS } from "./swrCache.js";
 
 /**

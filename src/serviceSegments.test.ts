@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { getServiceSegments } from '../api/storage';
+import { getServiceSegments } from '../api/_lib/storage';
 
 /**
  * Een loop is het deel van een dienst waaronder bepaalde ritten vallen: elk

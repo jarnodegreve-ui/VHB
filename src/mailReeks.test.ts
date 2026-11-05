@@ -14,11 +14,11 @@ const nep = vi.hoisted(() => ({
   stuur: vi.fn(),
 }));
 
-vi.mock('../api/email.js', () => ({
+vi.mock('../api/_lib/email.js', () => ({
   maakMailTransport: vi.fn(async () => (nep.smtp ? nep.transport : null)),
   sendEmail: (opts: unknown) => nep.stuur(opts),
 }));
-vi.mock('../api/storage.js', () => ({
+vi.mock('../api/_lib/storage.js', () => ({
   startMailLog: vi.fn(async (r: { soort: string; aantal: number }) => { nep.verloop.push(`start:${r.soort}:${r.aantal}`); return nep.logId; }),
   rondMailLogAf: vi.fn(async (id: string, u: { gelukt: boolean; fout: string | null }) => { nep.verloop.push(`klaar:${id}:${u.gelukt}:${u.fout}`); return true; }),
   logMail: vi.fn(async (r: { gelukt: boolean; fout: string | null; aantal: number }) => { nep.verloop.push(`achteraf:${r.aantal}:${r.gelukt}:${r.fout}`); }),

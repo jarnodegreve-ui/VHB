@@ -92,7 +92,7 @@ const sharedStoreDegraded = () => hasSharedStore() && Date.now() < storeDownUnti
 /**
  * Eén Upstash-pipeline-aanroep, best-effort: null als de store niet
  * geconfigureerd of onbereikbaar is (zelfde degradatie-logica als de
- * limiter). Gedeeld met de users-cache-epoch (api/userCache.ts).
+ * limiter). Gedeeld met de users-cache-epoch (api/_lib/userCache.ts).
  */
 export async function sharedPipeline(commands: string[][], timeoutMs = 1500): Promise<Array<{ result?: unknown }> | null> {
   if (!hasSharedStore()) return null;

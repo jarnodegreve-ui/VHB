@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { maandGrenzen } from '../api/helpers';
+import { maandGrenzen } from '../api/_lib/helpers';
 
 /**
  * De grenzen waarmee het maandbord en de dagafsluiting hun matrixrijen

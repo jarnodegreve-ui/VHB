@@ -11,7 +11,7 @@
  */
 
 import crypto from "node:crypto";
-import type { AuthenticatedRequest } from "../types.js";
+import type { AuthenticatedRequest } from "./types.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { RECORD_REVISION_HEADER } from "./recordWrites.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.

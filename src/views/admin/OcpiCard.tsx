@@ -20,7 +20,7 @@ type OcpiStatus = {
 /**
  * Beheer-kaart voor de OCPI-koppeling (ChargEye). Toont of de omgeving
  * geconfigureerd is en of de credentials-handshake al gelukt is, met één knop
- * om (her)te registreren. Read-only monitoring; zie api/ocpi.ts.
+ * om (her)te registreren. Read-only monitoring; zie api/_lib/ocpi.ts.
  */
 export function OcpiCard() {
   const [status, setStatus] = useState<OcpiStatus | null>(null);

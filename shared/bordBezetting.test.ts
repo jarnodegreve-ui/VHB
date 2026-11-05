@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { OVERNAME_CODES, afwezigheidsReden, dienstOpBord, vrijOpBord } from './bordBezetting';
-import { TAKEOVER_CODES, isTakeoverCode, toLookupToken } from '../api/helpers.js';
+import { TAKEOVER_CODES, isTakeoverCode, toLookupToken } from '../api/_lib/helpers.js';
 
 /**
  * De ene lezing van een bordcel, voor server én client (controle 29-09):
@@ -53,7 +53,7 @@ describe('vrijOpBord', () => {
 });
 
 describe('drift met de server', () => {
-  it('dezelfde overname-codes als TAKEOVER_CODES in api/helpers.ts', () => {
+  it('dezelfde overname-codes als TAKEOVER_CODES in api/_lib/helpers.ts', () => {
     expect([...OVERNAME_CODES]).toEqual([...TAKEOVER_CODES]);
   });
 

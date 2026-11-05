@@ -2,7 +2,7 @@
  * Aanwezigheid: wie was wanneer actief op het portaal.
  *
  * De pure beslissingen staan hier, los van Express en Supabase, zodat ze
- * testbaar zijn zonder database. Het opslaggedeelte staat in api/storage.ts
+ * testbaar zijn zonder database. Het opslaggedeelte staat in api/_lib/storage.ts
  * (noteerAanwezigheid / getAanwezigheid), de registratie hangt in de
  * auth-middleware.
  *

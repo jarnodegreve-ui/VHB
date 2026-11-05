@@ -1,4 +1,4 @@
-import { nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
+import { nameIdIndex, sortedNameToken, toLookupToken } from "./helpers.js";
 import { dagtypeVanDag, tijdenOpDag, type DagtypeKalender, type DienstVariant } from "../../shared/dagtype.js";
 import { dienstenOpDag, type VersieMetDiensten } from "../../shared/dienstregeling.js";
 import { legRuilenOverMaandbeeld, type OverlayCel, type OverlayRuil } from "./ruilOverlay.js";

@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const pushes: Array<{ ids: string[]; payload: any }> = [];
-vi.mock('../api/push.js', () => ({ sendPushToUsers: async (ids: string[], payload: any) => { pushes.push({ ids, payload }); } }));
+vi.mock('../api/_lib/push.js', () => ({ sendPushToUsers: async (ids: string[], payload: any) => { pushes.push({ ids, payload }); } }));
 
 const {
   gewijzigdeDagen, gewijzigdeDagenPerChauffeur, importPushTekst, roosterAfdrukken, roosterDagAfdrukken, roosterPushTekst, verstuurRoosterPushes,

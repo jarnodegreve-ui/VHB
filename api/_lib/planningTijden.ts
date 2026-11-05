@@ -1,4 +1,4 @@
-import { isValidHHMM } from "../storage.js";
+import { isValidHHMM } from "./storage.js";
 
 /**
  * Tijden in een handmatige planning-save (beveiligingsscan 01-10). De import

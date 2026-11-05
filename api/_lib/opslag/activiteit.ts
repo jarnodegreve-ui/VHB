@@ -1,4 +1,4 @@
-import type { ActivityLogRecord, ActivityLogRow, AuthenticatedRequest } from "../../types.js";
+import type { ActivityLogRecord, ActivityLogRow, AuthenticatedRequest } from "../types.js";
 import { RUIL_BEKEKEN_ACTIE } from "../../../shared/ruilVerloop.js";
 import { hoortBijSessie, type AanwezigheidLocatie } from "../aanwezigheid.js";
 import { paginatedFetch, requireDb } from "./basis.js";

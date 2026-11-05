@@ -1,5 +1,5 @@
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
-import type { AppUser, IncomingUser, AppUserIntern } from "../../types.js";
+import type { AppUser, IncomingUser, AppUserIntern } from "../types.js";
 import {
   countAdmins,
   ensureUniqueUserEmails,
@@ -8,8 +8,8 @@ import {
   sanitizeIncomingUser,
   toDatabaseUser,
   toPublicUser,
-} from "../../helpers.js";
-import { supabaseAdmin } from "../../db.js";
+} from "../helpers.js";
+import { supabaseAdmin } from "../db.js";
 import type { DashboardVoorkeuren } from "../../../shared/schemas/dashboardVoorkeuren.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { isMissingDbFunction, paginatedFetch, requireDb } from "./basis.js";

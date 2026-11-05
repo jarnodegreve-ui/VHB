@@ -13,7 +13,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { db } from '../api/db';
+import { db } from '../api/_lib/db';
 
 type Grant = { tabel: string; grantee: string; privilege: string };
 type Snapshot = { tabellen: Array<{ tabel: string; rls: boolean }>; grants: Grant[] };

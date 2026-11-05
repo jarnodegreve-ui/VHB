@@ -7,10 +7,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   applySwapToPlanning, getSwapDoorvoerRegels, getSwapsArchief, getSwapsData, getSwapsOpDienstdag, getSwapsVenster, replacePlanningData, revertSwapFromPlanning,
   schrijfSwapAlsStatus, swapToestandInPlanning, voegSwapsToe,
-} from '../api/storage';
+} from '../api/_lib/storage';
 import { archiefVolgorde, ruilInVenster } from '../shared/ruilVenster';
-import { db } from '../api/db';
-import { SWAP_UITVOERING_ACTIES } from '../api/helpers';
+import { db } from '../api/_lib/db';
+import { SWAP_UITVOERING_ACTIES } from '../api/_lib/helpers';
 import { dienst, leegDatabase, planningKort } from './hulp';
 
 beforeEach(leegDatabase);

@@ -1,12 +1,12 @@
-import { tijdenOpDag, variantenSchoon, type DienstVariant } from "../shared/dagtype.js";
-import { dienstenOpDag, type VersieMetDiensten } from "../shared/dienstregeling.js";
+import { tijdenOpDag, variantenSchoon, type DienstVariant } from "../../shared/dagtype.js";
+import { dienstenOpDag, type VersieMetDiensten } from "../../shared/dienstregeling.js";
 import { randomBytes } from "node:crypto";
-import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
-import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
-import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
-import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
-import { uploadMoment } from "./_lib/bijlagenActies.js";
-import { verlofBudgettenSchoon } from "../shared/verlofSaldo.js";
+import { parseDashboardVoorkeuren } from "../../shared/schemas/dashboardVoorkeuren.js";
+import { HANDMATIGE_WISSEL_PREFIX } from "../../shared/schemas/constanten.js";
+import { MAX_UPDATE_BIJLAGEN } from "../../shared/schemas/update.js";
+import { MAX_OMLEIDING_BIJLAGEN } from "../../shared/schemas/diversion.js";
+import { uploadMoment } from "./bijlagenActies.js";
+import { verlofBudgettenSchoon } from "../../shared/verlofSaldo.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -194,7 +194,7 @@ export const veilig = (raw: string): string =>
 // bij elke koude start laden.
 
 /** 'HH:MM' → minuten; busvak-uren ≥ 24 ("26:16") geldig tot 47:59 — zelfde
- *  regels als parseBusvakMin in api/advisor.ts. */
+ *  regels als parseBusvakMin in api/_lib/advisor.ts. */
 const parseBusvakMinuten = (t: string): number | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? "").trim());
   if (!m) return null;
@@ -493,7 +493,7 @@ export const matrixCodesForDate = (
  * Dag/maand/jaar in élke tekst die een mens leest: foutmeldingen, meldingen,
  * mails en het activiteitenlog toonden de rauwe ISO-datum, en die las Jarno
  * als jaar/maand/dag (17-09). Voor Telegram-lijstjes blijft DAG_KORT
- * ("wo 17 sep") de vorm, die staat in api/telegram.ts.
+ * ("wo 17 sep") de vorm, die staat in api/_lib/telegram.ts.
  */
 export const DAG_DMJ = (iso: string | null | undefined): string => {
   const s = String(iso ?? "").slice(0, 10);
@@ -686,7 +686,7 @@ export const sanitizeDiversionPdfUrl = (value?: string | null): string | null =>
 // camelCase-kolommen in productie ("startDate"/"endDate"/"pdfUrl", geverifieerd
 // 2026-08-01). De mapper schreef lowercase en dat liet élke omleiding-save
 // falen met 42703. mapCoordinates wordt NIET geschreven en ook niet gelezen:
-// de kolom bestaat live niet (api/schemaProbes.ts), het beheer-formulier
+// de kolom bestaat live niet (api/_lib/schemaProbes.ts), het beheer-formulier
 // heeft er geen veld voor en toPublicDiversion kent het veld niet meer.
 // `bijlagen` staat hier bewust niet bij: die kolom schrijven alleen
 // zetDiversionBijlagen en de bijlage-routes (Storage is de bron).

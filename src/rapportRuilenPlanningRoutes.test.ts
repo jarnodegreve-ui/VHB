@@ -13,8 +13,8 @@ import express from 'express';
 
 const gelezen = { swaps: 0, planning: 0, matrix: 0, dekking: [] as string[][] };
 
-vi.mock('../api/middleware.js', async (origineel) => {
-  const echt = await origineel<typeof import('../api/middleware')>();
+vi.mock('../api/_lib/middleware.js', async (origineel) => {
+  const echt = await origineel<typeof import('../api/_lib/middleware')>();
   return {
     ...echt,
     authenticate: (req: express.Request & { appUser?: unknown }, _res: express.Response, next: express.NextFunction) => {
@@ -24,8 +24,8 @@ vi.mock('../api/middleware.js', async (origineel) => {
     },
   };
 });
-vi.mock('../api/storage.js', async (origineel) => ({
-  ...(await origineel<typeof import('../api/storage')>()),
+vi.mock('../api/_lib/storage.js', async (origineel) => ({
+  ...(await origineel<typeof import('../api/_lib/storage')>()),
   getSwapsData: async () => {
     gelezen.swaps += 1;
     return [
@@ -58,7 +58,7 @@ vi.mock('../api/storage.js', async (origineel) => ({
   getPlanningCodesData: async () => [{ code: 'vrij', category: 'absence', description: 'Vrij', isDayOff: true }],
   getLeaveData: async () => [],
 }));
-vi.mock('../api/coverageRoutes.js', () => ({
+vi.mock('../api/_lib/coverageRoutes.js', () => ({
   berekenDekkingsGaten: async (van: string, tot: string) => {
     gelezen.dekking.push([van, tot]);
     return [{ date: van, dayType: 'schooldag', expected: 2, covered: 1, missing: ['2115'] }];
