@@ -252,6 +252,19 @@ describe('foutgroepen (fingerprint, groepering, status, regressie)', () => {
     expect(res.status).toBe(200);
     expect(res.json.count).toBe(1);
   });
+
+  it('ook een genegeerde groep voorbij de duizendste statusrij blijft genegeerd (paginering, geen .limit)', async () => {
+    await meld('Ruisfout 1');
+    const fp = mem.clientErrors[0].fingerprint;
+    // 1100 oudere statussen die vóór deze fingerprint sorteren: de echte staat op de tweede pagina.
+    mem.clientErrorStatus = [
+      ...Array.from({ length: 1100 }, (_, i) => ({ fingerprint: `!${String(i).padStart(4, '0')}`, status: 'genegeerd', release: null, bijgewerktOp: null, door: '1' })),
+      { fingerprint: fp, status: 'genegeerd', release: null, bijgewerktOp: null, door: '1' },
+    ];
+    await meld('Echte fout');
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.json.count).toBe(1);
+  });
 });
 
 describe('rate limiting', () => {

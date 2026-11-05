@@ -1,5 +1,5 @@
 import { db } from "../../db.js";
-import { requireDb } from "./basis.js";
+import { paginatedFetch, requireDb } from "./basis.js";
 
 // --- Client errors ---
 
@@ -111,11 +111,13 @@ const mapClientErrorStatusRow = (row: any): ClientErrorStatusRecord => ({
 });
 
 export const getClientErrorStatuses = async (): Promise<Map<string, ClientErrorStatusRecord> | null> => {
-  if (!db) return null;
+  const client = db;
+  if (!client) return null;
   try {
-    const { data, error } = await db.from("client_error_status").select("*").limit(5000);
-    if (error) return null;
-    return new Map((data ?? []).map((r: any) => [String(r.fingerprint), mapClientErrorStatusRow(r)]));
+    // Alles, gepagineerd: de oude .limit(5000) was geen bewuste grens en
+    // PostgREST gaf er toch maar 1000. Fingerprint is de sleutel, dus uniek.
+    const data = await paginatedFetch((from, to, telling) => client.from("client_error_status").select("*", telling).order("fingerprint").range(from, to));
+    return new Map(data.map((r: any) => [String(r.fingerprint), mapClientErrorStatusRow(r)]));
   } catch {
     return null;
   }
