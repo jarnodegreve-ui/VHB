@@ -3,7 +3,7 @@ import {
   api,
   mem,
 } from './harnas';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 describe('onbemande dienst toewijzen (Dekking)', () => {
   // Een gat = een verwachte dienst die op níémand staat; de dienstwissel kan
@@ -567,5 +567,52 @@ describe('dekkingsinstellingen: een databasefout gaat niet naar de client (05-11
       spion.mockRestore();
       fouten.mockRestore();
     }
+  });
+});
+
+// Nr. 48 (05-11): een dienst die via een ruil op naam staat van een account
+// dat intussen uit dienst is (of verwijderd) heeft geen rijder. Tot dan telde
+// de dekking hem als ingevuld, want de ruil wees naar een bestaand id.
+describe('dekking: eigenaar via ruil zonder actief account (nr. 48)', () => {
+  const DAG = '2030-07-15';
+  let usersVoor: typeof mem.users;
+  beforeEach(() => {
+    usersVoor = mem.users;
+    mem.users = [...usersVoor, { id: '5', name: 'Daniel Decock', email: 'd@vhb.be', role: 'chauffeur', isActive: false } as (typeof mem.users)[number]];
+    mem.planningMatrix = [{ id: 'm-48', source_date: DAG, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' }];
+    mem.leave = [];
+    mem.swaps = [];
+    mem.coverageExpectations = { week: ['12', '11'] } as any;
+  });
+  afterEach(() => { mem.users = usersVoor; });
+  const ruilNaar = (targetDriverId: string) => {
+    mem.swaps = [{
+      id: 's-48', shiftId: 'sh-48', requesterId: '3', targetDriverId, status: 'approved', reason: 'Ruil',
+      createdAt: '2030-07-01T08:00:00Z', decidedAt: '2030-07-02T08:00:00Z', shiftDate: DAG, shiftLine: '12', swapType: 'overname',
+    } as (typeof mem.swaps)[number]];
+  };
+  const dag = async () => (await api('GET', `/api/coverage-gaps?from=${DAG}&to=${DAG}`, { token: 'tok-planner' })).json.days[0];
+
+  it('ontvanger uit dienst: de dienst is een gat met uitval "uit dienst", de andere dienst blijft gedekt', async () => {
+    ruilNaar('5');
+    expect(await dag()).toMatchObject({ expected: 2, covered: 1, missing: ['12'], uitval: { '12': { name: 'Daniel Decock', reason: 'uit dienst' } } });
+  });
+
+  it('ontvanger verwijderd: zelfde gat, reden "account verwijderd"', async () => {
+    ruilNaar('weg');
+    expect(await dag()).toMatchObject({ missing: ['12'], uitval: { '12': { name: 'Onbekend', reason: 'account verwijderd' } } });
+  });
+
+  it('ontvanger actief maar geen chauffeur (planner die inspringt): gewoon gedekt', async () => {
+    ruilNaar('2');
+    expect(await dag()).toMatchObject({ covered: 2, missing: [] });
+  });
+
+  it('een gereden dag blijft gereden: vóór vandaag geen gat, zoals bij een laat ziektebriefje', async () => {
+    mem.planningMatrix = [{ id: 'm-48h', source_date: '2020-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' }];
+    mem.swaps = [{ ...({} as any), id: 's-48h', shiftId: 'sh-48h', requesterId: '3', targetDriverId: '5', status: 'approved', reason: 'Ruil', createdAt: '2020-07-01T08:00:00Z', decidedAt: '2020-07-02T08:00:00Z', shiftDate: '2020-07-15', shiftLine: '12', swapType: 'overname' }];
+    const res = await api('GET', '/api/coverage-gaps?from=2020-07-15&to=2020-07-15', { token: 'tok-planner' });
+    expect(res.json.days[0]).toMatchObject({ covered: 2, missing: [] });
+    expect(res.json.days[0].uitval).toBeUndefined();
   });
 });

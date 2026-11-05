@@ -78,7 +78,13 @@ export function CelDetailModal({ cel, wissel }: Props) {
                   {selected.cell.swapAway ? (
                     <>
                       Dienst {selected.cell.swapManual ? 'overgezet' : 'weggeruild'}
-                      {selected.cell.swapTo ? <> naar <span className="font-semibold text-slate-700">{selected.cell.swapTo}</span></> : null}, daardoor vrij.
+                      {selected.cell.swapTo
+                        ? <> naar <span className="font-semibold text-slate-700">{selected.cell.swapTo}</span></>
+                        : selected.cell.swapToBuitenBord ? <> naar een verwijderd account</> : null}, daardoor vrij.
+                      {/* De ontvanger staat niet meer op het bord (uit dienst): de dienst
+                          heeft geen rijder. Terugdraaien (hieronder) zet hem terug op
+                          deze chauffeur; anders staat hij in Openstaande diensten (nr. 48). */}
+                      {selected.cell.swapToBuitenBord && <> Niemand op het bord rijdt deze dienst: draai de wissel terug, of wijs hem toe via Openstaande diensten.</>}
                     </>
                   ) : (
                     <>

@@ -97,7 +97,9 @@ export const celTitel = (cell: MonthCell, heeftNotitie: boolean) => [
   cell.hiddenService ? `dienst ${cell.hiddenService} nog niet herverdeeld` : '',
   cell.swapId
     ? cell.swapAway
-      ? `dienst ${cell.swapManual ? 'overgezet' : 'weggeruild'} naar ${cell.swapTo || 'een collega'}`
+      ? cell.swapToBuitenBord
+        ? `dienst ${cell.swapManual ? 'overgezet' : 'weggeruild'} naar ${cell.swapTo || 'een verwijderd account'}, niemand op het bord rijdt hem`
+        : `dienst ${cell.swapManual ? 'overgezet' : 'weggeruild'} naar ${cell.swapTo || 'een collega'}`
       : (cell.swapManual ? `handmatig overgezet van ${cell.swapFrom || 'een collega'}` : `geruild met ${cell.swapFrom || 'een collega'}`)
     : '',
   heeftNotitie ? 'notitie' : '',

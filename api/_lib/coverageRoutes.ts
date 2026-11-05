@@ -4,7 +4,7 @@ import { dekkingDagtypeVanDag } from "../../shared/dekkingDagtype.js";
 import { dienstenOpDag } from "../../shared/dienstregeling.js";
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
-import { computeDayGap, normalizeCode, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../../shared/coverageGaps.js";
+import { computeDayGap, normalizeCode, REDEN_ACCOUNT_VERWIJDERD, REDEN_UIT_DIENST, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../../shared/coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, zoekKettingen, adviesSamenvatting, adviesVenster, adviesMaanden, controleerAdviesBereik, AdviesBereikFout, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
 import {
@@ -143,6 +143,20 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
     const userNameById = new Map<string, string>(chauffeursVoorNaam.map((u) => [String(u.id), String(u.name ?? "")]));
     // Wie een dienst overnam kan ook een flexi of iemand van de staf zijn: daarvoor de naam van élk account.
     const elkeNaamById = new Map<string, string>((usersForLeave as any[]).map((u) => [String(u.id), String(u.name ?? "")]));
+    const accountById = new Map<string, { name?: unknown; isActive?: unknown }>((usersForLeave as any[]).map((u) => [String(u.id), u]));
+    // Een dienst die via een ruil of wissel op naam kwam van een account dat
+    // intussen uit dienst is (of verwijderd) heeft geen rijder: hij telt als
+    // gat, met wie hem had en waarom (nr. 48, 05-11; de ruil naar Daniel
+    // Decock die het bord en de dekking als ingevuld bleven tellen). Alleen
+    // voor een eigenaar die zeker is (via de ruil, op id); een Excel-kolom
+    // van een naam zonder actief account blijft bewust buiten schot, want
+    // naamherkenning gaf eerder fantoomgaten (20-08).
+    const buitenDienst = (eigenaarId: string | undefined): { name: string; reason: string } | null => {
+      if (!eigenaarId) return null;
+      const account = accountById.get(eigenaarId);
+      if (!account) return { name: "Onbekend", reason: REDEN_ACCOUNT_VERWIJDERD };
+      return account.isActive === false ? { name: String(account.name ?? ""), reason: REDEN_UIT_DIENST } : null;
+    };
     const UITVAL_REDEN: Record<string, string> = { ziekte: "ziek", betaald_verlof: "verlof", klein_verlet: "klein verlet" };
 
     // Doorgevoerde ruilen en handmatige wissels: de matrix is een momentopname
@@ -195,9 +209,13 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
         const matrixId = idByNameToken.get(token) ?? idByNameToken.get(sortedNameToken(String(naam)));
         // Is deze dienst intussen overgenomen? Dan bepaalt de níéuwe eigenaar
         // of hij gedekt is — niet de chauffeur die nog in de Excel staat.
-        const id = nieuweEigenaarPerDienst.get(sleutel(date, String(v))) ?? matrixId;
+        const nieuweEigenaar = nieuweEigenaarPerDienst.get(sleutel(date, String(v)));
+        const id = nieuweEigenaar ?? matrixId;
+        const uitDienst = historisch ? null : buitenDienst(nieuweEigenaar);
         const afwezig = !historisch && id ? afwezigOp(approvedLeaveAll, id, date) : null;
-        if (id && afwezig) {
+        if (uitDienst) {
+          uitvalByCode.set(normalizeCode(String(v)), uitDienst);
+        } else if (id && afwezig) {
           uitvalByCode.set(normalizeCode(String(v)), {
             name: userNameById.get(id) || String(naam),
             reason: UITVAL_REDEN[afwezig.type] ?? afwezig.type,
