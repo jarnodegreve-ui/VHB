@@ -23,13 +23,26 @@ updates:
         update-types: [major]
     ignore:
       # Vite-major en React-major bewust met de hand (breaking changes in
-      # build/config), niet via een automatische PR.
+      # build/config), niet via een automatische PR. De Vite-plugin hoort bij
+      # de Vite-major: plugin-react 6 vraagt Vite 7, dus zonder deze regel
+      # kwam de majors-PR van 01-11-2026 niet eens door npm ci (ERESOLVE) en
+      # bleef hij elke maand rood.
       - dependency-name: vite
         update-types: [version-update:semver-major]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: [version-update:semver-major]
+      # React-minors ook met de hand (02-11-2026): 19.3.1 maakte react-vendor
+      # 60 → 68,6 kB gzip in de startbundel (+14 %) en het bundelbudget viel
+      # om. Pas nemen na een bewuste keuze (budget + Lighthouse-ijking); de
+      # typepakketten lopen mee met de runtime. Patches komen gewoon door.
       - dependency-name: react
-        update-types: [version-update:semver-major]
+        update-types: [version-update:semver-major, version-update:semver-minor]
       - dependency-name: react-dom
-        update-types: [version-update:semver-major]
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: "@types/react"
+        update-types: [version-update:semver-minor]
+      - dependency-name: "@types/react-dom"
+        update-types: [version-update:semver-minor]
   - package-ecosystem: github-actions
     directory: /
     schedule:

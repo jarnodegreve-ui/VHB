@@ -189,6 +189,9 @@ jobs:
       # zonder VITE_SUPABASE_* rendert de app "configuratie ontbreekt".
       VITE_SUPABASE_URL: http://localhost:4191
       VITE_SUPABASE_ANON_KEY: e2e-dummy-anon-key
+      # Vaste meetbrowser, zie de stap "Meetbrowser" hieronder. Bumpen = een
+      # nieuwe ijkronde van de drempels in .lighthouserc.json.
+      LH_CHROME: 151.0.7922.34
     steps:
       - uses: actions/checkout@v4
 
@@ -203,29 +206,38 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Meetbrowser (30-10, keuze Jarno): de Chromium van Playwright (Chrome
-      # for Testing, versie uit package-lock), niet de Chrome van het
-      # runner-image. Het image van 25-10 bracht Chrome 156 en daarmee een
+      # Meetbrowser (30-10, keuze Jarno; 02-11 losgekoppeld van Playwright):
+      # een vaste Chrome for Testing (LH_CHROME hierboven), dezelfde build
+      # waarmee de drempels op 30-10 geijkt zijn. Niet de Chrome van het
+      # runner-image: het image van 25-10 bracht Chrome 156 en daarmee een
       # verdubbelde JS-opstarttijd in de meting (Mijn dag 0,70-0,74 →
       # 0,58-0,62, TBT 327-476 → 818-1092 ms) op ongewijzigde code, op 24.04
-      # én 26.04. Nu verschuift het meetinstrument alleen met een bewuste
-      # Playwright-upgrade: ijk dan de drempels in .lighthouserc.json opnieuw
-      # (CLAUDE.md › Lighthouse CI). Eigen cache-key: de e2e-cache bevat ook
-      # WebKit en hoort niet door een chromium-only save overschreven te worden.
-      - name: Playwright-Chromium-cache
+      # én 26.04. En sinds 02-11 ook niet meer de Chromium van Playwright:
+      # Playwright 1.64 brengt diezelfde 156 mee, en een maandelijkse
+      # Dependabot-bump mag het meetinstrument niet stilletjes verschuiven.
+      # Het meetinstrument verschuift nu alleen met een bewuste bump van
+      # LH_CHROME, mét ijkronde (CLAUDE.md › Lighthouse CI). Eigen cache: de
+      # download is 190 MB.
+      - name: Meetbrowser-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
+          path: ~/.cache/lh-chrome
+          key: lh-chrome-${{ runner.os }}-ubuntu-24.04-${{ env.LH_CHROME }}
 
-      # Zonder --with-deps: het runner-image heeft de Chrome-bibliotheken al.
-      - name: Playwright-Chromium (meetbrowser)
-        run: npx playwright install chromium
+      # @puppeteer/browsers haalt de build uit het Chrome-for-Testing-archief
+      # en drukt "chrome@<versie> <pad>" af; dat pad gaat naar lhci. Zonder
+      # extra systeempakketten: het runner-image heeft de Chrome-bibliotheken al.
+      - name: Meetbrowser (Chrome for Testing)
+        run: |
+          PAD=$(npx --yes @puppeteer/browsers@3.2.6 install "chrome@$LH_CHROME" --path ~/.cache/lh-chrome | tail -1 | sed 's/^[^ ]* //')
+          test -x "$PAD" || { echo "meetbrowser niet gevonden: $PAD"; exit 1; }
+          "$PAD" --version
+          echo "LH_CHROME_PAD=$PAD" >> "$GITHUB_ENV"
 
       # autorun = healthcheck + collect (start scripts/lighthouse-server.mjs
       # zelf) + assert + upload naar .lighthouseci/rapporten (filesystem).
       - name: Lighthouse CI
-        run: npx --yes @lhci/cli@0.14.0 autorun --collect.chromePath="$(node -e "console.log(require('@playwright/test').chromium.executablePath())")"
+        run: npx --yes @lhci/cli@0.14.0 autorun --collect.chromePath="$LH_CHROME_PAD"
 
       # Alleen rapporten/ (de kopie die lhci zelf wegschrijft, HTML + JSON per
       # run): de ruwe collect-uitvoer ernaast in .lighthouseci is dezelfde

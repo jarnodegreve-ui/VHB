@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ADMIN, CHAUFFEUR, seed, wachtOpAnimaties } from './helpers';
+import { ADMIN, AXE_TAGS, AXE_TIJDELIJK_UIT, CHAUFFEUR, seed, wachtOpAnimaties } from './helpers';
 
 /**
  * Rapporten: catalogus → rapport → filter → leeg → de print-URL klopt en het
@@ -663,7 +663,7 @@ for (const thema of ['light', 'dark'] as const) {
       await page.waitForTimeout(500);
       // De bottom-nav heeft een bekende, elders gedocumenteerde contrastschuld (e2e/a11y.spec.ts).
       await wachtOpAnimaties(page);
-      const resultaat = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('nav[aria-label="Hoofdnavigatie"]').analyze();
+      const resultaat = await new AxeBuilder({ page }).withTags(AXE_TAGS).disableRules(AXE_TIJDELIJK_UIT).exclude('nav[aria-label="Hoofdnavigatie"]').analyze();
       const blokkerend = resultaat.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
       expect(blokkerend.map((v) => `${v.id}: ${v.help} (${JSON.stringify(v.nodes[0]?.target)})`), `${pad} (${thema})`).toEqual([]);
     });

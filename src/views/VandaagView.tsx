@@ -7,7 +7,7 @@ import { useAppDataContext } from '../app/AppDataContext';
 import { SkeletonRow } from '../components/Skeleton';
 import { addDays, isoDate } from '../lib/availability';
 import { WEEKSTROOK_DAGEN, bouwDagBriefing, bouwWeekPunten, briefingKop, dagWoordVoor, type BriefingAfwezige, type BriefingRuil, type WeekDagPunt } from '../lib/dagBriefing';
-import { WEEKDAY_SHORT_MON, formatDatumDMJ, formatDayLong } from '../lib/format';
+import { MONTH_NAMES, WEEKDAY_SHORT_MON, formatDatumDMJ, formatDayLong } from '../lib/format';
 import { cn } from '../lib/ui';
 import { telHref } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -77,25 +77,34 @@ function Weekstrook({ week, vandaag, gekozen, onKies }: {
               key={punt.dag}
               onClick={() => onKies(punt.dag)}
               aria-pressed={actief}
-              aria-label={`${woord}, ${formatDayLong(punt.dag)}: ${telling}`}
+              // De zichtbare tekst van de knop (ma 2) staat vooraan in de naam,
+              // na het dagwoord (WCAG 2.5.3, axe 4.14: label in de naam); de
+              // dagnaam voluit zit al in `woord`, en voor vandaag en morgen is
+              // ze bekend. Specs zoeken op "Vandaag, …: n punten vragen …".
+              aria-label={`${woord}, ${WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()].toLowerCase()}: ${telling}`}
               className={cn(
                 'flex min-h-16 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-center',
                 actief && 'bg-surface-muted ring-1 ring-inset ring-hairline',
               )}
             >
               <span aria-hidden="true" className="text-micro">{WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}</span>
+              {/* Spatie tussen de twee tekstknopen: zonder leest axe de
+                  zichtbare tekst als "wo4" en zoekt dat woord in de naam. In
+                  een flex-kolom tekent een witruimteknoop niets. */}
+              {' '}
               <span aria-hidden="true" className={cn('text-sm font-bold tabular-nums leading-tight', isVandaag ? 'text-oker-800' : 'text-slate-800')}>
                 {d.getDate()}
               </span>
               <span
                 aria-hidden="true"
+                // Het cijfer als CSS-inhoud (`.teller-badge`, index.css): een
+                // teller is geen label, de naam hierboven zegt het aantal.
+                data-teller={punt.onbekend ? '–' : String(punt.aandacht)}
                 className={cn(
-                  'mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-2xs font-bold tabular-nums leading-none',
+                  'teller-badge mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-2xs font-bold tabular-nums leading-none',
                   punt.onbekend ? 'text-slate-400' : punt.aandacht > 0 ? 'bg-amber-500/15 text-amber-700' : 'text-slate-400',
                 )}
-              >
-                {punt.onbekend ? '–' : punt.aandacht}
-              </span>
+              />
             </Pressable>
           );
         })}

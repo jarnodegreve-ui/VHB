@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ADMIN, CHAUFFEUR, seed, wachtOpAnimaties } from './helpers';
+import { ADMIN, AXE_TAGS, CHAUFFEUR, seed, wachtOpAnimaties } from './helpers';
 import { TECHNIEKER } from '../scripts/audit-fixtures.mjs';
 import { logIn, zonderSessie } from './deeplinkHulp';
 
@@ -288,7 +288,7 @@ test.describe('toegankelijkheid', () => {
       await expect(paneel(page, '2515')).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(400);
       await wachtOpAnimaties(page);
-      const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+      const axe = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
       const blokkerend = axe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
       expect(blokkerend.map((v) => `${v.id}: ${JSON.stringify(v.nodes[0]?.target)}`)).toEqual([]);
       const overloop = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

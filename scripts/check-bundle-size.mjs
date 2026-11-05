@@ -198,7 +198,18 @@ import zlib from 'node:zlib';
 // aanvulling van de ReadableStream-iterator voor Safari ≤ 26
 // (src/lib/streamIteratie.ts, ±0,3 kB in de ritblad-chunk). Lokaal 740 → 742;
 // budget = die meting plus de ±0,5 kB van de runner en ±1,5 kB marge.
-const BUDGET_KB = 744;
+// 02-11 (Dependabot minor-en-patch november, zonder React 19.3): 744 → 746.
+// Geen nieuwe dependency; tailwind-merge 3.6 → 3.7 en supabase-js 2.112 →
+// 2.118 verschuiven ±1 kB tussen de vendor-chunks. Lokaal 742 → 744-745
+// (main meet 743 op de runner); budget = die meting plus de ±0,5 kB van de
+// runner en ±1,5 kB marge. React 19.3.1 is bewust NIET meegenomen: die maakt
+// react-vendor 60,1 → 68,6 kB gzip (+14 %, in de startbundel) en het totaal
+// 752; zie .github/dependabot.yml.
+// 05-11: totaal 747 → 749 en index 79,6 → 80,5. De zes PR's van de
+// controle-ronde 04-11 samen (index 79,27 lokaal) plus deze deps-ronde (vite
+// 6.4.5, framer-motion-patch) meten op de runner index 79,68 en totaal 747,
+// precies op de grens. Geen nieuwe dependency. Budget = de meting plus ±1 kB.
+const BUDGET_KB = 749;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -281,7 +292,7 @@ const DEELBUDGET_KB = {
   // index) noemt de nieuwe gedeelde chunks (ToonMeer, archief). Lokaal
   // 78,63 → 78,77; de CI-runner meet de index ±0,4 kB zwaarder, dat kwam
   // op de grens. Budget = de meting plus ±0,8 kB.
-  index: 79.6,
+  index: 80.5,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB

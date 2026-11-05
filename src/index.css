@@ -1109,6 +1109,16 @@ html.dark {
     }
   }
 
+  /* Teller-badge (CountUp badge, 02-11): het cijfer als CSS-inhoud, geen
+     tekstknoop. Een badge is een decoratieve teller naast een label; de naam
+     van de knop blijft het label en het aantal zit in aria-label of
+     aria-describedby. axe-core 4.14 (WCAG 2.5.3) telt elke zichtbare
+     tekstknoop als label, ook aria-hidden, en eiste anders "1 Verlof" als
+     naam van een dock-tab. Zelfde letter en box als tekst, dus pixelgelijk. */
+  .teller-badge::after {
+    content: attr(data-teller);
+  }
+
   /* Pressed-staat voor rijen, nav-items, dock-tabs, tabelkoppen en menu-items
      (fase 2, 22-09): een vlak dat meteen verschijnt bij de aanraking en op de
      ladder wegtrekt bij het loslaten. Geen schaal (scale op een tekstrij
