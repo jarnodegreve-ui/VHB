@@ -3,7 +3,7 @@ import {
   api,
   mem,
 } from './harnas';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 describe('bulk-wipe-vangrail (PR #71)', () => {
   it('weigert een save die >50% van de diensten zou verwijderen (409)', async () => {
@@ -388,6 +388,31 @@ describe('beveiliging (controleronde 16-08)', () => {
     // Een reeds bekend token (last_seen-update) mag ondanks de cap.
     const bekend = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'd0', body: { name: 't0' } });
     expect(bekend.status).toBe(200);
+  });
+
+  it('C2, de registratielimiet telt alleen voor een nieuw token, een bekend token raakt Upstash niet (05-11)', async () => {
+    const { deviceRegisterRateLimit } = await import('../../api/rateLimit.js');
+    const toets = vi.spyOn(deviceRegisterRateLimit, 'toets');
+    try {
+      // Een bekend token (elke app-start): de limiet wordt niet eens bevraagd,
+      // dus ook meer dan 12 keer per uur blijft 200.
+      for (let i = 0; i < 13; i++) {
+        expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-ok', body: { name: 'iPhone · app' } })).status).toBe(200);
+      }
+      expect(toets).toHaveBeenCalledTimes(0);
+      // Nieuwe tokens: één toets per registratie, de dertiende binnen het uur is te veel.
+      for (let i = 0; i < 12; i++) {
+        expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: `dev-nieuw-${i}`, body: { name: 'x' } })).status).toBe(200);
+      }
+      const teVeel = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-nieuw-12', body: { name: 'x' } });
+      expect(teVeel.status).toBe(429);
+      expect(teVeel.json.error).toBe('Te veel opeenvolgende verzoeken. Probeer het straks opnieuw.');
+      expect(toets).toHaveBeenCalledTimes(13);
+      // Het bekende token blijft ook dan werken.
+      expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-ok', body: { name: 'iPhone · app' } })).status).toBe(200);
+    } finally {
+      toets.mockRestore();
+    }
   });
 
   it('D, decidedAt is server-gezaghebbend bij een afwijzing via de array-route', async () => {
