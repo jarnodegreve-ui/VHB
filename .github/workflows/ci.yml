@@ -156,7 +156,7 @@ jobs:
 
   # Prestatiebudget (09-2026): Lighthouse CI op de gebouwde app, mobiel
   # geëmuleerd (Moto-G-klasse, gesimuleerde 4G — de bus, niet de kantoor-Mac),
-  # 3 runs per URL en de mediaan telt. Loginscherm én Mijn dag (ingelogd als
+  # 5 runs per URL en de mediaan telt. Loginscherm én Mijn dag (ingelogd als
   # chauffeur via de e2e-fixtures, zie scripts/lighthouse-server.mjs).
   #
   # Drempels (.lighthouserc.json, per URL via assertMatrix):
@@ -232,8 +232,7 @@ jobs:
       # inhoud nog een keer en was ruim de helft van het artefact. Groen 3
       # dagen, genoeg om de bootup-tijd van react-vendor naast een rode run te
       # leggen (CLAUDE.md › Lighthouse CI); rood 14 dagen. Aanleiding 30-10:
-      # GitHub meldde dat de gratis Actions-opslag van het account bijna vol
-      # zat, en de repo is privé, dus elk artefact telt mee.
+      # GitHub meldde dat de gratis Actions-opslag van het account bijna vol zat.
       - name: Lighthouse-rapporten als artifact
         if: always()
         uses: actions/upload-artifact@v4

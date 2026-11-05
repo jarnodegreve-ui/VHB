@@ -58,9 +58,10 @@ planner dwingen zijn werkelijkheid te verminken om in het model te passen.
   beheerzijde (bezetting, dekking, planning-matrix, gebruikers, toestellen, OCPI).
 - PWA-eisen: safe-area, standalone-navigatie, touch-targets, geen animatie-jank op
   oudere toestellen, offline cache.
-- Lokaal is er **geen `.env`** — de app kan hier niet met echte data draaien.
-  Voorbeeldwerk gebruikt daarom verzonnen maar realistische demonstratiedata, en die
-  moet als zodanig herkenbaar zijn.
+- Lokaal laadt de API buiten Vercel een `.env` via dotenv (`api/index.ts`); zonder
+  dat bestand draait de app niet met echte data. Voorbeeldwerk gebruikt daarom
+  verzonnen maar realistische demonstratiedata, en die moet als zodanig herkenbaar
+  zijn.
 
 ## Brand Commitments
 
