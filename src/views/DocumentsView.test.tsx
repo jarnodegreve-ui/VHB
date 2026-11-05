@@ -299,3 +299,22 @@ describe('Documenten: verversen bij het hervatten van de app', () => {
     expect(documentLadingen()).toBe(1);
   });
 });
+
+describe('Documenten: een mislukte eerste laad (05-11)', () => {
+  // Tot 05-11: een toast plus "Nog geen documenten", en leeg mag nooit "niet
+  // geladen" betekenen. Nu een Foutkaart met Opnieuw proberen; geen toast.
+  it('toont een Foutkaart met herkansing, geen lege staat en geen toast; opnieuw proberen laadt de lijst', async () => {
+    tokens = ['fout', 'eerste'];
+    render(<DocumentsView currentUser={CHAUFFEUR} />);
+    await rust();
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByText('De documenten konden niet laden.')).toBeTruthy();
+    expect(screen.queryByText('Nog geen documenten')).toBeNull();
+    expect(notifyMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Opnieuw proberen' }));
+    await rust();
+    expect(documentLadingen()).toBe(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(openKnop()).toBeTruthy();
+  });
+});
