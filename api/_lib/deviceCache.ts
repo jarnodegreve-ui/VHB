@@ -23,8 +23,8 @@ type Clock = () => number;
 //  - ook "geen rij" (null) wordt gecacht: dat is de weigerende kant, en een
 //    registratie wist de cache.
 //  - FOUTEN worden nooit gecacht en gaan ongewijzigd door naar de aanroeper:
-//    de gate blijft fail-closed (503) bij een DB-fout en fail-open uitsluitend
-//    bij een ontbrekende tabel, exact zoals vóór de cache.
+//    de gate blijft fail-closed (503) bij een DB-fout voor chauffeur en
+//    technieker; staf gaat sinds 05-11 zonder gate verder (zie middleware.ts).
 //
 // INGETROKKEN SESSIES (controle-ronde 09-09, nr. 2). De lookup hierboven hangt
 // aan de header X-Device-Token, en die kan een client weglaten of verzinnen.

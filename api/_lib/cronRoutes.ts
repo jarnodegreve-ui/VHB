@@ -758,7 +758,13 @@ export function mountCronRoutes(app: express.Express) {
         return [] as Array<{ label: string; waarde: string }>;
       });
       if (afgekapt.length > 0) {
-        extraLijsten.push({ kop: "Niet verzameld (tijd op)", items: afgekapt.map((s) => `${s}: overgeslagen, het overzicht had geen tijd meer; de volgende keer opnieuw.`) });
+        // De secties documenten en voertuigen versturen ook de mijlpaalpushes
+        // (90/30/7/0 resp. 60/30/7/0 dagen); morgen is het 89 of 29, dus wat
+        // vandaag overgeslagen is komt niet "de volgende keer opnieuw".
+        const gevolg = (s: string) => (s === "documenten" || s === "voertuigen"
+          ? "de mijlpaalmeldingen (push) van vandaag zijn daardoor niet verstuurd, kijk het scherm na"
+          : "de volgende keer opnieuw");
+        extraLijsten.push({ kop: "Niet verzameld (tijd op)", items: afgekapt.map((s) => `${s}: overgeslagen, het overzicht had geen tijd meer; ${gevolg(s)}.`) });
       }
       // g.source/message/lastUrl zijn door de client aangeleverd; de lay-out
       // escapet elke regel, anders is de digest-mail een HTML-injectiekanaal

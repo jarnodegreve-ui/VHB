@@ -646,12 +646,15 @@ export function mountVerlofRoutes(app: express.Express) {
         String(a.type) === String(b.type);
       for (const next of recordsToWrite) {
         const prev = previousById.get(String(next.id));
-        if (prev && ongewijzigd(prev, next)) continue;
         // Vrije tekst begrensd (05-11), zoals de ziekmelding: de toelichting
-        // komt in mails, pushes en het log terecht.
-        if (String(next.comment ?? "").length > MAX_TOELICHTING) {
+        // komt in mails, pushes en het log terecht. Alleen voor een nieuwe of
+        // gewijzigde toelichting (een oude lange tekst blokkeert geen
+        // datumwijziging), en vóór de kortsluiting hieronder, want die kijkt
+        // alleen naar datums en type.
+        if ((!prev || String(prev.comment ?? "") !== String(next.comment ?? "")) && String(next.comment ?? "").length > MAX_TOELICHTING) {
           return res.status(400).json({ error: `De toelichting is te lang (maximaal ${MAX_TOELICHTING} tekens).` });
         }
+        if (prev && ongewijzigd(prev, next)) continue;
         const start = String(next.startDate ?? "");
         const end = String(next.endDate ?? "");
         const startVerschoven = !prev || String(prev.startDate) !== start;

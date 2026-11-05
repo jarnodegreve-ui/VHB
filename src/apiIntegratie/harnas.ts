@@ -59,6 +59,8 @@ const mem = vi.hoisted(() => ({
   recordLezingFaalt: false,
   // true = Storage antwoordt niet meer bij het oplijsten van een bucket.
   opslagHangt: false,
+  /** Wat de retentie-mock als opgeruimd meldt (null = overal 0, dus geen heartbeat 'retentie'). */
+  retentieUitkomst: null as null | Partial<Record<'clientErrors' | 'activityLog' | 'planningNotes' | 'pushSubscriptions' | 'meldingen' | 'aanwezigheid' | 'mailLog', number>>,
   // Wat de nachtcron in welke volgorde deed: heartbeats en de eerste
   // aanroep van de opruiming.
   cronVolgorde: [] as string[],
@@ -772,7 +774,7 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     // Retentie van de nachtcron: alleen de volgorde telt hier.
     pruneOldRecords: async () => {
       mem.cronVolgorde.push('opruiming: retentie');
-      return { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0, aanwezigheid: 0, mailLog: 0 };
+      return { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0, aanwezigheid: 0, mailLog: 0, ...(mem.retentieUitkomst ?? {}) };
     },
     // De heartbeat van een cron: hier alleen onthouden wat er wanneer kwam.
     // Eén opname voor de mail-tests (mem.hartslagen) en de nachtcron
@@ -1209,6 +1211,7 @@ beforeEach(() => {
   mem.logLezingFaalt = false;
   mem.recordLezingFaalt = false;
   mem.opslagHangt = false;
+  mem.retentieUitkomst = null;
   mem.cronVolgorde = [];
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
