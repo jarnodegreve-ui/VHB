@@ -10,7 +10,7 @@ import { openRitbladExtern } from '../lib/ritblad';
 import { formatDatumDMJ } from '../lib/format';
 import { isRitbladOpgeslagen, verwijderRitbladUitCache } from '../lib/ritbladCache';
 import { reportHandledError } from '../lib/monitoring';
-import { useOnline } from '../lib/useOnline';
+import { isOnlineNu, useOnline } from '../lib/useOnline';
 import { haalRitbladMeta, herstartPdfjsWorker, laadPdfjs, laadRitbladDocument, laatDocumentLos, zoekPaginasGecachedMetStatus } from '../lib/ritbladPaginas';
 import { knijpNaarZoomStap, vingerAfstand } from '../lib/ritbladZoom';
 import { Fout, GeenBereik, NietGevonden } from './illustraties';
@@ -340,7 +340,7 @@ export function RitbladViewer({
         // hapering onderweg): één keer het bewaarde exemplaar weggooien en de
         // bundel vers ophalen (melding chauffeurs 07-10). Zonder bereik heeft
         // dat geen zin, en stond er niets bewaard, dan was de cache het niet.
-        if (signal.aborted || (typeof navigator !== 'undefined' && navigator.onLine === false)) throw err;
+        if (signal.aborted || !isOnlineNu()) throw err;
         if (!(await verwijderRitbladUitCache(meta.url))) throw err;
         geladen = await laadRitbladDocument((await versUrl()) ?? meta.url, versUrl);
       }
@@ -472,7 +472,7 @@ export function RitbladViewer({
           <div className="w-full">
             <EmptyState
               variant="fout"
-              illustratie={typeof navigator !== 'undefined' && navigator.onLine === false ? <GeenBereik /> : <Fout />}
+              illustratie={online ? <Fout /> : <GeenBereik />}
               title="Ritblad kon niet geladen worden"
               message="Controleer je verbinding, of open de volledige bundel zoals voorheen."
               action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => void openRitbladExtern(datum)}>Volledige bundel openen</Button>}

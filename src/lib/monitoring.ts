@@ -11,6 +11,7 @@
 
 import { getSupabaseAuthHeaders } from './ui';
 import { RELEASE } from './appVersion';
+import { isOnlineNu } from './useOnline';
 
 const MAX_REPORTS_PER_SESSION = 20;
 const MAX_FEEDBACK_PER_SESSION = 10;
@@ -90,7 +91,7 @@ function rapportContext() {
     release: RELEASE,
     view: currentView ?? undefined,
     role: currentRole ?? undefined,
-    online: typeof navigator === 'undefined' ? undefined : navigator.onLine,
+    online: isOnlineNu(),
     breadcrumbs: getBreadcrumbs(),
   };
 }

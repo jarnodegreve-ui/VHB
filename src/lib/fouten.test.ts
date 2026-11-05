@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Sinds 05-11 leest fouten.ts het bereik uit de online-store (isOnlineNu, met
+// ping) in plaats van navigator.onLine; de test zet die store.
+const bereik = vi.hoisted(() => ({ online: true }));
+vi.mock('./useOnline', () => ({ isOnlineNu: () => bereik.online }));
+
 import { leesFout, meldSchrijffout, schrijffout, vervolgstap } from './fouten';
 
-const online = (waarde: boolean) => vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(waarde);
+const online = (waarde: boolean) => { bereik.online = waarde; };
 
 afterEach(() => vi.restoreAllMocks());
 

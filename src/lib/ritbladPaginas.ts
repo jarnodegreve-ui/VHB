@@ -17,6 +17,7 @@ import { apiFetch } from './api';
 import { zorgVoorStreamIteratie } from './streamIteratie';
 import { metRetry } from './lazyRetry';
 import { ritbladMetaPad } from './ritblad';
+import { isOnlineNu } from './useOnline';
 
 // Minimale vorm van wat we van pdfjs gebruiken — zo blijven de tests vrij
 // van een echte PDF én van de pdfjs-import (die in jsdom geen worker heeft).
@@ -315,7 +316,7 @@ export function laadPdfjs(): Promise<Pdfjs> {
         import('pdfjs-dist'),
         import('pdfjs-dist/build/pdf.worker.min.mjs?worker'),
       ]),
-      { magHerladen: () => typeof navigator === 'undefined' || navigator.onLine !== false },
+      { magHerladen: () => isOnlineNu() },
     );
     pdfjsPromise = importeer().then(([pdfjs, worker]) => {
       // Safari 26 en ouder: getTextContent() itereert een ReadableStream met
