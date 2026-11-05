@@ -267,6 +267,24 @@ describe('foutgroepen (fingerprint, groepering, status, regressie)', () => {
   });
 });
 
+describe('antwoordheaders (05-11)', () => {
+  it('elk /api-antwoord draagt Cache-Control: no-store en geen X-Powered-By, de ETag-vingerafdruk blijft', async () => {
+    const lijst = await api('GET', '/api/leave', { token: 'tok-a' });
+    expect(lijst.status).toBe(200);
+    expect(lijst.headers.get('cache-control')).toBe('no-store');
+    expect(lijst.headers.get('x-powered-by')).toBeNull();
+    // De datalaag leest de ETag als vingerafdruk (src/app/data/kern.ts); die
+    // zet Express ook bij no-store.
+    expect(lijst.headers.get('etag')).toBeTruthy();
+    // Ook vóór de rate-limiter (health) en op een 404.
+    const health = await api('GET', '/api/health');
+    expect(health.headers.get('cache-control')).toBe('no-store');
+    const weg = await api('GET', '/api/bestaat-niet', { token: 'tok-a' });
+    expect(weg.status).toBe(404);
+    expect(weg.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
 describe('rate limiting', () => {
   it('blokkeert met 429 zodra een token de limiet (50/venster) overschrijdt', async () => {
     // RATE_LIMIT_MAX=50 in deze testomgeving; beforeEach heeft gereset.
