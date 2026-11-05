@@ -17,7 +17,8 @@ import { useMaandVeeg } from '../lib/useMaandVeeg';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { ActieMenu } from '../components/ActieMenu';
 import { SkeletonRow } from '../components/Skeleton';
-import { cn, telHref } from '../lib/ui';
+import { cn } from '../lib/ui';
+import { planningTelefoon } from '../lib/planningTelefoon';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { formatDuration } from '../lib/shiftTime';
@@ -107,12 +108,6 @@ function ConflictUitweg({ planningTel, onRuil }: { planningTel?: string; onRuil:
     </div>
   );
 }
-
-/** tel:-link naar de planning: eerste planner met nummer, anders beheerder. */
-const planningTelefoon = (users: User[]): string | undefined => {
-  const kandidaat = users.find((u) => u.role === 'planner' && u.phone?.trim()) ?? users.find((u) => u.role === 'admin' && u.phone?.trim());
-  return telHref(kandidaat?.phone);
-};
 
 export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, planningTot = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; /** Laatste dag waarvoor er planning in het portaal staat (ISO). */ planningTot?: string | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);

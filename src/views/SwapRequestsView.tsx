@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
+import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Phone, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell } from '../components/ui';
@@ -37,6 +37,8 @@ import { RecordOnbekend } from '../components/RecordOnbekend';
 import { useRecordLink } from '../app/useRecordLink';
 import { brengRecordInBeeld } from '../lib/recordLink';
 import { citaat } from '../../shared/tekst';
+import { planningTelefoon } from '../lib/planningTelefoon';
+import { navigeer } from '../app/router';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
@@ -224,6 +226,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [selectedTargetDriver, user.id]);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
+  // Bel-link voor "Vraag de planning om hulp" in de wizard, zelfde bron als het rooster.
+  const planningTel = useMemo(() => planningTelefoon(users), [users]);
   const isAdmin = user.role === 'admin';
   /** Naam bij een id, voor het verloop per persoon (RuilVerloop). */
   const naamVan = (id: string) => users.find((u) => u.id === id)?.name;
@@ -1316,8 +1320,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}
                 {wizardStep === 1 && (
                   myShifts.length === 0 ? (
-                    <Card tone="warning" padding="none" className="px-4 py-3 text-sm font-medium text-amber-800">
-                      Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Via Systeemstatus kan je een fictieve testdienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
+                    <Card tone="warning" padding="none" className="space-y-2.5 px-4 py-3 text-sm font-medium text-amber-800">
+                      <p>Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Via Systeemstatus kan je een fictieve testdienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}</p>
+                      {/* Dezelfde uitweg als bij een verlof-conflict in het rooster: bellen
+                          als een planner een nummer heeft, anders de weg naar Contacten. */}
+                      {!isPlanner && (planningTel
+                        ? <Button variant="secondary" size="sm" icon={<Phone size={14} />} onClick={() => { window.location.href = planningTel; }}>Bel de planning</Button>
+                        : <Button variant="secondary" size="sm" icon={<Phone size={14} />} onClick={() => navigeer('contacten')}>Contacten</Button>)}
                     </Card>
                   ) : (
                     <div className="space-y-2" data-fout={wizardFouten.fouten.dienst ? '' : undefined}>
