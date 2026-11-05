@@ -67,6 +67,38 @@ describe('urgente-update-mail: ontvangers server-side', () => {
   });
 });
 
+describe('urgente-update-mail: fouten onderweg', () => {
+  it('een DB-fout bij het lezen van de gebruikers geeft een nette 500, geen hangend verzoek', async () => {
+    const storage = await import('../../api/storage.js');
+    const spion = vi.spyOn(storage, 'getUsersData').mockRejectedValueOnce(new Error('relation "users" does not exist'));
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
+      expect(res.status).toBe(500);
+      expect(res.json).toEqual({ error: 'Dringende update versturen is mislukt. Probeer het zo opnieuw.' });
+    } finally {
+      spion.mockRestore();
+      stil.mockRestore();
+    }
+  });
+
+  it('een pushdienst die weigert houdt de mail niet tegen: 200 en de mail is vertrokken', async () => {
+    const push = await import('../../api/push.js');
+    const spion = vi.spyOn(push, 'sendPushToUsers').mockRejectedValueOnce(new Error('push kapot'));
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mem.emailsSent = [];
+    try {
+      const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
+      expect(res.status).toBe(200);
+      expect(res.json.success).toBe(true);
+      expect(mem.emailsSent.some((e) => e.context === 'urgent-update')).toBe(true);
+    } finally {
+      spion.mockRestore();
+      stil.mockRestore();
+    }
+  });
+});
+
 describe('push-notificaties', () => {
   it('geeft de public key aan ingelogde gebruikers', async () => {
     const res = await api('GET', '/api/push/public-key', { token: 'tok-a' });
