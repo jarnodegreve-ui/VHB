@@ -76,7 +76,8 @@ describe('BijlageViewer: een bijlage in de app', () => {
     render(<Detail />);
     const laag = await screen.findByRole('dialog', { name: PLAN.filename });
     await waitFor(() => expect(screen.getByText('3 pagina’s')).toBeTruthy());
-    expect(laag.textContent).toContain('100 %');
+    // Getal + eenheid via metEenheid (05-11): smalle vaste spatie, geen gewone.
+    expect(laag.textContent).toContain('100\u202F%');
     expect(screen.getByRole('button', { name: 'Inzoomen' })).toBeTruthy();
     expect(laadBijlageMock).toHaveBeenCalledWith(
       { soort: 'omleiding', recordId: 'o-1', slot: 1, filename: PLAN.filename, sizeBytes: 1200, url: LINK },

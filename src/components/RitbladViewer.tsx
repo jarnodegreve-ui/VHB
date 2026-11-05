@@ -7,7 +7,7 @@ import { Button, IconButton } from './primitives';
 import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
 import { openRitbladExtern } from '../lib/ritblad';
-import { formatDatumDMJ } from '../lib/format';
+import { formatDatumDMJ, metEenheid } from '../lib/format';
 import { isRitbladOpgeslagen, verwijderRitbladUitCache } from '../lib/ritbladCache';
 import { reportHandledError } from '../lib/monitoring';
 import { isOnlineNu, useOnline } from '../lib/useOnline';
@@ -256,7 +256,7 @@ export function PdfBladen({ doc, paginas, paginaLabel, voet }: {
         <IconButton label="Uitzoomen" variant="secondary" size="sm" disabled={zoomIdx === 0} onClick={() => setZoomIdx((i) => Math.max(0, i - 1))}>
           <ZoomOut size={16} />
         </IconButton>
-        <span className="w-12 text-center text-xs font-semibold tabular-nums text-slate-600" aria-live="polite">{Math.round(zoom * 100)} %</span>
+        <span className="w-12 text-center text-xs font-semibold tabular-nums text-slate-600" aria-live="polite">{metEenheid(Math.round(zoom * 100), '%')}</span>
         <IconButton label="Inzoomen" variant="secondary" size="sm" disabled={zoomIdx === ZOOM_STAPPEN.length - 1} onClick={() => setZoomIdx((i) => Math.min(ZOOM_STAPPEN.length - 1, i + 1))}>
           <ZoomIn size={16} />
         </IconButton>
