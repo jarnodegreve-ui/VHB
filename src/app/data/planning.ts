@@ -3,7 +3,7 @@ import type { PlanningCode, PlanningMatrixImportHistory, PlanningMatrixRow, Serv
 import { apiFetch, apiLijst } from '../../lib/api';
 import { fetchCoverageGaps, type DayGap } from '../../lib/coverage';
 import { addDays, isoDate } from '../../lib/availability';
-import { useCollectieState, type DataCtx } from './kern';
+import { isRevisieConflict, useCollectieState, type DataCtx } from './kern';
 import { laatSchrijffout } from '../../lib/foutenLui';
 import { navigeer } from '../router';
 import { dienstoverzichtToast } from '../../lib/dienstoverzichtToast';
@@ -79,11 +79,6 @@ export function usePlanningData(ctx: DataCtx) {
         headers: ctx.revisionHeader('planning'),
         body: JSON.stringify(newShifts),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('De planning is intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
-        await fetchPlanning();
-        return false;
-      }
       if (response.ok) {
         setShifts(newShifts);
         ctx.captureRevision('planning', response);
@@ -93,6 +88,14 @@ export function usePlanningData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
+      // Alleen een echt revisieconflict ververst en vraagt opnieuw (zie
+      // isRevisieConflict in kern.ts); een 409 met een reden (dubbele
+      // inplanning, massa-verwijder-rem) toont die reden.
+      if (isRevisieConflict(response.status, err)) {
+        showToast('De planning is intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchPlanning();
+        return false;
+      }
       laatSchrijffout('Opslaan van planning', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
@@ -141,11 +144,6 @@ export function usePlanningData(ctx: DataCtx) {
           : versie ? (versie.revisie ? { 'x-collection-revision': versie.revisie } : {}) : ctx.revisionHeader('services'),
         body: JSON.stringify(newServices),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('Het dienstoverzicht is intussen door iemand anders gewijzigd, ik ververs het, probeer je wijziging opnieuw.', 'info');
-        if (!versie) await fetchServices();
-        return false;
-      }
       if (response.ok) {
         if (!versie) {
           setServices(newServices);
@@ -172,6 +170,14 @@ export function usePlanningData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
+      // Zelfde onderscheid als bij de planning: alleen een echt
+      // revisieconflict ververst; de massa-verwijder-rem (409 met details)
+      // en een dienstregel tonen hun reden.
+      if (isRevisieConflict(response.status, err)) {
+        showToast('Het dienstoverzicht is intussen door iemand anders gewijzigd, ik ververs het, probeer je wijziging opnieuw.', 'info');
+        if (!versie) await fetchServices();
+        return false;
+      }
       laatSchrijffout(opts?.actie ?? 'Opslaan van diensten', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
@@ -230,13 +236,15 @@ export function usePlanningData(ctx: DataCtx) {
         headers: ctx.revisionHeader('planningCodes'),
         body: JSON.stringify(newCodes),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('De planningscodes zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
-        await fetchPlanningCodes();
-        return false;
-      }
-      const data = await response.json();
+      const data = await response.json().catch(() => ({} as any));
       if (!response.ok) {
+        // Alleen een echt revisieconflict ververst (isRevisieConflict); een
+        // 409 met een reden gaat als fout naar de beheerder.
+        if (isRevisieConflict(response.status, data)) {
+          showToast('De planningscodes zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
+          await fetchPlanningCodes();
+          return false;
+        }
         throw Object.assign(new Error(data?.details || data?.error || 'Opslaan mislukt.'), { status: response.status });
       }
       setPlanningCodes(newCodes);

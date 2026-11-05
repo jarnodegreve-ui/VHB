@@ -3,7 +3,7 @@ import type { User } from '../../types';
 import { apiFetch, apiJson, apiLijst } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
 import { startRustigePoll } from '../../lib/rustigePoll';
-import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { isRevisieConflict, replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 import { laatSchrijffout } from '../../lib/foutenLui';
 
 /**
@@ -92,32 +92,26 @@ export function useMensenData(ctx: DataCtx) {
         headers: ctx.revisionHeader('users'),
         body: JSON.stringify(newUsers),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('De gebruikerslijst is intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
-        await fetchUsers();
-        return false;
-      }
       if (response.ok) {
         await fetchUsers();
         // Logboek stil op de achtergrond: de overlay wacht er niet op.
         if (currentUser?.role === 'admin') void fetchActivityLog();
         showToast('Gebruikers succesvol opgeslagen.', 'success');
         return true;
-      } else {
-        const text = await response.text();
-        console.error('Server error saving users. Status:', response.status, 'Body:', text);
-
-        // Alleen een JSON-reden van de server is gebruikerstekst; een
-        // HTML-foutpagina (Vercel) blijft in de console hierboven.
-        let reden = '';
-        try {
-          const errorData = JSON.parse(text);
-          reden = errorData.details || errorData.error || '';
-        } catch {
-          // geen JSON: de status volstaat voor de vervolgstap
-        }
-        throw Object.assign(new Error(reden), { status: response.status });
       }
+      const err = await response.json().catch(() => ({} as any));
+      // Alleen een echt revisieconflict (isRevisieConflict, kern.ts) is "iemand
+      // anders was je voor". De andere 409's van deze route zijn een reden over
+      // déze opslag, de massa-verwijder-rem en "e-mail al in gebruik", en die
+      // moet de beheerder lezen; tot 05-11 verving de revisietoast ze.
+      if (isRevisieConflict(response.status, err)) {
+        showToast('De gebruikerslijst is intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchUsers();
+        return false;
+      }
+      console.error('Server error saving users. Status:', response.status, 'Body:', err);
+      laatSchrijffout('Opslaan van gebruikers', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
+      return false;
     } catch (error: any) {
       console.error('Error saving users:', error);
       laatSchrijffout('Opslaan van gebruikers', error, (tekst) => showToast(tekst, 'error'));
