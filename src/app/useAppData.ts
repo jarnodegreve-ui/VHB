@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { User, View } from '../types';
-import { useDataKern, useStabieleActies, type ShowToast } from './data/kern';
+import { useDataKern, useStabieleActies, type BronMeting, type ShowToast } from './data/kern';
 import { useActiviteitData } from './data/activiteit';
 import { usePlanningData } from './data/planning';
 import { useVerlofData } from './data/verlof';
@@ -177,13 +177,11 @@ export function useAppData({
           planning.refreshCoverageGaps(),
         ] : []),
       ]);
-      // Versheid: kwam er ook maar één antwoord uit de SW-cache (offline of
-      // buiten bereik), dan is dit geen verse synchronisatie. We houden dan
-      // de datum van het oudste gecachte antwoord aan (of laten de vorige
-      // waarde staan), zodat "gegevens van hh:mm" klopt.
+      // Versheid: zie syncTijdNa (kwam er iets uit de SW-cache, dan telt de
+      // datum van het oudste gecachte antwoord; kwam er niets, dan niets).
       const bron = ctx.sluitBronMeting();
-      if (bron.uitCache === 0) setLastSyncedAt(Date.now());
-      else if (bron.oudste !== null) setLastSyncedAt((vorige) => (vorige === null ? bron.oudste : Math.min(vorige, bron.oudste!)));
+      const nu = Date.now();
+      setLastSyncedAt((vorige) => syncTijdNa(bron, vorige, nu));
     } catch (error) {
       console.error('Error loading app data:', error);
       meldLaadfout('de gegevens', error);
@@ -226,6 +224,22 @@ export function useAppData({
 
   const refreshAll = () =>
     currentUser && session?.access_token ? loadAppData(currentUser, session.access_token, { wachtOpAlles: true }) : Promise.resolve();
+
+  /** Een stille verversing (de volledige catch-up na een socket-reconnect of
+   *  terug online, useLiveUpdates) als synchronisatie boeken: de synctijd
+   *  verschuift alleen als er echt een antwoord kwam. Tot 05-11 zette de
+   *  online-catch-up in App.tsx de tijd ook als elke call mislukt was, en
+   *  zei "gegevens van hh:mm" bij de volgende uitval dus het verkeerde uur. */
+  const boekSync = async (werk: () => Promise<unknown>): Promise<void> => {
+    ctx.beginBronMeting();
+    try {
+      await werk();
+    } finally {
+      const bron = ctx.sluitBronMeting();
+      const nu = Date.now();
+      setLastSyncedAt((vorige) => syncTijdNa(bron, vorige, nu));
+    }
+  };
 
   /** Alles leegmaken bij uitloggen (sessie verlopen / afgemeld). De poort
    *  gaat weer dicht: wie zich daarna in dezelfde pagina aanmeldt (afmelden
@@ -279,7 +293,7 @@ export function useAppData({
     setIsInitialLoad, setLastSyncedAt,
     // herlaadCollectie: retry vanuit een Foutkaart (useCollectieStaat), zelfde
     // lader en dezelfde bundeling van een lopend verzoek als de laadbeurt.
-    loadAppData, refreshAll, resetAll, herlaadCollectie: laadUitgesteld,
+    loadAppData, refreshAll, resetAll, herlaadCollectie: laadUitgesteld, boekSync,
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, fetchUnseenDocuments, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog, fetchLoginActivity,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
@@ -290,6 +304,19 @@ export function useAppData({
   });
 
   return useMemo(() => ({ ...data, ...acties, acties }), [data, acties]);
+}
+
+/**
+ * De synctijd na een laadronde, uit de herkomstmeting van de kern: alles vers
+ * = nu; ook maar één antwoord uit de SW-cache (offline of buiten bereik) = de
+ * datum van het oudste gecachte antwoord, nooit later dan wat er stond; geen
+ * enkel antwoord (alles mislukt) = de vorige waarde blijft staan.
+ */
+export function syncTijdNa(bron: BronMeting, vorige: number | null, nu: number): number | null {
+  if (bron.vers === 0 && bron.uitCache === 0) return vorige;
+  if (bron.uitCache === 0) return nu;
+  if (bron.oudste === null) return vorige;
+  return vorige === null ? bron.oudste : Math.min(vorige, bron.oudste);
 }
 
 /** De platte vorm die App en de views (via de context) te zien krijgen. */
