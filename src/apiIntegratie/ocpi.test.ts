@@ -2,7 +2,7 @@
 import {
   api,
 } from './harnas';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 describe('OCPI 2.2.1, gehoste endpoints + handshake-auth', () => {
   const tok = (s: string) => 'Token ' + Buffer.from(s, 'utf8').toString('base64');
@@ -73,6 +73,17 @@ describe('OCPI-dashboard, autorisatie', () => {
   it('GET /api/ocpi/dashboard is admin-only', async () => {
     expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-planner' })).status).toBe(403);
     expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-a' })).status).toBe(403);
+  });
+  it('een databasefout geeft een generieke 500 zonder de databasetekst (05-11)', async () => {
+    // De testdatabase kent de OCPI-tabellen niet: de route valt op de databasefout.
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await api('GET', '/api/ocpi/dashboard', { token: 'tok-admin' });
+      expect(res.status).toBe(500);
+      expect(res.json).toEqual({ error: 'Het laadpalendashboard kon niet geladen worden. Kijk de serverlog na.' });
+    } finally {
+      stil.mockRestore();
+    }
   });
   // Laadpalen-herwerking 08-09: maand, historiek, sessies, dag en export
   // dragen dezelfde admin-guard; de periode-validatie vuurt vóór de database

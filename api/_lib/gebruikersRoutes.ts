@@ -487,7 +487,7 @@ export function mountGebruikersRoutes(app: express.Express) {
           // Zonder deactivering heeft de rest geen zin: de gebruiker kan nog
           // inloggen en toestellen opnieuw registreren.
           console.error("Uit dienst: deactiveren is mislukt.", err?.message || err);
-          return res.status(500).json({ error: "Deactiveren is mislukt.", stappen: [{ stap: "deactiveren", ok: false, detail: String(err?.message || err) }] });
+          return res.status(500).json({ error: "Deactiveren is mislukt.", stappen: [{ stap: "deactiveren", ok: false, detail: "Account niet gedeactiveerd, zie de serverlog." }] });
         }
       } else {
         stappen.push({ stap: "deactiveren", ok: true, detail: "Account was al gedeactiveerd." });
