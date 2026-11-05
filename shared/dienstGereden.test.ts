@@ -19,9 +19,13 @@ describe('dienstGereden (J, 24-09)', () => {
   it('busvak-eindtijd na middernacht telt door op de dienstdag', () => {
     const nacht = { date: vandaag, delen: [{ endTime: '26:16' }] };
     expect(dienstGereden(nacht, vandaag, 23 * 60 + 59)).toBe(false);
-    // Kalenderdag erna: de dienst van gisteren is gereden zodra 02:16 voorbij is; in
-    // minuten van de dienstdag is dat 26:16, en de dag zelf ligt in het verleden.
-    expect(dienstGereden(nacht, '2026-09-25', 60)).toBe(true);
+    // Kalenderdag erna: de dienst van gisteren is pas gereden zodra 02:16 voorbij
+    // is (26:16 in minuten van de dienstdag); om 01:00 loopt hij nog.
+    expect(dienstGereden(nacht, '2026-09-25', 60)).toBe(false);
+    expect(dienstGereden(nacht, '2026-09-25', 2 * 60 + 15)).toBe(false);
+    expect(dienstGereden(nacht, '2026-09-25', 2 * 60 + 16)).toBe(true);
+    // Eergisteren is altijd gereden, ook met een busvak-einde.
+    expect(dienstGereden(nacht, '2026-09-26', 0)).toBe(true);
   });
 
   it('zonder leesbare eindtijd: niet gereden (veilige kant)', () => {
