@@ -69,6 +69,15 @@ describe('dienstopbouw (golden, dienstregeling 2026-09)', () => {
     expect(new Set(mijn.map((r) => r.split('|')[0])).size).toBe(55);
   });
 
+  it('binnen een dienst staan de rijen op de klok van de dienstdag, zoals in de Access-tabel: 4110 eindigt met 23:49, 00:18, 01:17, 01:19', () => {
+    // De HD-tekst is na middernacht al omgeslagen; sorteren op die tekst zette
+    // "00:18" vóór "16:32" (controle-ronde 04-11, punt 4).
+    const mijn = looncomponentenVanSegmenten(segments.filter((s) => s.serviceNumber === '4110')).map((r) => r.hd);
+    const access = verwacht.filter((r) => r.Service === '4110').map((r) => r.HD);
+    expect(mijn).toEqual(access);
+    expect(mijn.slice(-4)).toEqual(['23:49', '00:18', '01:17', '01:19']);
+  });
+
   it('controles: de actuele dienstregeling heeft geen gaten of overlap, wel de bekende duurafwijkingen', () => {
     const b = controleerSegmenten(segments);
     expect(b.filter((x) => x.soort === 'gat' || x.soort === 'overlap' || x.soort === 'einde_voor_start')).toEqual([]);
@@ -97,6 +106,15 @@ describe('dienstopbouw, rekenregels', () => {
     expect(splitsStationnement(40)).toEqual({ at: 15, nat100: 25, nat50: 0 });
     expect(splitsStationnement(45)).toEqual({ at: 15, nat100: 30, nat50: 0 });
     expect(splitsStationnement(78)).toEqual({ at: 15, nat100: 30, nat50: 33 });
+  });
+
+  it('looncomponenten over middernacht: 23:50 vóór 00:05 (minuten, niet de Easypay-tekst), dienstnummers natuurlijk gesorteerd', () => {
+    const rijen = looncomponentenVanSegmenten([
+      seg({ serviceNumber: '2607', volgorde: 2, type: 'RIT', startMin: 24 * 60 + 5, eindeMin: 24 * 60 + 30 }),
+      seg({ serviceNumber: '2607', volgorde: 1, type: 'RIT', startMin: 23 * 60 + 50, eindeMin: 24 * 60 + 5 }),
+      seg({ serviceNumber: '2510', volgorde: 1, type: 'RIT', startMin: 6 * 60, eindeMin: 7 * 60 }),
+    ]);
+    expect(rijen.map((r) => `${r.service} ${r.hd}-${r.ha} ${r.jd}${r.ja}`)).toEqual(['2510 06:00-07:00 00', '2607 23:50-00:05 01', '2607 00:05-00:30 11']);
   });
 
   it('nachtminuten: vóór 06:00 en vanaf 20:00, klok loopt door', () => {
