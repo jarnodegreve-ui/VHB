@@ -18,9 +18,10 @@ describe('uurwissel (controle-ronde 04-11, punt 35)', () => {
     expect(uurwisselMin('2026-10-24', '2026-10-25')).toBe(-60);
   });
 
-  it('wat geen datum is telt als 0', () => {
+  it('wat geen datum is geeft geen correctie', () => {
     expect(brusselOffsetMin('')).toBe(0);
     expect(brusselOffsetMin('27/03/2027')).toBe(0);
-    expect(uurwisselMin('x', '2027-03-28')).toBe(120);
+    expect(uurwisselMin('x', '2027-03-28')).toBe(0);
+    expect(uurwisselMin('2027-03-27', '')).toBe(0);
   });
 });
