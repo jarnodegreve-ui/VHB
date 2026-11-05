@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDatumDMJ, formatGetal, formatMomentKort, formatPeriodeDMJ, formatPeriodeKort, formatRelatief, metEenheid } from './format';
+import { formatDateHuman, formatDatumDMJ, formatGetal, formatMomentKort, formatPeriodeDMJ, formatPeriodeKort, formatRelatief, metEenheid } from './format';
 
 describe('formatGetal (komma als decimaalteken, smalle spatie als duizendtal, max. 2 decimalen)', () => {
   it('kapt ChargEye-decimalen af op twee cijfers na de komma', () => {
@@ -101,5 +101,29 @@ describe('formatPeriodeKort (lijstrijen op een telefoon)', () => {
     expect(formatPeriodeKort('2026-08-10', '2026-08-10')).toBe('10/08/2026');
     expect(formatPeriodeKort('2026-08-10')).toBe('10/08/2026');
     expect(formatPeriodeKort(null, '2026-08-10')).toBe('10/08/2026');
+  });
+});
+
+// Een UTC-tijdstempel is bij ons soms al de volgende dag: de knip op tien
+// tekens toonde tussen 00u en 01u (winter) of 02u (zomer) de dag ervoor.
+describe('formatDateHuman / formatDatumDMJ met een tijdstempel (Brusselse dag)', () => {
+  it('winter: 23u30 UTC op 4 november is bij ons 5 november', () => {
+    expect(formatDatumDMJ('2026-11-04T23:30:00.000Z')).toBe('05/11/2026');
+    expect(formatDateHuman('2026-11-04T23:30:00.000Z')).toMatch(/^do 5 november/);
+  });
+  it('zomer: 22u30 UTC op 4 juli is bij ons 5 juli', () => {
+    expect(formatDatumDMJ('2026-07-04T22:30:00.000Z')).toBe('05/07/2026');
+    expect(formatDateHuman('2026-07-04T22:30:00.000Z')).toMatch(/^zo 5 juli/);
+  });
+  it('een offset telt ook; een zuivere dag en een zone-loze waarde blijven ongewijzigd', () => {
+    expect(formatDatumDMJ('2026-11-04T23:30:00+00:00')).toBe('05/11/2026');
+    expect(formatDatumDMJ('2026-11-05')).toBe('05/11/2026');
+    expect(formatDateHuman('2026-11-05')).toMatch(/^do 5 november/);
+    // Zone-loos is al wandkloktijd (zelfde regel als formatMomentKort).
+    expect(formatDatumDMJ('2026-11-04T23:30:00')).toBe('04/11/2026');
+  });
+  it('formatRelatief geeft het tijdstip door, dus ook daar de Brusselse dag', () => {
+    const nu = new Date('2026-12-01T12:00:00.000Z').getTime();
+    expect(formatRelatief('2026-11-04T23:30:00.000Z', nu)).toMatch(/^do 5 november/);
   });
 });
