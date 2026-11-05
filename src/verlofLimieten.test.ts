@@ -18,14 +18,17 @@ describe('verloflimieten (per periode instelbaar, 09-09)', () => {
     expect(limietVoorDag(limieten, '2027-01-04')).toBe(3);
   });
 
-  it('bij overlap wint de eerste periode in de lijst', () => {
+  it('bij overlap wint de kortste periode, ook als ze later in de lijst staat (04-11, punt 37)', () => {
     const overlap = { standaard: 2, periodes: [
       { id: 'a', naam: 'Ruim', van: '2026-07-01', tot: '2026-08-31', max: 5 },
       { id: 'b', naam: 'Bouwverlof', van: '2026-07-20', tot: '2026-08-05', max: 1 },
     ] };
-    expect(limietVoorDag(overlap, '2026-07-25')).toBe(5);
-    // Na sorteren op startdatum blijft dat zo; de editor sorteert altijd.
-    expect(limietVoorDag({ ...overlap, periodes: sorteerPeriodes(overlap.periodes) }, '2026-07-25')).toBe(5);
+    // Tot 04-11 won hier de eerste in de lijst (5): het bouwverlof deed dan nooit iets.
+    expect(limietVoorDag(overlap, '2026-07-25')).toBe(1);
+    expect(limietVoorDag(overlap, '2026-07-10')).toBe(5);
+    // Volgorde in de lijst maakt niet uit; de editor sorteert op startdatum.
+    expect(limietVoorDag({ ...overlap, periodes: sorteerPeriodes(overlap.periodes) }, '2026-07-25')).toBe(1);
+    expect(limietVoorDag({ ...overlap, periodes: [...overlap.periodes].reverse() }, '2026-07-25')).toBe(1);
   });
 
   it('sorteert op startdatum, dan naam', () => {

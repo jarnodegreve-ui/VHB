@@ -31,8 +31,9 @@ export type VerlofLimietPeriode = z.output<typeof verlofLimietPeriodeSchema>;
 export const verlofLimietenSchema = z.object({
   /** Geldt op elke dag die in geen enkele periode valt. */
   standaard: limiet.default(2),
-  /** Uitzonderingsperiodes; bij overlap wint de eerste in de lijst (de
-   *  editor sorteert op startdatum, dus de vroegst beginnende). */
+  /** Uitzonderingsperiodes; bij overlap wint de kortste (de meest
+   *  specifieke, bv. een bouwverlofweek binnen de zomer), bij gelijke lengte
+   *  de eerste in de lijst (de editor sorteert op startdatum). */
   periodes: z.array(verlofLimietPeriodeSchema).max(100, 'Maximum 100 periodes').default([]),
 });
 
@@ -66,14 +67,27 @@ export const parseVerlofLimieten = (waarde: unknown): VerlofLimieten => {
   return perDag ? { ...r.data, perDag } : r.data;
 };
 
-/** Hoeveel chauffeurs mogen op deze dag ('YYYY-MM-DD') tegelijk vrij zijn? */
+/** Lengte van een periode voor de vergelijking (ms tussen van en tot; beide
+ *  zijn ISO-dagen, dus dit is een dagentelling). */
+const periodeLengte = (p: VerlofLimietPeriode): number => Date.parse(p.tot) - Date.parse(p.van);
+
+/** Hoeveel chauffeurs mogen op deze dag ('YYYY-MM-DD') tegelijk vrij zijn?
+ *  De dagtypekalender (perDag) wint; daarna de meest specifieke periode die
+ *  de dag bevat, dat is de kortste (bij gelijke lengte de eerste in de
+ *  lijst); anders de standaard. Tot 04-11 won bij overlap de eerste in de
+ *  lijst, de vroegst beginnende, zodat een kortere, strengere periode binnen
+ *  een langere nooit iets deed (controle-ronde 04-11, punt 37). */
 export const limietVoorDag = (limieten: VerlofLimieten, dagIso: string): number => {
   const eigen = limieten.perDag?.[dagIso];
   if (typeof eigen === 'number') return eigen;
-  const periode = limieten.periodes.find((p) => p.van <= dagIso && dagIso <= p.tot);
-  return periode ? periode.max : limieten.standaard;
+  let beste: VerlofLimietPeriode | null = null;
+  for (const p of limieten.periodes) {
+    if (p.van <= dagIso && dagIso <= p.tot && (beste === null || periodeLengte(p) < periodeLengte(beste))) beste = p;
+  }
+  return beste ? beste.max : limieten.standaard;
 };
 
-/** Periodes gesorteerd op startdatum, dan naam; zo is "eerste wint" voorspelbaar. */
+/** Periodes gesorteerd op startdatum, dan naam; zo is "bij gelijke lengte
+ *  wint de eerste" voorspelbaar. */
 export const sorteerPeriodes = (periodes: VerlofLimietPeriode[]): VerlofLimietPeriode[] =>
   [...periodes].sort((a, b) => a.van.localeCompare(b.van) || a.naam.localeCompare(b.naam, 'nl'));
