@@ -42,6 +42,33 @@ describe('minutesUntilShiftEnd', () => {
   });
 });
 
+describe('aftelling over een uurwissel (controle-ronde 04-11, punt 35)', () => {
+  // vitest.config.ts pint TZ op Europe/Brussels; de nacht van 27 op 28 maart
+  // 2027 duurt 23 uur (02:00 wordt 03:00), die van 30 op 31 oktober 2027 25 uur.
+  it('naar de zomertijd: een nachtdienst 22:00-06:00 heeft om 00:30 nog 4u30, geen 5u30', () => {
+    const nacht = { date: '2027-03-27', startTime: '22:00', endTime: '06:00' };
+    expect(minutesUntilShiftEnd(nacht, om('2027-03-28', 0, 30))).toBe(270);
+    // Busvak-notatie: 27:00 = 03:00 de nacht erna, vanaf 23:00 nog 3 uur (de klok slaat 02:00 over).
+    expect(minutesUntilShiftEnd({ date: '2027-03-27', startTime: '20:00', endTime: '27:00' }, om('2027-03-27', 23, 0))).toBe(180);
+  });
+
+  it('naar de zomertijd: de vroege dienst van zondag is om 23:00 nog 6 uur weg, geen 7', () => {
+    expect(minutesUntilShiftStart({ date: '2027-03-28', startTime: '06:00' }, om('2027-03-27', 23, 0))).toBe(360);
+  });
+
+  it('naar de wintertijd: dezelfde nachtdienst heeft om 00:30 nog 6u30', () => {
+    const nacht = { date: '2027-10-30', startTime: '22:00', endTime: '06:00' };
+    expect(minutesUntilShiftEnd(nacht, om('2027-10-31', 0, 30))).toBe(390);
+    expect(minutesUntilShiftStart({ date: '2027-10-31', startTime: '06:00' }, om('2027-10-30', 23, 0))).toBe(480);
+  });
+
+  it('seconden tellen niet mee: de aftelling blijft in hele minuten', () => {
+    const dienst = { date: '2026-08-02', startTime: '12:08', endTime: '18:54' };
+    expect(minutesUntilShiftEnd(dienst, new Date('2026-08-02T17:22:45'))).toBe(92);
+    expect(minutesUntilShiftStart({ date: '2026-08-02', startTime: '12:08' }, new Date('2026-08-02T11:00:59'))).toBe(68);
+  });
+});
+
 describe('formatRemaining', () => {
   it('schrijft uren en minuten compact', () => {
     expect(formatRemaining(92)).toBe('nog 1u 32min');

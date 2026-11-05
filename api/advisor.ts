@@ -21,6 +21,7 @@ import { MAX_PERIODE_DAGEN, dagenInPeriode, isIsoDag } from "../shared/rapporten
 // rustcontrole bij een dienstruil exact dezelfde uitkomst geeft als dit
 // advies. Hier doorgeëxporteerd: bestaande imports blijven gelijk.
 import { MIN_RUST_UREN, dagVenster, formatRust, rustTovVolgendeDag, rustTovVorigeDag, type TijdRij } from "../shared/ruilRust.js";
+import { uurwisselMin } from "../shared/uurwissel.js";
 export { MIN_RUST_UREN, dagVenster, rustTovVolgendeDag, rustTovVorigeDag, type TijdRij };
 
 export const MAX_WERKDAGEN_NA_ELKAAR = 6;
@@ -200,8 +201,12 @@ export const beoordeelKandidaat = (invoer: {
   datum: string;
   keren: number;
 }): KandidaatAdvies => {
-  const rustVoor = invoer.dienstVenster ? rustTovVorigeDag(invoer.vorigeDag, invoer.dienstVenster.start) : null;
-  const rustNa = invoer.dienstVenster ? rustTovVolgendeDag(invoer.volgendeDag, invoer.dienstVenster.eind) : null;
+  // vorigeDag en volgendeDag zijn de dag vóór en ná `datum` (coverageRoutes
+  // bouwt ze met addDagenIso), dus de uurwissel in die nachten is bekend.
+  const vorige = addDagenIso(invoer.datum, -1);
+  const volgende = addDagenIso(invoer.datum, 1);
+  const rustVoor = invoer.dienstVenster ? rustTovVorigeDag(invoer.vorigeDag, invoer.dienstVenster.start, uurwisselMin(vorige, invoer.datum)) : null;
+  const rustNa = invoer.dienstVenster ? rustTovVolgendeDag(invoer.volgendeDag, invoer.dienstVenster.eind, uurwisselMin(invoer.datum, volgende)) : null;
   const dagen = dagenNaElkaarMet(invoer.gewerkteDagen, invoer.datum);
   const grens = MIN_RUST_UREN * 60;
   const redenen: string[] = [];

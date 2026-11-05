@@ -17,6 +17,8 @@
  *   exporteert ze door), zodat beide nooit een andere uitkomst geven.
  */
 
+import { uurwisselMin } from './uurwissel.js';
+
 export const MIN_RUST_UREN = 8;
 
 export type TijdRij = { startTime: string; endTime: string };
@@ -59,18 +61,23 @@ export const dagVenster = (rijen: readonly TijdRij[]): { start: number; eind: nu
  * Rust in minuten tussen het einde van de vorige werkdag en het begin van de
  * dienst. Beide staan in minuten t.o.v. hun éigen dienstdag-middernacht; de
  * vorige dag ligt 24u eerder, vandaar de +24u op de start.
- * null = geen dienst de dag ervoor → de regel legt niets op.
+ * `uurwissel` corrigeert voor de nacht waarin de klok verspringt
+ * (uurwisselMin(vorige dag, dienstdag) uit shared/uurwissel.ts): naar de
+ * zomertijd is de nacht een uur korter (+60 gaat eraf), naar de wintertijd
+ * een uur langer. Zonder dat getal rekent de functie met een vlakke nacht van
+ * 24 uur, zoals een aanroeper zonder datums (controle-ronde 04-11, punt 35).
+ * null = geen dienst de dag ervoor, de regel legt dan niets op.
  */
-export const rustTovVorigeDag = (vorigeDag: readonly TijdRij[], dienstStart: number): number | null => {
+export const rustTovVorigeDag = (vorigeDag: readonly TijdRij[], dienstStart: number, uurwissel = 0): number | null => {
   const v = dagVenster(vorigeDag);
-  return v === null ? null : dienstStart + 24 * 60 - v.eind;
+  return v === null ? null : dienstStart + 24 * 60 - uurwissel - v.eind;
 };
 
 /** Spiegelbeeld: rust tussen het einde van de dienst en de start van de
- *  dienst op de dag erna. */
-export const rustTovVolgendeDag = (volgendeDag: readonly TijdRij[], dienstEind: number): number | null => {
+ *  dienst op de dag erna; `uurwissel` = uurwisselMin(dienstdag, dag erna). */
+export const rustTovVolgendeDag = (volgendeDag: readonly TijdRij[], dienstEind: number, uurwissel = 0): number | null => {
   const v = dagVenster(volgendeDag);
-  return v === null ? null : v.start + 24 * 60 - dienstEind;
+  return v === null ? null : v.start + 24 * 60 - uurwissel - dienstEind;
 };
 
 /** "8u" / "7u53" — compacte urennotatie. */
@@ -157,8 +164,10 @@ export const beoordeelRuilRust = (ruil: RuilVoorRust, planning: readonly RustPla
   const regel = (wie: RuilRustRegel['wie'], persoon: string, datum: string, naam: string, rijen: RustPlanningRij[]): RuilRustRegel | null => {
     const venster = dagVenster(rijen);
     if (!venster) return null;
-    const rustVoor = rustTovVorigeDag(naRuil(persoon, dagErbij(datum, -1)), venster.start);
-    const rustNa = rustTovVolgendeDag(naRuil(persoon, dagErbij(datum, 1)), venster.eind);
+    const vorige = dagErbij(datum, -1);
+    const volgende = dagErbij(datum, 1);
+    const rustVoor = rustTovVorigeDag(naRuil(persoon, vorige), venster.start, uurwisselMin(vorige, datum));
+    const rustNa = rustTovVolgendeDag(naRuil(persoon, volgende), venster.eind, uurwisselMin(datum, volgende));
     return { wie, datum, dienst: naam, rustVoor, rustNa, teKort: (rustVoor !== null && rustVoor < grens) || (rustNa !== null && rustNa < grens) };
   };
 

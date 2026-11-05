@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beoordeelRuilRust, formatRust, type RustPlanningRij } from './ruilRust';
+import { beoordeelRuilRust, formatRust, rustTovVolgendeDag, rustTovVorigeDag, type RustPlanningRij } from './ruilRust';
 
 const rij = (driverId: string, date: string, line: string, startTime: string, endTime: string): RustPlanningRij => ({ driverId, date, line, startTime, endTime });
 const A = 'a'; // aanvrager
@@ -101,6 +101,49 @@ describe('beoordeelRuilRust', () => {
   it('kapotte tijden geven geen regel in plaats van een verzonnen getal', () => {
     const planning = [rij(A, '2026-10-07', '2101', 'x', '14:00')];
     expect(beoordeelRuilRust({ requesterId: A, targetDriverId: B, status: 'pending', shiftDate: '2026-10-07', shiftLine: '2101' }, planning)).toEqual([]);
+  });
+});
+
+describe('rust over een uurwissel (controle-ronde 04-11, punt 35)', () => {
+  it('rustTovVorigeDag/VolgendeDag: zonder correctie een vlakke nacht van 24 uur, met correctie een uur korter of langer', () => {
+    const laat = [{ startTime: '14:00', endTime: '22:00' }];
+    expect(rustTovVorigeDag(laat, 6 * 60)).toBe(480);
+    expect(rustTovVorigeDag(laat, 6 * 60, 60)).toBe(420); // naar de zomertijd: 7u
+    expect(rustTovVorigeDag(laat, 6 * 60, -60)).toBe(540); // naar de wintertijd: 9u
+    const vroeg = [{ startTime: '06:00', endTime: '14:00' }];
+    expect(rustTovVolgendeDag(vroeg, 22 * 60)).toBe(480);
+    expect(rustTovVolgendeDag(vroeg, 22 * 60, 60)).toBe(420);
+    expect(rustTovVolgendeDag(vroeg, 22 * 60, -60)).toBe(540);
+  });
+
+  it('nacht van zaterdag 27 op zondag 28 maart 2027 (23 uur): 22:00 naar 06:00 is 7u, dus te kort', () => {
+    const planning = [
+      rij(A, '2027-03-28', '2101', '06:00', '14:00'), // gaat naar B
+      rij(B, '2027-03-27', '2230', '14:00', '22:00'),
+    ];
+    const [regel] = beoordeelRuilRust({ requesterId: A, targetDriverId: B, status: 'pending', shiftDate: '2027-03-28', shiftLine: '2101' }, planning);
+    expect(regel.rustVoor).toBe(7 * 60);
+    expect(regel.teKort).toBe(true);
+  });
+
+  it('spiegelbeeld: de late dienst van zaterdag 27 maart met zondag 06:00 erna geeft 7u rust na', () => {
+    const planning = [
+      rij(A, '2027-03-27', '2230', '14:00', '22:00'), // gaat naar B
+      rij(B, '2027-03-28', '2101', '06:00', '14:00'),
+    ];
+    const [regel] = beoordeelRuilRust({ requesterId: A, targetDriverId: B, status: 'pending', shiftDate: '2027-03-27', shiftLine: '2230' }, planning);
+    expect(regel.rustNa).toBe(7 * 60);
+    expect(regel.teKort).toBe(true);
+  });
+
+  it('nacht van 30 op 31 oktober 2027 (25 uur): 22:00 naar 06:00 is 9u', () => {
+    const planning = [
+      rij(A, '2027-10-31', '2101', '06:00', '14:00'),
+      rij(B, '2027-10-30', '2230', '14:00', '22:00'),
+    ];
+    const [regel] = beoordeelRuilRust({ requesterId: A, targetDriverId: B, status: 'pending', shiftDate: '2027-10-31', shiftLine: '2101' }, planning);
+    expect(regel.rustVoor).toBe(9 * 60);
+    expect(regel.teKort).toBe(false);
   });
 });
 

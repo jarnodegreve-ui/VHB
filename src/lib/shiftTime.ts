@@ -80,12 +80,34 @@ export const hasShiftEnded = (
 };
 
 /**
+ * Een klokminuut van de dienstdag als echt tijdstip. De Date-constructor rekent
+ * in lokale kloktijd, dus busvak-minuten (1460 = 00:20 de nacht erna) en een
+ * uurwissel komen vanzelf goed: 08:00 op zondag 28 maart 2027 ligt zeven uur
+ * na middernacht, niet acht. null voor wat geen ISO-dag is.
+ */
+const tijdstipOpDienstdag = (date: string, minuut: number): Date | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date ?? ''));
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, minuut);
+};
+
+/** `now` op de minuut afgekapt: de aftelling telt hele minuten, zoals de
+ *  klokminuten-versie met getHours()/getMinutes() deed. */
+const opDeMinuut = (now: Date): Date => new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+
+const minutenTussen = (van: Date, tot: Date): number => Math.round((tot.getTime() - van.getTime()) / 60000);
+
+/**
  * Hoeveel minuten loopt dit segment nog? null als de tijden ongeldig zijn of
- * het segment niet (meer) bezig is — de aanroeper toont dan gewoon niets.
+ * het segment niet (meer) bezig is, de aanroeper toont dan gewoon niets.
  *
- * Zelfde tijdframe als isShiftActiveAt: alles in minuten t.o.v. middernacht
- * van de dienstdag, zodat de busvak-notatie ("24:20" = 00:20 de nacht erna)
- * en een dienst van gisteren die nu nog loopt allebei goed uitkomen.
+ * Bezig-of-niet volgt isShiftActiveAt; de aftelling zelf rekent met echte
+ * tijdstippen (einde van het segment op de dienstdag, als Date) en niet met
+ * klokminuten plus een dagverschil: in de nacht waarin de klok verspringt
+ * (27 op 28 maart 2027, 23 uur) telde die een uur te veel, in oktober een
+ * uur te weinig (controle-ronde 04-11, punt 35). De busvak-notatie ("24:20"
+ * = 00:20 de nacht erna) en een dienst van gisteren die nu nog loopt komen
+ * allebei goed uit.
  */
 export const minutesUntilShiftEnd = (
   shift: { date: string; startTime: string; endTime: string },
@@ -96,22 +118,20 @@ export const minutesUntilShiftEnd = (
   const end = parseHHMM(shift.endTime);
   if (start === null || end === null) return null;
   const endNorm = end <= start ? end + 24 * 60 : end;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const dagVerschil = Math.round(
-    (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
-  );
-  const resterend = endNorm - (nowMin + dagVerschil * 24 * 60);
+  const einde = tijdstipOpDienstdag(shift.date, endNorm);
+  if (!einde) return null;
+  const resterend = minutenTussen(opDeMinuut(now), einde);
   return resterend > 0 ? resterend : null;
 };
 
 /**
  * Hoeveel minuten tot dit segment begint? null als het al begonnen is (of de
- * starttijd ongeldig is) — de aanroeper toont dan een aftelling naar het einde
+ * starttijd ongeldig is), de aanroeper toont dan een aftelling naar het einde
  * of niets.
  *
- * Zelfde tijdframe als minutesUntilShiftEnd: alles in minuten t.o.v.
- * middernacht van de dienstdag, zodat een dienst van morgen die vanavond al in
- * beeld staat correct vooruit telt.
+ * Zelfde rekenwijze als minutesUntilShiftEnd: het begin als echt tijdstip op
+ * de dienstdag, zodat een dienst van morgen die vanavond al in beeld staat
+ * correct vooruit telt, ook over een uurwissel heen.
  */
 export const minutesUntilShiftStart = (
   shift: { date: string; startTime: string },
@@ -119,11 +139,9 @@ export const minutesUntilShiftStart = (
 ): number | null => {
   const start = parseHHMM(shift.startTime);
   if (start === null) return null;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const dagVerschil = Math.round(
-    (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
-  );
-  const tot = start - (nowMin + dagVerschil * 24 * 60);
+  const begin = tijdstipOpDienstdag(shift.date, start);
+  if (!begin) return null;
+  const tot = minutenTussen(opDeMinuut(now), begin);
   return tot > 0 ? tot : null;
 };
 
