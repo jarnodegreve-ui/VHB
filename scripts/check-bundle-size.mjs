@@ -205,7 +205,11 @@ import zlib from 'node:zlib';
 // runner en ±1,5 kB marge. React 19.3.1 is bewust NIET meegenomen: die maakt
 // react-vendor 60,1 → 68,6 kB gzip (+14 %, in de startbundel) en het totaal
 // 752; zie .github/dependabot.yml.
-const BUDGET_KB = 747;
+// 05-11: totaal 747 → 749 en index 79,6 → 80,5. De zes PR's van de
+// controle-ronde 04-11 samen (index 79,27 lokaal) plus deze deps-ronde (vite
+// 6.4.5, framer-motion-patch) meten op de runner index 79,68 en totaal 747,
+// precies op de grens. Geen nieuwe dependency. Budget = de meting plus ±1 kB.
+const BUDGET_KB = 749;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -288,7 +292,7 @@ const DEELBUDGET_KB = {
   // index) noemt de nieuwe gedeelde chunks (ToonMeer, archief). Lokaal
   // 78,63 → 78,77; de CI-runner meet de index ±0,4 kB zwaarder, dat kwam
   // op de grens. Budget = de meting plus ±0,8 kB.
-  index: 79.6,
+  index: 80.5,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
