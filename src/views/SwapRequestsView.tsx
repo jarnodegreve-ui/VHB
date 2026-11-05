@@ -35,6 +35,7 @@ import { AllesGedaan, LegeLijst } from '../components/illustraties';
 import { TableShell, Td, Th } from '../components/TabelBasis';
 import { RecordOnbekend } from '../components/RecordOnbekend';
 import { useRecordLink } from '../app/useRecordLink';
+import { useCollectieStaat } from '../app/collectieStaat';
 import { brengRecordInBeeld } from '../lib/recordLink';
 import { citaat } from '../../shared/tekst';
 import { planningTelefoon } from '../lib/planningTelefoon';
@@ -226,6 +227,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [selectedTargetDriver, user.id]);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
+  // Laadfout van de ruilen (chauffeur: uitgesteld geladen) is geen lege staat:
+  // dan een Foutkaart met Opnieuw proberen, nooit "Nog geen ruilverzoeken".
+  const laad = useCollectieStaat('swaps');
+  const foutkaart = <Foutkaart compact boodschap={laad.fout ?? 'De dienstruilen konden niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />;
   // Bel-link voor "Vraag de planning om hulp" in de wizard, zelfde bron als het rooster.
   const planningTel = useMemo(() => planningTelefoon(users), [users]);
   const isAdmin = user.role === 'admin';
@@ -760,7 +765,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
-          {mijnLijst.getoond > 0 ? (
+          {laad.foutZonderData ? foutkaart : mijnLijst.getoond > 0 ? (
             /* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
                in plaats van een stapel losse kaarten, de dag als titel
                (daaraan herken je de ruil), de dienst eronder. De lijst groeit
@@ -849,7 +854,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
         <div className="space-y-4">
           <MicroLabel className="ml-1">Openstaande dienstruilen</MicroLabel>
-          {availableSwaps.length > 0 ? isPlanner ? (
+          {laad.foutZonderData ? foutkaart : availableSwaps.length > 0 ? isPlanner ? (
             /* Staf ziet hier ELKE open ruil, ook die tussen twee collega's. Met
                een kaart per ruil was deze kolom onoverzichtelijk (Jarno 14-10:
                "veel kleinere tegeltjes, gewoon de naam van beide chauffeurs").

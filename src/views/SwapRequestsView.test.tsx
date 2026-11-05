@@ -66,3 +66,29 @@ describe('Dienstruil: wizard zonder komende dienst', () => {
     expect(within(wizard).getByRole('button', { name: 'Contacten' })).toBeTruthy();
   });
 });
+
+// Een laadfout van de ruilen (voor een chauffeur laden ze uitgesteld) toonde
+// "Nog geen ruilverzoeken" en "Geen openstaande dienstruilen". Dat is het
+// patroon van ServicesView en MeldingenView: bij foutZonderData een Foutkaart
+// met Opnieuw proberen, geen lege staat (controle 04-11, punt 8).
+describe('Dienstruil: laadfout zonder gegevens', () => {
+  it('toont in beide kolommen de Foutkaart met Opnieuw proberen, geen lege staat', async () => {
+    const herlaadCollectie = vi.fn().mockResolvedValue(undefined);
+    appData.waarde = { collectieStaat: { swaps: { geslaagd: false, mislukt: true } }, herlaadCollectie };
+    toon([CHAUFFEUR, PLANNER]);
+    expect(screen.getAllByText('De dienstruilen konden niet laden.')).toHaveLength(2);
+    expect(screen.queryByText('Nog geen ruilverzoeken')).toBeNull();
+    expect(screen.queryByText('Geen openstaande dienstruilen')).toBeNull();
+    await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: /Opnieuw/ })[0]); });
+    expect(herlaadCollectie).toHaveBeenCalledWith('swaps');
+  });
+
+  it('zonder fout blijft de lege staat zoals ze was', async () => {
+    appData.waarde = { collectieStaat: { swaps: { geslaagd: true, mislukt: false } }, herlaadCollectie: vi.fn() };
+    toon([CHAUFFEUR, PLANNER]);
+    // Mijn verzoeken wacht eerst op het archief ("Laden…"), dan pas de lege staat.
+    expect(await screen.findByText('Nog geen ruilverzoeken')).toBeTruthy();
+    expect(screen.getByText('Geen openstaande dienstruilen')).toBeTruthy();
+    expect(screen.queryByText('De dienstruilen konden niet laden.')).toBeNull();
+  });
+});
