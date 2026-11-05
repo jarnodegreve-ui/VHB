@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatRemaining, formatStartsIn, minutesUntilShiftEnd, minutesUntilShiftStart } from './lib/shiftTime';
+import { tijdstipBrussel } from '../shared/uurwissel';
 
 /** Lokale tijd (geen UTC) — de helpers rekenen met getHours(). */
 const om = (iso: string, uur: number, minuut: number) =>
@@ -54,6 +55,25 @@ describe('aftelling over een uurwissel (controle-ronde 04-11, punt 35)', () => {
 
   it('naar de zomertijd: de vroege dienst van zondag is om 23:00 nog 6 uur weg, geen 7', () => {
     expect(minutesUntilShiftStart({ date: '2027-03-28', startTime: '06:00' }, om('2027-03-27', 23, 0))).toBe(360);
+  });
+
+  it('leest een kloktijd zoals shared/uurwissel.ts (tijdstipBrussel), ook in de wisselnachten', () => {
+    // De aftelling rekent met de lokale Date (TZ Europe/Brussels in vitest), de
+    // rustregel met tijdstipBrussel; dezelfde lezing, hier vastgelegd.
+    // Via de aftelling naar het begin van een dienst op die kloktijd (ligt in
+    // elk geval hieronder in de toekomst): afgekapte `nu` plus de minuten.
+    const aftelling = (date: string, tijd: string, nu: Date) => {
+      const tot = minutesUntilShiftStart({ date, startTime: tijd }, nu);
+      return tot === null ? null : Math.floor(nu.getTime() / 60000) * 60000 + tot * 60000;
+    };
+    const nu = new Date('2027-03-27T20:00:00Z');
+    for (const [date, minuut, tijd] of [['2027-03-27', 27 * 60, '27:00'], ['2027-03-27', 26 * 60 + 30, '26:30'], ['2027-03-28', 6 * 60, '06:00']] as const) {
+      expect(aftelling(date, tijd, nu)).toBe(tijdstipBrussel(date, minuut));
+    }
+    const nuOkt = new Date('2027-10-30T20:00:00Z');
+    for (const [date, minuut, tijd] of [['2027-10-30', 26 * 60 + 30, '26:30'], ['2027-10-30', 27 * 60 + 30, '27:30'], ['2027-10-31', 6 * 60, '06:00']] as const) {
+      expect(aftelling(date, tijd, nuOkt)).toBe(tijdstipBrussel(date, minuut));
+    }
   });
 
   it('in het dubbele uur van de wintertijdwissel telt de echte klok (02:30 CET, de tweede keer)', () => {

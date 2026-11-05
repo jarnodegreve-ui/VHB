@@ -1,7 +1,6 @@
 import { addDays, isoDate } from './datum';
 import { eindtijdMinuten } from '../../shared/dienstGereden';
 import { normaliseerTijd } from '../../shared/tijdNotatie';
-import { tijdstipBrussel } from '../../shared/uurwissel';
 
 /** 'HH:MM' → minuten sinds middernacht van de dienstdag, of null bij een
  *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
@@ -81,13 +80,22 @@ export const hasShiftEnded = (
 };
 
 /**
- * Een klokminuut van de dienstdag als echt tijdstip (epoch-ms) op de Brusselse
- * klok, dezelfde lezing als de rustregel (shared/uurwissel.ts): busvak-minuten
- * (1460 = 00:20 de nacht erna) en een uurwissel komen goed uit, 08:00 op
- * zondag 28 maart 2027 ligt zeven uur na middernacht, niet acht. null voor
- * wat geen ISO-dag is.
+ * Een klokminuut van de dienstdag als echt tijdstip (epoch-ms). De
+ * Date-constructor rekent in de lokale kloktijd van het toestel (in België
+ * de Brusselse klok) en leest een kloktijd precies zoals shared/uurwissel.ts
+ * (`tijdstipBrussel`, de rustregel): busvak-minuten (1620 = 03:00 de nacht
+ * erna) zijn de klok van de volgende dag, een kloktijd die in de wisselnacht
+ * niet bestaat schuift een uur op en een dubbele is de eerste keer; 08:00 op
+ * zondag 28 maart 2027 ligt zo zeven uur na middernacht, niet acht.
+ * src/shiftTime.test.ts houdt de twee lezingen gelijk. Bewust niet de
+ * gedeelde helper importeren: die kost de chauffeur-warmup ±0,5 kB en Mijn
+ * dag zit op het budget. null voor wat geen ISO-dag is.
  */
-const tijdstipOpDienstdag = (date: string, minuut: number): number | null => tijdstipBrussel(date, minuut);
+const tijdstipOpDienstdag = (date: string, minuut: number): number | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date ?? ''));
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, minuut).getTime();
+};
 
 /** `now` op de minuut afgekapt (epoch, niet via de lokale klokvelden: in het
  *  dubbele uur van de wintertijdwissel wijzen die twee keer dezelfde minuut
