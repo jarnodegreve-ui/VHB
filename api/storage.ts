@@ -237,6 +237,7 @@ export {
 export {
   getLeaveData,
   saveLeaveData,
+  schrijfLeaveAlsStatus,
 } from "./_lib/opslag/verlof.js";
 export {
   type MailLogRegel,

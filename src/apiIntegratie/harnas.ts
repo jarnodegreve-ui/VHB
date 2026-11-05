@@ -163,6 +163,8 @@ const mem = vi.hoisted(() => ({
   // de lezing van de handler (en zijn planning-doorvoer) en zijn schrijfactie.
   // Een test laat daar een tweede, echt verzoek landen.
   voorSwapStatusWissel: null as null | ((swapId: string) => Promise<void> | void),
+  // Zelfde haak vóór de voorwaardelijke statuswissel van een verlofaanvraag.
+  voorLeaveStatusWissel: null as null | ((leaveId: string) => Promise<void> | void),
   // Het venster (15-10) als een momentopname van vóór een wijziging: de
   // vensterquery geeft dan deze ruilen terug in plaats van mem.swaps. Zo
   // simuleert een test dat een ruil tussen de vensterlezing en de volledige
@@ -514,6 +516,19 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     },
     saveLeaveData: async (data: any[], idsToDelete: string[] = []) => {
       mem.leave = replaceById(mem.leave, data, idsToDelete);
+    },
+    // Zoals de echte: `update ... where id = ? and status = ?`; raakt niets
+    // (false) als de status intussen wisselde. Zie schrijfSwapAlsStatus.
+    schrijfLeaveAlsStatus: async (record: any, verwachteStatus: string) => {
+      const haak = mem.voorLeaveStatusWissel;
+      if (haak) {
+        mem.voorLeaveStatusWissel = null;
+        await haak(String(record.id));
+      }
+      const rij = mem.leave.find((l: any) => String(l.id) === String(record.id));
+      if (!rij || String(rij.status) !== String(verwachteStatus)) return false;
+      mem.leave = mem.leave.map((l: any) => (l === rij ? { ...record } : l));
+      return true;
     },
     getSwapsData: async (filters?: { betrokkenUserId?: string }) => {
       mem.swapFilters.push(filters ?? null);
@@ -1279,6 +1294,7 @@ beforeEach(() => {
   mem.planningVersieTeller = 0;
   mem.planningVervangenFaalt = false;
   mem.voorSwapStatusWissel = null;
+  mem.voorLeaveStatusWissel = null;
   mem.vensterMomentopname = null;
   mem.swapStatusWissels = [];
   mem.planningVerplaatsenFaalt = null;

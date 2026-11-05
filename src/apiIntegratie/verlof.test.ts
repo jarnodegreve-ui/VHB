@@ -946,3 +946,40 @@ describe('ziekte is geen verlof (Jarno 06-10): geen mail of push naar de chauffe
     expect(mem.pushesSent.find((p) => p.payload.title === 'Verlof goedgekeurd')?.userIds).toEqual(['4']);
   });
 });
+
+// Scan 04-11, punt 12. De beslissing toetste de status op een momentopname en
+// schreef daarna de hele rij onvoorwaardelijk: van twee beslissers in hetzelfde
+// venster won de laatste stil en vertrokken beide mails. Nu is de schrijfactie
+// voorwaardelijk op de gelezen status (schrijfLeaveAlsStatus). Het tweede
+// verzoek landt hier echt in het venster van het eerste, via de haak
+// `mem.voorLeaveStatusWissel`, en gaat zelf ook door de echte route.
+describe('verlof: twee beslissers op hetzelfde moment (05-11)', () => {
+  const beslisMails = async () => vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mock.calls.length;
+  const patch = (token: string, body: Record<string, unknown>) => api('PATCH', '/api/leave/l-b1', { token, body });
+
+  beforeEach(async () => {
+    vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mockClear();
+    mem.pushesSent = [];
+    mem.activity = [];
+  });
+
+  it('de afwijzing landt eerst: de goedkeuring krijgt 409 met de verse status, en er vertrekt één mail en één push', async () => {
+    let tweede: { status: number; json: any } | undefined;
+    mem.voorLeaveStatusWissel = async () => { tweede = await patch('tok-admin', { status: 'rejected', ifStatus: 'pending', reden: 'te druk' }); };
+    const eerste = await patch('tok-planner', { status: 'approved', ifStatus: 'pending' });
+    expect(tweede?.status).toBe(200);
+    expect(eerste.status).toBe(409);
+    expect(eerste.json).toEqual({ error: "Deze aanvraag is intussen al 'rejected', de lijst is ververst.", currentStatus: 'rejected' });
+    expect(mem.leave.find((l) => l.id === 'l-b1')).toMatchObject({ status: 'rejected', beslisReden: 'te druk' });
+    expect(await beslisMails()).toBe(1);
+    expect(mem.pushesSent.filter((p) => p.payload.soort === 'verlof')).toEqual([expect.objectContaining({ userIds: ['4'], payload: expect.objectContaining({ title: 'Verlof afgewezen' }) })]);
+    expect(mem.activity.filter((a) => a.entityId === 'l-b1').map((a) => a.action)).toEqual(['Verlof afgewezen']);
+  });
+
+  it('de aanvraag is intussen ingetrokken: 404, niets gemaild', async () => {
+    mem.voorLeaveStatusWissel = () => { mem.leave = mem.leave.filter((l) => l.id !== 'l-b1'); };
+    const res = await patch('tok-planner', { status: 'approved', ifStatus: 'pending' });
+    expect(res.status).toBe(404);
+    expect(await beslisMails()).toBe(0);
+  });
+});

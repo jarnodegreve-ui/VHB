@@ -27,7 +27,7 @@ import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, v
 import { valideerRecord } from "./valideer.js";
 import { brusselsDay, DAG_DMJ, PERIODE_DMJ, LEAVE_TYPE_LABEL, isActieveStaf } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, getAppSetting, setAppSetting } from "../storage.js";
+import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, schrijfLeaveAlsStatus, getAppSetting, setAppSetting } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 
@@ -290,8 +290,13 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
 
     const decidedAt = new Date().toISOString();
     const updated = { ...current, status, decidedAt, ...(reden ? { beslisReden: reden } : {}) };
+    // Voorwaardelijk schrijven op de gelezen status (zoals schrijfSwapAlsStatus):
+    // de controle hierboven zag een momentopname; besliste een collega in het
+    // venster ertussen, dan raakt deze schrijfactie geen rij en vertrekt er
+    // geen tweede mail. De verse status gaat mee in de 409.
+    let geschreven: boolean;
     try {
-      await saveLeaveData([updated], []);
+      geschreven = await schrijfLeaveAlsStatus(updated, ifStatus);
     } catch (err) {
       // Kolom beslisreden ontbreekt nog (migratie 2026-09-22 niet gedraaid):
       // de beslissing is dan NIET opgeslagen. Duidelijk melden i.p.v. een
@@ -300,6 +305,13 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
         return { fout: { status: 503, error: "De reden kan nog niet bewaard worden: de databasemigratie van 22-09 (kolom beslisreden) is nog niet gedraaid. Weiger voorlopig zonder reden." } };
       }
       throw err;
+    }
+    if (!geschreven) {
+      const vers = (await getLeaveData({ userId: String(current.userId) })).find((l) => String(l.id) === id);
+      if (!vers) {
+        return { fout: { status: 404, error: "Deze verlofaanvraag bestaat niet (meer), mogelijk net ingetrokken." } };
+      }
+      return { fout: { status: 409, error: `Deze aanvraag is intussen al '${vers.status}', de lijst is ververst.`, currentStatus: String(vers.status) } };
     }
 
     const users = await getUsersData();

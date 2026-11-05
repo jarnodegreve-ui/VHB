@@ -45,3 +45,26 @@ export const saveLeaveData = async (data: any, idsToDelete: string[] = [], optie
   // daarom in dezelfde databaseoperatie (security-audit 07-09, bevinding 7).
   await verwijderInStukken(client, 'leave', 'id', idsToDelete.map(String), opties.alleenPending ? (q) => q.eq('status', 'pending') : undefined);
 };
+
+/**
+ * Verlofbeslissing als compare-and-set (zelfde model als schrijfSwapAlsStatus):
+ * de rij wordt alleen geschreven als ze nog de status heeft die de handler
+ * las. `false` = geen rij geraakt, dus iemand anders besliste intussen (of de
+ * aanvraag werd ingetrokken); de rij blijft dan zoals ze is. Tot 05-11 schreef
+ * beslisVerlofIntern de hele rij onvoorwaardelijk: van twee beslissers in
+ * hetzelfde venster won de laatste stil en vertrokken beide mails.
+ * `beslisreden` zit alleen in de rij wanneer er een reden is (toDatabaseLeave),
+ * zodat de terugval zonder de migratie van 22-09 blijft werken.
+ */
+export const schrijfLeaveAlsStatus = async (record: any, verwachteStatus: string): Promise<boolean> => {
+  const client = requireDb();
+  const { id, ...rij } = toDatabaseLeave(toPublicLeave(record));
+  const { data, error } = await client
+    .from('leave')
+    .update(rij)
+    .eq('id', id)
+    .eq('status', String(verwachteStatus))
+    .select('id');
+  if (error) throw error;
+  return (data ?? []).length > 0;
+};
