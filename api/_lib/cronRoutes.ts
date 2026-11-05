@@ -254,8 +254,15 @@ export function mountCronRoutes(app: express.Express) {
         }
       }
 
+      // De heartbeat van de back-up EERST: de back-up staat op dit punt al
+      // opgeslagen. De retentie en de opruiming hieronder praten met de
+      // database, Storage en het log; blijft daar iets hangen, dan mag dat
+      // nooit lezen als "de back-up is mislukt". (Tot 05-11 liep de retentie
+      // vóór deze regel, tegen het commentaar in.)
+      await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
+
       // Retentie ná de back-up: de zojuist gemaakte back-up bevat de volledige
-      // historiek nog, daarna mag oud grut weg (fouten 30 d, auditlog 1 jaar —
+      // historiek nog, daarna mag oud grut weg (fouten 30 d, auditlog 1 jaar,
       // instelbaar via env). Best-effort: mag de back-up-respons niet breken.
       const errorDays = Number(process.env.RETENTION_ERROR_DAYS) > 0 ? Number(process.env.RETENTION_ERROR_DAYS) : 30;
       const logDays = Number(process.env.RETENTION_LOG_DAYS) > 0 ? Number(process.env.RETENTION_LOG_DAYS) : 365;
@@ -268,13 +275,12 @@ export function mountCronRoutes(app: express.Express) {
       const pruned = await pruneOldRecords({ errorDays, logDays, noteDays, meldingDays, aanwezigheidDays });
       const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen + pruned.aanwezigheid + pruned.mailLog;
       if (prunedTotal > 0) {
-        console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d), ${pruned.mailLog} mail-logregels (>${logDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
+        const uitkomst = `${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d), ${pruned.mailLog} mail-logregels (>${logDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd`;
+        console.log(`[cron-backup] retentie: ${uitkomst}.`);
+        // Eigen regel in het log, zoals de bijlagen hieronder: de heartbeat
+        // van de back-up draagt de retentie niet meer.
+        await logCronHeartbeat("retentie", `Retentie: ${uitkomst}.`);
       }
-
-      // De heartbeat van de back-up EERST: de back-up staat op dit punt al
-      // opgeslagen. De opruiming hieronder praat met Storage en het log; blijft
-      // daar iets hangen, dan mag dat nooit lezen als "de back-up is mislukt".
-      await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
 
       // Bijlagen van verwijderde omleidingen en updates: pas nu opruimen, een
       // dag na het verdwijnen van het record, zodat "Ongedaan maken" de PDF's
@@ -489,6 +495,21 @@ export function mountCronRoutes(app: express.Express) {
       const sinceMs = Date.now() - intervalMin * 60 * 1000;
       const sinceIso = new Date(sinceMs).toISOString();
 
+      // Tijdsbudget (05-11): de secties hieronder doen elk hun eigen
+      // databasewerk, pushes en mails; samen liepen ze zonder rem tegen de
+      // 60 s van de functie aan, en dan vertrok de mail niet. Na het budget
+      // wordt er niets meer verzameld en meldt de mail wat overgeslagen is.
+      // performance.now, niet Date: monotoon en onafhankelijk van een
+      // nagebootste klok. Instelbaar voor de tests (ERROR_DIGEST_BUDGET_MS).
+      const gestart = performance.now();
+      const budgetMs = Number(process.env.ERROR_DIGEST_BUDGET_MS) > 0 ? Number(process.env.ERROR_DIGEST_BUDGET_MS) : 40_000;
+      const afgekapt: string[] = [];
+      const opTijd = (sectie: string) => {
+        if (performance.now() - gestart < budgetMs) return true;
+        afgekapt.push(sectie);
+        return false;
+      };
+
       const allErrors = await getClientErrorsSince(sinceIso);
       // Levenscyclus ("sessie verlopen") en deploy-ruis (chunk-laadfouten die
       // lazyWithRetry al opvangt) horen niet in de mail — zie isDigestRuis.
@@ -509,7 +530,7 @@ export function mountCronRoutes(app: express.Express) {
       // Extra secties van het overzicht (documenten, voertuigen, openstaande
       // diensten) als opsommingen voor de lay-out, in deze volgorde.
       const extraLijsten: Array<{ kop: string; items: string[] }> = [];
-      try {
+      if (opTijd("documenten")) try {
         const [expiries, alleUsers] = await Promise.all([getUserExpiries(), getUsersData()]);
         const actief = new Map(alleUsers.filter((u: any) => u.isActive !== false).map((u: any) => [String(u.id), u]));
         const vandaag = brusselsDay(new Date().toISOString());
@@ -572,7 +593,7 @@ export function mountCronRoutes(app: express.Express) {
       // naar de techniekers (ook een chauffeur met "Ook technieker") en admins
       // (het voertuig heeft geen mailbox) en de mailsectie toont alles binnen
       // 60 dagen. Best-effort.
-      try {
+      if (opTijd("voertuigen")) try {
         const [voertuigExpiries, voertuigen, alleUsers] = await Promise.all([getVehicleExpiries(), getVehicles(), getUsersData()]);
         const perVoertuig = new Map(voertuigen.filter((v) => v.status !== "uit_dienst").map((v) => [v.id, v]));
         const vandaag = brusselsDay(new Date().toISOString());
@@ -615,7 +636,7 @@ export function mountCronRoutes(app: express.Express) {
       // het portaal niet meer te openen om te wéten dat er iets openstaat. Best-
       // effort, mag het dagoverzicht nooit breken. Per gat draait de volledige
       // adviesberekening; cap op 8 zodat de cron niet ontspoort bij een lege maand.
-      try {
+      if (opTijd("openstaande diensten")) try {
         const vandaagBrussel = brusselsDay(new Date().toISOString());
         const dagen = await berekenDekkingsGaten(vandaagBrussel, addDagenIso(vandaagBrussel, 6));
         const gaten = dagen.flatMap((d) => d.missing.map((code) => ({ date: d.date, code })));
@@ -732,10 +753,19 @@ export function mountCronRoutes(app: express.Express) {
         ? `${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).`
         : "";
       // De weekcijfers (vroeger de aparte maandagmail) alleen in het weekoverzicht.
-      const week = weekdag === "elke" ? [] : await weekcijfers().catch((err) => {
+      const week = weekdag === "elke" || !opTijd("weekcijfers") ? [] : await weekcijfers().catch((err) => {
         console.error("[error-digest] weekcijfers mislukt:", err?.message ?? err);
         return [] as Array<{ label: string; waarde: string }>;
       });
+      if (afgekapt.length > 0) {
+        // De secties documenten en voertuigen versturen ook de mijlpaalpushes
+        // (90/30/7/0 resp. 60/30/7/0 dagen); morgen is het 89 of 29, dus wat
+        // vandaag overgeslagen is komt niet "de volgende keer opnieuw".
+        const gevolg = (s: string) => (s === "documenten" || s === "voertuigen"
+          ? "de mijlpaalmeldingen (push) van vandaag zijn daardoor niet verstuurd, kijk het scherm na"
+          : "de volgende keer opnieuw");
+        extraLijsten.push({ kop: "Niet verzameld (tijd op)", items: afgekapt.map((s) => `${s}: overgeslagen, het overzicht had geen tijd meer; ${gevolg(s)}.`) });
+      }
       // g.source/message/lastUrl zijn door de client aangeleverd; de lay-out
       // escapet elke regel, anders is de digest-mail een HTML-injectiekanaal
       // richting de admins.
@@ -757,8 +787,8 @@ export function mountCronRoutes(app: express.Express) {
       // geen SMTP was of de verzending mislukte.
       const verzonden = overzichtVerzending(result);
       console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), ${verzonden.woord}`);
-      await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} ${verzonden.woord}: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
-      res.json({ success: true, count: errors.length, alerted: verzonden.alerted, recipients: recipients.length, mocked: result.mocked, ...(verzonden.reden ? { reason: verzonden.reden } : {}) });
+      await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} ${verzonden.woord}: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s)${afgekapt.length ? `, afgekapt: ${afgekapt.join(", ")}` : ""}.`);
+      res.json({ success: true, count: errors.length, alerted: verzonden.alerted, recipients: recipients.length, mocked: result.mocked, ...(verzonden.reden ? { reason: verzonden.reden } : {}), ...(afgekapt.length ? { afgekapt } : {}) });
     } catch (err: any) {
       console.error("[error-digest] mislukt:", err?.message || err);
       console.error("Digest mislukt", err);

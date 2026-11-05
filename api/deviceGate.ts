@@ -21,10 +21,11 @@ export type DeviceGateVerdict = {
 };
 
 /**
- * Herkent de fout "de user_devices-tabel bestaat nog niet" (migratie niet
- * gedraaid). Alléén dan mag de gate fail-open; elke andere DB-fout is
- * fail-closed. Postgres: 42P01 (undefined_table); PostgREST: PGRST205
- * (schema-cache kent de tabel niet).
+ * Herkent de fout "deze tabel bestaat (nog) niet" (migratie niet gedraaid).
+ * Postgres: 42P01 (undefined_table); PostgREST: PGRST205 (schema-cache kent
+ * de tabel niet). De toestel-gate zelf heeft sinds 05-11 geen aparte tak
+ * meer voor een ontbrekende tabel (user_devices zit in de basismigratie);
+ * de sessiecontrole en de toestelroutes gebruiken dit nog.
  */
 export const isMissingTableError = (err: unknown): boolean => {
   const code = String((err as { code?: unknown })?.code ?? "");

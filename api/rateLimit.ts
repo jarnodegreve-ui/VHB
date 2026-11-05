@@ -374,25 +374,42 @@ export const clientErrorRateLimit = async (req: express.Request, res: express.Re
  */
 const ACTION_WINDOW_MS = num(process.env.RATE_LIMIT_ACTION_WINDOW_MS, 3_600_000); // 1 uur
 const actionLimiters: RateLimiter[] = [];
-export function createActionRateLimit(name: string, max: number) {
+const ACTIE_GEWEIGERD = "Te veel opeenvolgende verzoeken. Probeer het straks opnieuw.";
+/** Het middleware, plus `toets(req)` voor een handler die de limiet pas na
+ *  een eigen controle wil aanspreken (één Upstash-trip, alleen als het moet). */
+export type ActieLimiet = ((req: express.Request, res: express.Response, next: express.NextFunction) => Promise<void>) & {
+  toets: (req: express.Request) => Promise<{ allowed: boolean; retryAfterSec: number }>;
+  weiger: (res: express.Response, retryAfterSec: number) => express.Response;
+};
+export function createActionRateLimit(name: string, max: number): ActieLimiet {
   const local = createRateLimiter({ windowMs: ACTION_WINDOW_MS, max });
   actionLimiters.push(local);
-  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const toets = async (req: express.Request) => {
     const appUser = (req as any).appUser;
     const who = appUser?.id ? `u:${appUser.id}` : `ip:${clientIp(req)}`;
     const key = `act:${name}:${who}`;
-    const { allowed, retryAfterSec } =
-      (await sharedCheck(key, ACTION_WINDOW_MS, max)) ?? local.check(key);
+    return (await sharedCheck(key, ACTION_WINDOW_MS, max)) ?? local.check(key);
+  };
+  const weiger = (res: express.Response, retryAfterSec: number) => {
+    res.setHeader("Retry-After", String(retryAfterSec));
+    return res.status(429).json({ error: ACTIE_GEWEIGERD });
+  };
+  const middleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const { allowed, retryAfterSec } = await toets(req);
     if (!allowed) {
-      res.setHeader("Retry-After", String(retryAfterSec));
-      return res.status(429).json({ error: "Te veel opeenvolgende verzoeken. Probeer het straks opnieuw." });
+      weiger(res, retryAfterSec);
+      return;
     }
     next();
   };
+  return Object.assign(middleware, { toets, weiger });
 }
 
 // Nieuw toestel registreren: ruim voor een normale gebruiker (meerdere
-// telefoons/tablets), streng genoeg tegen token-rotatie-flood.
+// telefoons/tablets), streng genoeg tegen token-rotatie-flood. Niet als
+// middleware op de route (dat kostte bij élke app-start een tweede
+// Upstash-trip voor een bekend token), maar via `toets` in de handler,
+// alleen op het pad van een nieuw token.
 export const deviceRegisterRateLimit = createActionRateLimit("device-register", num(process.env.RATE_LIMIT_DEVICE_MAX, 12));
 // Bedrijfsbreed noodbericht (mail + push naar de hele ploeg): een paar per uur.
 export const urgentEmailRateLimit = createActionRateLimit("urgent-email", num(process.env.RATE_LIMIT_URGENT_MAX, 6));

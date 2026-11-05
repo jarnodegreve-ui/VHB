@@ -71,11 +71,29 @@ if (!process.env.CALENDAR_FEED_SECRET) {
 
 const app = express();
 const PORT = 3000;
+// Geen "X-Powered-By: Express" op elk antwoord: zegt niets nuttigs, wel welk
+// framework draait.
+app.disable("x-powered-by");
 
 // Meetbaarheid: Server-Timing op elk /api-antwoord + één logregel voor trage
 // requests. Als allereerste middleware, zodat ook CORS, body-parsing, de
 // rate-limiter en authenticate in de gemeten tijd zitten. Zie _lib/serverTiming.ts.
 app.use("/api", serverTiming());
+
+// Standaard `Cache-Control: no-store` op elk /api-antwoord (05-11). Zonder
+// header zette Vercel er `public, max-age=0, must-revalidate` op, en Express
+// een zwakke ETag: persoonsgebonden antwoorden (planning, verlof, gebruikers)
+// waren zo in principe door een tussenliggende cache te bewaren. Keuze voor
+// no-store en niet `private, no-cache`: niets aan de clientkant steunt op een
+// 304 of If-None-Match; de datalaag (src/app/data/kern.ts) leest de ETag
+// alleen als vingerafdruk voor "is het antwoord gewijzigd", en die header
+// zet Express ook bij no-store; de service worker bewaart /api/me en
+// /api/planning zelf via cache.put, dat Cache-Control negeert. Een route die
+// zelf een header zet (de agenda-feed met no-cache) overschrijft deze.
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 
 // CORS beperkt tot de eigen origins (prod, Vercel-previews van dit project,
 // lokale dev) i.p.v. wildcard. De app draait same-origin, dus browsers hebben

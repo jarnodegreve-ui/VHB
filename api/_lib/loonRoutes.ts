@@ -379,7 +379,9 @@ export function mountLoonRoutes(app: express.Express) {
     // en zouden de export stil onvolledig maken: die blokkeren net als open
     // dagen. Zelfde bron als het maandraster (planning_matrix_rows), beperkt
     // tot vandaag zodat een lopende maand niet op de toekomst blokkeert.
-    const vandaag = new Date().toISOString().slice(0, 10);
+    // Vandaag op de Brusselse klok: de UTC-dag is tussen middernacht en één
+    // (winter) of twee uur nog gisteren, en dan ontbrak de dag van vandaag.
+    const vandaag = brusselsDay(new Date().toISOString());
     const geopend = new Set(dagen.map((d) => d.datum));
     const nietGeopendeDagen = [...new Set(matrixRows.map((r: any) => String(r.source_date)))]
       .filter((d) => d.startsWith(`${maand}-`) && d <= vandaag && !geopend.has(d))

@@ -1,4 +1,5 @@
 import { db } from "../db.js";
+import { paginatedFetch } from "../storage.js";
 import type { Bevinding, Segment } from "../../shared/dienst.js";
 import type { ImportETWaarschuwing } from "../../shared/dienst/importET.js";
 
@@ -158,12 +159,18 @@ export const deleteImport = async (id: string): Promise<boolean> => {
 };
 
 export const getSegments = async (importId: string, filter: { serviceNumber?: string; dagtypeCode?: string } = {}): Promise<Array<Segment & { id: string; importId: string }>> => {
-  let q = requireDb().from("service_segments").select("*").eq("import_id", importId).order("dagtype_code").order("service_number").order("volgorde").limit(10000);
-  if (filter.serviceNumber) q = q.eq("service_number", filter.serviceNumber);
-  if (filter.dagtypeCode) q = q.eq("dagtype_code", filter.dagtypeCode);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map(toSegment);
+  // Een ET-export telt meer dan 1000 ritdelen (2026: 1234); PostgREST geeft
+  // er per antwoord hoogstens 1000, wat de oude .limit(10000) ook vroeg. Zonder
+  // paginering misten looncomponenten, loonparameters en de afgeleide
+  // looncodes stil de rest. Tiebreak op id: volgorde is per dienst, niet uniek.
+  const client = requireDb();
+  const data = await paginatedFetch((from, to, telling) => {
+    let q = client.from("service_segments").select("*", telling).eq("import_id", importId);
+    if (filter.serviceNumber) q = q.eq("service_number", filter.serviceNumber);
+    if (filter.dagtypeCode) q = q.eq("dagtype_code", filter.dagtypeCode);
+    return q.order("dagtype_code").order("service_number").order("volgorde").order("id").range(from, to);
+  });
+  return data.map(toSegment);
 };
 
 export type DagtypeCode = { code: string; omschrijving: string; periode: string | null; aantalPerJaar: number | null; portaalDagtype: string | null };

@@ -159,7 +159,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
     }
   });
 
-  app.post("/api/devices/register", authenticate, deviceRegisterRateLimit, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/devices/register", authenticate, async (req: AuthenticatedRequest, res) => {
     try {
       const deviceToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
       if (!deviceToken || deviceToken.length > 100) {
@@ -176,6 +176,15 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const mijnToestellen = await listDevicesForUser(String(appUser.id));
       const bekend = mijnToestellen.find((d) => d.deviceToken === deviceToken) ?? null;
       const nieuwToken = !bekend;
+      // De per-uur-limiet alleen voor een nieuw token (05-11): een bekend
+      // token doet enkel een last_seen-update, en als middleware kostte de
+      // limiet bij elke opstart een tweede Upstash-aanroep (regel: één per
+      // request). Vóór de cap, zodat een token-flood ook geteld wordt
+      // wanneer de cap hem al tegenhoudt.
+      if (nieuwToken) {
+        const limiet = await deviceRegisterRateLimit.toets(req);
+        if (!limiet.allowed) return deviceRegisterRateLimit.weiger(res, limiet.retryAfterSec);
+      }
       if (nieuwToken && mijnToestellen.length >= MAX_DEVICES_PER_USER) {
         return res.status(429).json({ error: "Maximum aantal toestellen bereikt. Verwijder eerst een oud toestel." });
       }

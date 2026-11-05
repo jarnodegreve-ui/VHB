@@ -3,7 +3,7 @@ import {
   api,
   mem,
 } from './harnas';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 describe('bulk-wipe-vangrail (PR #71)', () => {
   it('weigert een save die >50% van de diensten zou verwijderen (409)', async () => {
@@ -252,6 +252,37 @@ describe('foutgroepen (fingerprint, groepering, status, regressie)', () => {
     expect(res.status).toBe(200);
     expect(res.json.count).toBe(1);
   });
+
+  it('ook een genegeerde groep voorbij de duizendste statusrij blijft genegeerd (paginering, geen .limit)', async () => {
+    await meld('Ruisfout 1');
+    const fp = mem.clientErrors[0].fingerprint;
+    // 1100 oudere statussen die vóór deze fingerprint sorteren: de echte staat op de tweede pagina.
+    mem.clientErrorStatus = [
+      ...Array.from({ length: 1100 }, (_, i) => ({ fingerprint: `!${String(i).padStart(4, '0')}`, status: 'genegeerd', release: null, bijgewerktOp: null, door: '1' })),
+      { fingerprint: fp, status: 'genegeerd', release: null, bijgewerktOp: null, door: '1' },
+    ];
+    await meld('Echte fout');
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.json.count).toBe(1);
+  });
+});
+
+describe('antwoordheaders (05-11)', () => {
+  it('elk /api-antwoord draagt Cache-Control: no-store en geen X-Powered-By, de ETag-vingerafdruk blijft', async () => {
+    const lijst = await api('GET', '/api/leave', { token: 'tok-a' });
+    expect(lijst.status).toBe(200);
+    expect(lijst.headers.get('cache-control')).toBe('no-store');
+    expect(lijst.headers.get('x-powered-by')).toBeNull();
+    // De datalaag leest de ETag als vingerafdruk (src/app/data/kern.ts); die
+    // zet Express ook bij no-store.
+    expect(lijst.headers.get('etag')).toBeTruthy();
+    // Ook vóór de rate-limiter (health) en op een 404.
+    const health = await api('GET', '/api/health');
+    expect(health.headers.get('cache-control')).toBe('no-store');
+    const weg = await api('GET', '/api/bestaat-niet', { token: 'tok-a' });
+    expect(weg.status).toBe(404);
+    expect(weg.headers.get('cache-control')).toBe('no-store');
+  });
 });
 
 describe('rate limiting', () => {
@@ -357,6 +388,31 @@ describe('beveiliging (controleronde 16-08)', () => {
     // Een reeds bekend token (last_seen-update) mag ondanks de cap.
     const bekend = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'd0', body: { name: 't0' } });
     expect(bekend.status).toBe(200);
+  });
+
+  it('C2, de registratielimiet telt alleen voor een nieuw token, een bekend token raakt Upstash niet (05-11)', async () => {
+    const { deviceRegisterRateLimit } = await import('../../api/rateLimit.js');
+    const toets = vi.spyOn(deviceRegisterRateLimit, 'toets');
+    try {
+      // Een bekend token (elke app-start): de limiet wordt niet eens bevraagd,
+      // dus ook meer dan 12 keer per uur blijft 200.
+      for (let i = 0; i < 13; i++) {
+        expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-ok', body: { name: 'iPhone · app' } })).status).toBe(200);
+      }
+      expect(toets).toHaveBeenCalledTimes(0);
+      // Nieuwe tokens: één toets per registratie, de dertiende binnen het uur is te veel.
+      for (let i = 0; i < 12; i++) {
+        expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: `dev-nieuw-${i}`, body: { name: 'x' } })).status).toBe(200);
+      }
+      const teVeel = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-nieuw-12', body: { name: 'x' } });
+      expect(teVeel.status).toBe(429);
+      expect(teVeel.json.error).toBe('Te veel opeenvolgende verzoeken. Probeer het straks opnieuw.');
+      expect(toets).toHaveBeenCalledTimes(13);
+      // Het bekende token blijft ook dan werken.
+      expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-ok', body: { name: 'iPhone · app' } })).status).toBe(200);
+    } finally {
+      toets.mockRestore();
+    }
   });
 
   it('D, decidedAt is server-gezaghebbend bij een afwijzing via de array-route', async () => {

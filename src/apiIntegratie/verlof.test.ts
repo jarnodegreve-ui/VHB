@@ -1,6 +1,7 @@
 // @vitest-environment node
 import {
   api,
+  KLOK_ISO,
   mem,
 } from './harnas';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -944,5 +945,64 @@ describe('ziekte is geen verlof (Jarno 06-10): geen mail of push naar de chauffe
     expect(res.status).toBe(200);
     expect(await beslisMails()).toBe(1);
     expect(mem.pushesSent.find((p) => p.payload.title === 'Verlof goedgekeurd')?.userIds).toEqual(['4']);
+  });
+});
+
+// Scan 04-11, punt 12. De beslissing toetste de status op een momentopname en
+// schreef daarna de hele rij onvoorwaardelijk: van twee beslissers in hetzelfde
+// venster won de laatste stil en vertrokken beide mails. Nu is de schrijfactie
+// voorwaardelijk op de gelezen status (schrijfLeaveAlsStatus). Het tweede
+// verzoek landt hier echt in het venster van het eerste, via de haak
+// `mem.voorLeaveStatusWissel`, en gaat zelf ook door de echte route.
+describe('verlof: twee beslissers op hetzelfde moment (05-11)', () => {
+  const beslisMails = async () => vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mock.calls.length;
+  const patch = (token: string, body: Record<string, unknown>) => api('PATCH', '/api/leave/l-b1', { token, body });
+
+  beforeEach(async () => {
+    vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mockClear();
+    mem.pushesSent = [];
+    mem.activity = [];
+  });
+
+  it('de afwijzing landt eerst: de goedkeuring krijgt 409 met de verse status, en er vertrekt één mail en één push', async () => {
+    let tweede: { status: number; json: any } | undefined;
+    mem.voorLeaveStatusWissel = async () => { tweede = await patch('tok-admin', { status: 'rejected', ifStatus: 'pending', reden: 'te druk' }); };
+    const eerste = await patch('tok-planner', { status: 'approved', ifStatus: 'pending' });
+    expect(tweede?.status).toBe(200);
+    expect(eerste.status).toBe(409);
+    expect(eerste.json).toEqual({ error: "Deze aanvraag is intussen al 'rejected', de lijst is ververst.", currentStatus: 'rejected' });
+    expect(mem.leave.find((l) => l.id === 'l-b1')).toMatchObject({ status: 'rejected', beslisReden: 'te druk' });
+    expect(await beslisMails()).toBe(1);
+    expect(mem.pushesSent.filter((p) => p.payload.soort === 'verlof')).toEqual([expect.objectContaining({ userIds: ['4'], payload: expect.objectContaining({ title: 'Verlof afgewezen' }) })]);
+    expect(mem.activity.filter((a) => a.entityId === 'l-b1').map((a) => a.action)).toEqual(['Verlof afgewezen']);
+  });
+
+  it('de aanvraag is intussen ingetrokken: 404, niets gemaild', async () => {
+    mem.voorLeaveStatusWissel = () => { mem.leave = mem.leave.filter((l) => l.id !== 'l-b1'); };
+    const res = await patch('tok-planner', { status: 'approved', ifStatus: 'pending' });
+    expect(res.status).toBe(404);
+    expect(await beslisMails()).toBe(0);
+  });
+});
+
+describe('verlof: toelichting begrensd en createdAt van de server (05-11)', () => {
+  const eigen = () => mem.leave.filter((l: any) => l.userId === '3');
+  const aanvraag = (over: Record<string, unknown> = {}) => ({ id: 'l-nieuw', userId: '3', startDate: '2027-12-20', endDate: '2027-12-21', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2000-01-01T00:00:00Z', ...over });
+
+  it('een toelichting van meer dan 1000 tekens wordt geweigerd, 1000 mag', async () => {
+    const teLang = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ comment: 'x'.repeat(1001) })] });
+    expect(teLang.status).toBe(400);
+    expect(teLang.json.error).toBe('De toelichting is te lang (maximaal 1000 tekens).');
+    expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeUndefined();
+    expect((await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ comment: 'x'.repeat(1000) })] })).status).toBe(200);
+  });
+
+  it('createdAt van een nieuwe aanvraag is het servertijdstip; een bestaande rij houdt haar opgeslagen waarde, ook via staf', async () => {
+    expect((await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag()] })).status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'l-nieuw')?.createdAt).toBe(KLOK_ISO);
+    // Staf schrijft de hele lijst: een gemanipuleerd createdAt op l-a1 blijft wat het was.
+    const lijst = mem.leave.map((l: any) => (l.id === 'l-a1' ? { ...l, comment: 'aangepast', createdAt: '1999-01-01T00:00:00Z' } : l));
+    expect((await api('POST', '/api/leave', { token: 'tok-planner', body: lijst })).status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'l-a1')?.createdAt).toBe('2026-06-01T08:00:00Z');
   });
 });

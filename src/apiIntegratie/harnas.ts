@@ -59,6 +59,8 @@ const mem = vi.hoisted(() => ({
   recordLezingFaalt: false,
   // true = Storage antwoordt niet meer bij het oplijsten van een bucket.
   opslagHangt: false,
+  /** Wat de retentie-mock als opgeruimd meldt (null = overal 0, dus geen heartbeat 'retentie'). */
+  retentieUitkomst: null as null | Partial<Record<'clientErrors' | 'activityLog' | 'planningNotes' | 'pushSubscriptions' | 'meldingen' | 'aanwezigheid' | 'mailLog', number>>,
   // Wat de nachtcron in welke volgorde deed: heartbeats en de eerste
   // aanroep van de opruiming.
   cronVolgorde: [] as string[],
@@ -144,6 +146,9 @@ const mem = vi.hoisted(() => ({
     loon_medewerkers: [] as any[],
     dag_afsluitingen: [] as any[],
     dag_prestaties: [] as any[],
+    // Dienstopbouw (api/_lib/dienstStorage.ts) draait hier ook integraal.
+    service_segment_imports: [] as any[],
+    service_segments: [] as any[],
   } as Record<string, any[]>,
   loonVolgnummer: 0,
   // planning_version-teller voor de heropbouw-vangrail: null = niet te lezen
@@ -160,6 +165,8 @@ const mem = vi.hoisted(() => ({
   // de lezing van de handler (en zijn planning-doorvoer) en zijn schrijfactie.
   // Een test laat daar een tweede, echt verzoek landen.
   voorSwapStatusWissel: null as null | ((swapId: string) => Promise<void> | void),
+  // Zelfde haak vóór de voorwaardelijke statuswissel van een verlofaanvraag.
+  voorLeaveStatusWissel: null as null | ((leaveId: string) => Promise<void> | void),
   // Het venster (15-10) als een momentopname van vóór een wijziging: de
   // vensterquery geeft dan deze ruilen terug in plaats van mem.swaps. Zo
   // simuleert een test dat een ruil tussen de vensterlezing en de volledige
@@ -249,7 +256,11 @@ vi.mock('../../api/db.js', () => {
 const POSTGREST_CAP = 1000;
 const LOON_UPSERT_SLEUTEL: Record<string, string> = { loon_codes: 'code', loon_medewerkers: 'user_id' };
 function loonFrom(tabel: string) {
-  if (!(tabel in mem.loonRijen)) throw new Error(`mock-db: onbekende tabel ${tabel}`);
+  // client_error_status leest uit mem.clientErrorStatus (camelCase, zoals de
+  // tests ze zetten), zodat de echte getClientErrorStatuses hier draait;
+  // zonder de migratie gooit de tabel zoals PostgREST.
+  if (tabel === 'client_error_status' && !mem.clientErrorStatusTabel) throw { code: '42P01', message: 'relation "client_error_status" does not exist' };
+  if (tabel !== 'client_error_status' && !(tabel in mem.loonRijen)) throw new Error(`mock-db: onbekende tabel ${tabel}`);
   const vergelijk = (a: any, b: any) => (a === b ? 0 : a === null || a === undefined ? -1 : b === null || b === undefined ? 1 : a < b ? -1 : 1);
   const q: any = {
     _op: 'select',
@@ -276,7 +287,9 @@ function loonFrom(tabel: string) {
     single() { q._single = 2; return q; },
     then(resolve: any, reject: any) { return q._run().then(resolve, reject); },
     async _run() {
-      const alle = mem.loonRijen[tabel];
+      const alle = tabel === 'client_error_status'
+        ? mem.clientErrorStatus.map((r: any) => ({ fingerprint: r.fingerprint, status: r.status, release: r.release ?? null, bijgewerkt_op: r.bijgewerktOp ?? null, door: r.door ?? null }))
+        : mem.loonRijen[tabel];
       const raak = (r: any) => q._filters.every((f: any) => f(r));
       const antwoord = (rijen: any[], extra: Record<string, unknown> = {}) => {
         if (q._single === 2) return rijen.length === 1 ? { data: rijen[0], error: null, ...extra } : { data: null, error: { code: 'PGRST116', message: `verwachtte 1 rij, kreeg ${rijen.length}` }, ...extra };
@@ -505,6 +518,19 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     },
     saveLeaveData: async (data: any[], idsToDelete: string[] = []) => {
       mem.leave = replaceById(mem.leave, data, idsToDelete);
+    },
+    // Zoals de echte: `update ... where id = ? and status = ?`; raakt niets
+    // (false) als de status intussen wisselde. Zie schrijfSwapAlsStatus.
+    schrijfLeaveAlsStatus: async (record: any, verwachteStatus: string) => {
+      const haak = mem.voorLeaveStatusWissel;
+      if (haak) {
+        mem.voorLeaveStatusWissel = null;
+        await haak(String(record.id));
+      }
+      const rij = mem.leave.find((l: any) => String(l.id) === String(record.id));
+      if (!rij || String(rij.status) !== String(verwachteStatus)) return false;
+      mem.leave = mem.leave.map((l: any) => (l === rij ? { ...record } : l));
+      return true;
     },
     getSwapsData: async (filters?: { betrokkenUserId?: string }) => {
       mem.swapFilters.push(filters ?? null);
@@ -744,6 +770,11 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       return [...mem.opslag]
         .filter((k) => k.startsWith(`${bucket}/`))
         .map((k) => ({ naam: k.slice(bucket.length + 1), gewijzigdOp: mem.opslagTijd.get(k) ?? '2026-01-01T00:00:00Z' }));
+    },
+    // Retentie van de nachtcron: alleen de volgorde telt hier.
+    pruneOldRecords: async () => {
+      mem.cronVolgorde.push('opruiming: retentie');
+      return { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0, aanwezigheid: 0, mailLog: 0, ...(mem.retentieUitkomst ?? {}) };
     },
     // De heartbeat van een cron: hier alleen onthouden wat er wanneer kwam.
     // Eén opname voor de mail-tests (mem.hartslagen) en de nachtcron
@@ -1054,8 +1085,6 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     logClientError: async (entry: any) => { mem.clientErrors.push({ id: mem.clientErrors.length + 1, createdAt: new Date().toISOString(), ...entry }); },
     // Zoals de echte functie: nieuwste eerst (created_at desc).
     getClientErrors: async () => [...mem.clientErrors].reverse(),
-    getClientErrorStatuses: async () =>
-      mem.clientErrorStatusTabel ? new Map(mem.clientErrorStatus.map((s: any) => [s.fingerprint, s])) : null,
     setClientErrorStatus: async (record: any) => {
       if (!mem.clientErrorStatusTabel) throw { code: '42P01', message: 'relation "client_error_status" does not exist' };
       mem.clientErrorStatus = [...mem.clientErrorStatus.filter((s: any) => s.fingerprint !== record.fingerprint), record];
@@ -1182,6 +1211,7 @@ beforeEach(() => {
   mem.logLezingFaalt = false;
   mem.recordLezingFaalt = false;
   mem.opslagHangt = false;
+  mem.retentieUitkomst = null;
   mem.cronVolgorde = [];
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
@@ -1266,12 +1296,13 @@ beforeEach(() => {
   mem.userExpiries = [];
   mem.meldingen = [];
   mem.authEmailBezet = null;
-  mem.loonRijen = { loon_codes: [], loon_medewerkers: [], dag_afsluitingen: [], dag_prestaties: [] };
+  mem.loonRijen = { loon_codes: [], loon_medewerkers: [], dag_afsluitingen: [], dag_prestaties: [], service_segment_imports: [], service_segments: [] };
   mem.loonVolgnummer = 0;
   mem.planningVersies = null;
   mem.planningVersieTeller = 0;
   mem.planningVervangenFaalt = false;
   mem.voorSwapStatusWissel = null;
+  mem.voorLeaveStatusWissel = null;
   mem.vensterMomentopname = null;
   mem.swapStatusWissels = [];
   mem.planningVerplaatsenFaalt = null;
