@@ -12,7 +12,7 @@ npm install
 cp .env.example .env.local   # Supabase- en SMTP-waarden invullen
 npm run dev                  # API + Vite-middleware op http://localhost:3000
 npm run test                 # vitest (unit + API-integratie)
-npm run test:e2e             # Playwright (eenmalig: npx playwright install chromium)
+npm run test:e2e             # Playwright (eenmalig: npx playwright install chromium webkit)
 npm run lint                 # tsc --noEmit
 ```
 

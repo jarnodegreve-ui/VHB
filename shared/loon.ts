@@ -13,10 +13,8 @@ export const DIENST_TYPE_LABEL: Record<DienstType, string> = {
 };
 
 export const LOON_CODE_BRONNEN = ['import', 'handmatig', 'segments'] as const;
-export type LoonCodeBron = (typeof LOON_CODE_BRONNEN)[number];
 
 export const DAG_STATUSSEN = ['open', 'afgesloten'] as const;
-export type DagStatus = (typeof DAG_STATUSSEN)[number];
 
 /** De acht kwaliteitsvlaggen van tblDagAdministratie, met NL-label. */
 export const QUAL_VLAGGEN = [

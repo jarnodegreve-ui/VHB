@@ -1,6 +1,6 @@
 # PlanX — VHB-personeelsportaal
 
-Portaal voor het busbedrijf (GitHub-repo `jarnodegreve-ui/VHB`). Vite + React + TS + Tailwind (`src/`), serverless API (`api/`), Supabase. Prod = Vercel-project `vhb` → vhb-five.vercel.app (Pro).
+Portaal voor het busbedrijf (GitHub-repo `jarnodegreve-ui/VHB`). Vite + React + TS + Tailwind (`src/`), serverless API (`api/`), Supabase. Prod = Vercel-project `vhb-portaal` → vhbportaal.com (Pro).
 
 ## Git & sessies
 - **Nooit `git add -A`** — parallelle sessies delen deze working tree (losse WIP). Stage expliciete paden; voor gedeelde bestanden (api/index.ts, vercel.json): aparte git-worktree vanaf origin/main.

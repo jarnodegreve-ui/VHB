@@ -99,15 +99,3 @@ export const bouwHeropbouwPlan = (invoer: {
     totaal,
   };
 };
-
-/** Korte regel voor het logboek en de toast: "3 chauffeurs, 5 dagen (2 erbij, 1 weg, 2 gewijzigd)". */
-export const planSamenvatting = (plan: HeropbouwPlan): string => {
-  if (plan.totaal.chauffeurs === 0) return "geen wijzigingen";
-  const delen = [
-    plan.totaal.erbij > 0 ? `${plan.totaal.erbij} erbij` : "",
-    plan.totaal.weg > 0 ? `${plan.totaal.weg} weg` : "",
-    plan.totaal.gewijzigd > 0 ? `${plan.totaal.gewijzigd} gewijzigd` : "",
-  ].filter(Boolean);
-  return `${plan.totaal.chauffeurs} chauffeur(s), ${plan.totaal.dagen} dag(en) (${delen.join(", ")})`;
-};
-
