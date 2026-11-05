@@ -5,7 +5,7 @@ import { VOERTUIG_STATUS } from '../../../shared/status';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { useRouteParam } from '../../app/router';
 import { formatShortDay } from '../../lib/format';
-import { laadVoertuigWerken, laadVoertuigen, urenTekst, vandaagIso, type Vehicle, type Werkprestatie } from '../../lib/techniek';
+import { laadVoertuigWerken, laadVoertuigen, urenMetEenheid, urenTekst, vandaagIso, type Vehicle, type Werkprestatie } from '../../lib/techniek';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { LegeLijst } from '../../components/illustraties';
 import { OpsStat } from '../../components/ops';
@@ -136,7 +136,7 @@ export function VoertuigWerkenView() {
                 <Card key={datum} padding="none" className="overflow-clip">
                   <div className="flex items-baseline justify-between border-b border-hairline px-5 py-3">
                     <h2 className="text-card-title">{formatShortDay(datum)}</h2>
-                    <span className="text-xs font-medium text-slate-500">{urenTekst(lijst.reduce((s, w) => s + w.werkuren, 0))} u</span>
+                    <span className="text-xs font-medium text-slate-500">{urenMetEenheid(lijst.reduce((s, w) => s + w.werkuren, 0))}</span>
                   </div>
                   <ul className="divide-y divide-hairline-subtle">
                     {lijst.map((w) => (
@@ -152,7 +152,7 @@ export function VoertuigWerkenView() {
                             {w.beginTijd && w.eindeTijd && <span>{w.beginTijd} tot {w.eindeTijd}</span>}
                           </p>
                         </div>
-                        <span className="shrink-0 text-sm font-semibold text-slate-800">{urenTekst(w.werkuren)} u</span>
+                        <span className="shrink-0 text-sm font-semibold text-slate-800">{urenMetEenheid(w.werkuren)}</span>
                       </li>
                     ))}
                   </ul>

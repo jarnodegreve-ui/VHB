@@ -17,14 +17,15 @@ import { useMaandVeeg } from '../lib/useMaandVeeg';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { ActieMenu } from '../components/ActieMenu';
 import { SkeletonRow } from '../components/Skeleton';
-import { cn, telHref } from '../lib/ui';
+import { cn } from '../lib/ui';
+import { planningTelefoon } from '../lib/planningTelefoon';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { formatDuration } from '../lib/shiftTime';
 import { brusselseMinuten, dienstGereden } from '../../shared/dienstGereden';
 import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
-import { formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDateHuman, formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
@@ -107,12 +108,6 @@ function ConflictUitweg({ planningTel, onRuil }: { planningTel?: string; onRuil:
     </div>
   );
 }
-
-/** tel:-link naar de planning: eerste planner met nummer, anders beheerder. */
-const planningTelefoon = (users: User[]): string | undefined => {
-  const kandidaat = users.find((u) => u.role === 'planner' && u.phone?.trim()) ?? users.find((u) => u.role === 'admin' && u.phone?.trim());
-  return telHref(kandidaat?.phone);
-};
 
 export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, planningTot = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; /** Laatste dag waarvoor er planning in het portaal staat (ISO). */ planningTot?: string | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
@@ -348,6 +343,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
                     variant="ghost"
                     size="sm"
                     className="-ml-3"
+                    aria-expanded={showPast}
                     onClick={() => setShowPast((v) => !v)}
                     icon={<ChevronDown size={14} className={uitklapChevron(showPast)} />}
                   >
@@ -517,7 +513,7 @@ function MonthCalendar({
                 key={day}
                 type="button"
                 onClick={() => setSelected(iso)}
-                aria-label={`${iso}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}`}
+                aria-label={`${formatDateHuman(iso)}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}`}
                 title={dayGroups.length > 0 ? `${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : undefined}
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',

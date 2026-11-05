@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
+import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Phone, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell } from '../components/ui';
@@ -26,7 +26,7 @@ import { RuilBekekenBaken } from '../components/RuilBekekenBaken';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
 import { ruilOverzichtQuery, ruilPeriodeFout, standaardRuilPeriode, type RuilPeriode } from '../lib/ruilOverzicht';
-import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
+import { formatDateHuman, formatDatumDMJ, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
@@ -35,8 +35,11 @@ import { AllesGedaan, LegeLijst } from '../components/illustraties';
 import { TableShell, Td, Th } from '../components/TabelBasis';
 import { RecordOnbekend } from '../components/RecordOnbekend';
 import { useRecordLink } from '../app/useRecordLink';
+import { useCollectieStaat } from '../app/collectieStaat';
 import { brengRecordInBeeld } from '../lib/recordLink';
 import { citaat } from '../../shared/tekst';
+import { planningTelefoon } from '../lib/planningTelefoon';
+import { navigeer } from '../app/router';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
@@ -224,6 +227,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [selectedTargetDriver, user.id]);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
+  // Laadfout van de ruilen (chauffeur: uitgesteld geladen) is geen lege staat:
+  // dan een Foutkaart met Opnieuw proberen, nooit "Nog geen ruilverzoeken".
+  const laad = useCollectieStaat('swaps');
+  const foutkaart = <Foutkaart compact boodschap={laad.fout ?? 'De dienstruilen konden niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />;
+  // Bel-link voor "Vraag de planning om hulp" in de wizard, zelfde bron als het rooster.
+  const planningTel = useMemo(() => planningTelefoon(users), [users]);
   const isAdmin = user.role === 'admin';
   /** Naam bij een id, voor het verloop per persoon (RuilVerloop). */
   const naamVan = (id: string) => users.find((u) => u.id === id)?.name;
@@ -756,7 +765,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
-          {mijnLijst.getoond > 0 ? (
+          {laad.foutZonderData ? foutkaart : mijnLijst.getoond > 0 ? (
             /* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
                in plaats van een stapel losse kaarten, de dag als titel
                (daaraan herken je de ruil), de dienst eronder. De lijst groeit
@@ -845,7 +854,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
         <div className="space-y-4">
           <MicroLabel className="ml-1">Openstaande dienstruilen</MicroLabel>
-          {availableSwaps.length > 0 ? isPlanner ? (
+          {laad.foutZonderData ? foutkaart : availableSwaps.length > 0 ? isPlanner ? (
             /* Staf ziet hier ELKE open ruil, ook die tussen twee collega's. Met
                een kaart per ruil was deze kolom onoverzichtelijk (Jarno 14-10:
                "veel kleinere tegeltjes, gewoon de naam van beide chauffeurs").
@@ -1316,8 +1325,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}
                 {wizardStep === 1 && (
                   myShifts.length === 0 ? (
-                    <Card tone="warning" padding="none" className="px-4 py-3 text-sm font-medium text-amber-800">
-                      Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Via Systeemstatus kan je een fictieve testdienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
+                    <Card tone="warning" padding="none" className="space-y-2.5 px-4 py-3 text-sm font-medium text-amber-800">
+                      <p>Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Via Systeemstatus kan je een fictieve testdienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}</p>
+                      {/* Dezelfde uitweg als bij een verlof-conflict in het rooster: bellen
+                          als een planner een nummer heeft, anders de weg naar Contacten. */}
+                      {!isPlanner && (planningTel
+                        ? <Button variant="secondary" size="sm" icon={<Phone size={14} />} onClick={() => { window.location.href = planningTel; }}>Bel de planning</Button>
+                        : <Button variant="secondary" size="sm" icon={<Phone size={14} />} onClick={() => navigeer('contacten')}>Contacten</Button>)}
                     </Card>
                   ) : (
                     <div className="space-y-2" data-fout={wizardFouten.fouten.dienst ? '' : undefined}>
@@ -1396,7 +1410,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {freeForDate && freeCount === 0 && (
                           <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)}, je kan wel met een collega die rijdt 1-op-1 ruilen.</p>
                         )}
-                        <p className="text-xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven; met een collega die die dag rijdt, ruil je 1-op-1.</p>
+                        <p className="text-xs font-medium text-slate-500">{citaat('Vrij')} = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven; met een collega die die dag rijdt, ruil je 1-op-1.</p>
                       </>
                     )}
                   </>
@@ -1684,7 +1698,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         onClose={() => setHistorySwap(null)}
         entityType="swap"
         entityId={historySwap?.id ?? ''}
-        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'}, ${shifts.find((s) => s.id === historySwap.shiftId)?.date ?? ''}` : undefined}
+        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'}, ${formatDatumDMJ(shifts.find((s) => s.id === historySwap.shiftId)?.date)}` : undefined}
       />
     </PageShell>
   );

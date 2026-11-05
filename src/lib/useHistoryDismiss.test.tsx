@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useHistoryDismiss } from './useHistoryDismiss';
+import { useHistoryDismiss } from './lagen';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

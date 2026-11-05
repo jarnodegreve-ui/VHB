@@ -281,3 +281,115 @@ describe('Gebruikers: uitnodigen', () => {
     window.removeEventListener('vhb-toast', opToast);
   });
 });
+
+// Vervaldata (Code 95, medische schifting) komen uit een aparte GET. Opende
+// de planner Bewerken vóór dat antwoord binnen was, dan bleef de draft leeg
+// en stuurde Opslaan voor elke soort validUntil: null: de vervaldata werden
+// stil gewist (controle 04-11). Nu staan de velden uit tot ze geladen zijn,
+// zaait de draft alsnog zodra ze binnen zijn, en slaat Opslaan ze over
+// zolang ze onbekend zijn.
+describe('Gebruikers: vervaldata die pas na het openen van Bewerken binnenkomen', () => {
+  const saveUser = () => (dataCtx as unknown as { saveUser: ReturnType<typeof vi.fn> }).saveUser;
+  const putsNaar = (pad: string) => apiFetchMock.mock.calls.filter(([url, init]) => url === pad && (init as RequestInit | undefined)?.method === 'PUT');
+  const bewerk = async (naam: string) => {
+    const rij = screen.getAllByText(naam).map((el) => el.closest('tr')).find((tr): tr is HTMLTableRowElement => tr !== null)!;
+    await act(async () => { fireEvent.click(within(rij).getByRole('button', { name: 'Bewerken' })); });
+    return screen.findByRole('dialog');
+  };
+  /** GET /api/user-expiries blijft hangen tot de test hem vrijgeeft. */
+  const vervaldataLaterMet = (rows: Array<{ userId: string; soort: string; validUntil: string }>) => {
+    let geef!: () => void;
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url === '/api/user-expiries') return new Promise<Response>((r) => { geef = () => r(Response.json(rows)); });
+      return Promise.resolve(new Response('[]', { status: 200 }));
+    });
+    return () => act(async () => { geef(); });
+  };
+
+  beforeEach(() => zetBreedte(1280));
+
+  it('de velden staan uit tot de vervaldata er zijn en tonen dan de bewaarde datum', async () => {
+    const geefVervaldata = vervaldataLaterMet([{ userId: CHAUFFEUR.id, soort: 'code95', validUntil: '2027-03-01' }]);
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(CHAUFFEUR.name);
+    const code95 = within(dialoog).getByLabelText('Code 95') as HTMLInputElement;
+    expect(code95.disabled).toBe(true);
+    expect(within(dialoog).getByText(/nog niet geladen/)).toBeTruthy();
+
+    await geefVervaldata();
+    await waitFor(() => expect(code95.disabled).toBe(false));
+    expect(code95.value).toBe('01/03/2027');
+  });
+
+  it('Opslaan vóór de vervaldata binnen zijn: de gebruiker wordt bewaard, de vervaldata blijven onaangeroerd', async () => {
+    vervaldataLaterMet([{ userId: CHAUFFEUR.id, soort: 'code95', validUntil: '2027-03-01' }]);
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(CHAUFFEUR.name);
+    await act(async () => { fireEvent.click(within(dialoog).getByRole('button', { name: 'Opslaan' })); });
+    await waitFor(() => expect(saveUser()).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // De lus over de soorten wordt overgeslagen zolang de vervaldata onbekend zijn.
+    expect(putsNaar('/api/user-expiries')).toHaveLength(0);
+  });
+
+  it('na het laden gaat alleen een echt gewijzigde soort naar de server (vroeger ook Code 95 met null)', async () => {
+    const geefVervaldata = vervaldataLaterMet([{ userId: CHAUFFEUR.id, soort: 'code95', validUntil: '2027-03-01' }]);
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(CHAUFFEUR.name);
+    await geefVervaldata();
+    const schifting = within(dialoog).getByLabelText('Medische schifting') as HTMLInputElement;
+    await waitFor(() => expect(schifting.disabled).toBe(false));
+    fireEvent.change(schifting, { target: { value: '15/06/2027' } });
+    fireEvent.blur(schifting);
+    await act(async () => { fireEvent.click(within(dialoog).getByRole('button', { name: 'Opslaan' })); });
+    await waitFor(() => expect(saveUser()).toHaveBeenCalled());
+    await waitFor(() => expect(putsNaar('/api/user-expiries')).toHaveLength(1));
+    expect(JSON.parse(String(putsNaar('/api/user-expiries')[0][1].body))).toEqual({ userId: CHAUFFEUR.id, soort: 'medische_schifting', validUntil: '2027-06-15' });
+  });
+});
+
+// Meldingen en toestellen komen uit twee aparte GET's. Vroeger toonde de lijst
+// meteen "Uit" en 0, ook vóór die antwoorden er waren of als ze mislukten:
+// "Uit" las dan als "hij krijgt niets". Nu een plaatshouder tot ze binnen
+// zijn, en "onbekend" als het laden mislukt (controle 04-11).
+describe('Gebruikers: meldingen en toestellen pas tonen als de lijsten binnen zijn', () => {
+  beforeEach(() => zetBreedte(1280));
+  /** De waarde onder elk kopje Toestellen (kaarten op de telefoon), zonder de kolomkop van de tabel. */
+  const toestellenKaarten = () => screen.getAllByText('Toestellen').filter((el) => !el.closest('th')).map((el) => el.nextElementSibling?.textContent ?? '');
+
+  it('zolang de antwoorden uitblijven: geen Uit, geen 0 en geen teller in de kop', () => {
+    const hangend = new Promise<Response>(() => {});
+    apiFetchMock.mockImplementation((url: string) => ((url === '/api/push/subscribers' || url === '/api/devices') ? hangend : Promise.resolve(new Response('[]', { status: 200 }))));
+    render(<ManageUsersView currentUser={ADMIN} />);
+    expect(screen.queryByText('Uit')).toBeNull();
+    expect(screen.queryByText('Meldingen uit')).toBeNull();
+    expect(screen.queryByText(/van \d+ met meldingen/)).toBeNull();
+    expect(toestellenKaarten().every((t) => t === '')).toBe(true);
+  });
+
+  it('binnen: Aan/Uit per rij, de teller in de kop en het aantal goedgekeurde toestellen', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/push/subscribers') return Response.json({ userIds: [PLANNER.id] });
+      if (url === '/api/devices') return Response.json([{ userId: CHAUFFEUR.id, status: 'approved' }, { userId: CHAUFFEUR.id, status: 'approved' }, { userId: PLANNER.id, status: 'pending' }]);
+      return new Response('[]', { status: 200 });
+    });
+    render(<ManageUsersView currentUser={ADMIN} />);
+    // Actieve medewerkers: admin, planner en chauffeur (de gepauzeerde telt niet mee).
+    await screen.findByText('1 van 3 met meldingen');
+    expect(screen.getAllByText('Aan')).toHaveLength(1);
+    expect(screen.getAllByText('Meldingen aan')).toHaveLength(1);
+    expect(screen.getAllByText('Uit')).toHaveLength(3);
+    const kaart = screen.getAllByText(CHAUFFEUR.name).find((el) => !el.closest('tr'))!.closest('.p-5') as HTMLElement;
+    expect(within(kaart).getByText('2')).toBeTruthy();
+  });
+
+  it('mislukt het laden: onbekend, niet Uit en niet 0', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => ((url === '/api/push/subscribers' || url === '/api/devices') ? new Response('{}', { status: 500 }) : new Response('[]', { status: 200 })));
+    render(<ManageUsersView currentUser={ADMIN} />);
+    await screen.findByText('Meldingen niet geladen');
+    expect(screen.queryByText('Uit')).toBeNull();
+    expect(screen.queryByText('Meldingen uit')).toBeNull();
+    expect(screen.getAllByText('Onbekend').length).toBe(USERS.length);
+    await waitFor(() => expect(toestellenKaarten().every((t) => t === 'onbekend')).toBe(true));
+  });
+});

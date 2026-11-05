@@ -232,7 +232,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-sm font-semibold text-slate-800">Laadpunt {nummer}{bus ? ` · bus ${bus}` : ''}</span>
-                      {st.soc !== null && <Badge tone={st.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono">{st.soc} %</Badge>}
+                      {st.soc !== null && <Badge tone={st.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono">{metEenheid(st.soc, '%')}</Badge>}
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
                       sinds {tijdstipKort(s.start_date_time)}{typeof s.kwh === 'number' ? ` · ${tekstKwh(s.kwh)} geladen` : ''}
@@ -284,7 +284,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                                   <span className="flex shrink-0 items-center gap-1.5">
                                     <span className="w-11 shrink-0 text-sm font-semibold font-mono text-slate-700">{evse.evse_id ?? evse.uid}</span>
                                     <span className="w-14 shrink-0 text-xs font-medium font-mono text-slate-600">{busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}</span>
-                                    {s.soc !== null && <Badge tone={s.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono">{s.soc} %</Badge>}
+                                    {s.soc !== null && <Badge tone={s.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono">{metEenheid(s.soc, '%')}</Badge>}
                                   </span>
                                   <Badge tone={s.vol ? 'emerald' : statusTone(evse.status)} dot stil={s.vol || stilStatus(statusTone(evse.status))} className="shrink-0 whitespace-nowrap">
                                     {s.label ?? statusLabel(evse.status)}

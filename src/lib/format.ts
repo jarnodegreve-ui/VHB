@@ -4,6 +4,25 @@
  * verschillende schermen drie formaten door elkaar, incl. rauw ISO
  * ("2026-07-18") — dit is de enige plek die daarover beslist.
  */
+import { vandaagBrussel } from './brussel';
+
+/**
+ * De kalenderdag ('YYYY-MM-DD') van een waarde die een dag óf een tijdstip
+ * kan zijn. Een tijdstip met zone (Z of offset, zo slaat de server ze op)
+ * gaat eerst naar de Brusselse dag: '2026-11-04T23:30:00.000Z' is bij ons al
+ * 5 november, en de oude knip op tien tekens toonde tussen 00u en 01u
+ * (winter) of 02u (zomer) de dag ervoor. Een zuivere dag of een zone-loze
+ * waarde is al wandkloktijd en blijft zoals hij is (zelfde regel als
+ * momentDelen hieronder).
+ */
+function kalenderDag(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value) && /(Z|[+-]\d{2}:?\d{2})$/.test(value)) {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return vandaagBrussel(d);
+  }
+  return value.slice(0, 10);
+}
+
 /**
  * Datum + tijd in Belgische tijd ("vr 18 juli, 14:32"). Verwacht een
  * ISO-timestamp; oudere niet-ISO-waarden (bv. al opgeslagen nl-BE-strings)
@@ -82,7 +101,7 @@ export const hoofdletter = (s: string): string => (s ? s.charAt(0).toUpperCase()
 
 export function formatDateHuman(iso: string | undefined | null): string {
   if (!iso) return '';
-  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  const d = new Date(`${kalenderDag(String(iso))}T00:00:00`);
   if (Number.isNaN(d.getTime())) return String(iso);
   const sameYear = d.getFullYear() === new Date().getFullYear();
   try {
@@ -106,7 +125,7 @@ export function formatDateHuman(iso: string | undefined | null): string {
  */
 export function formatDatumDMJ(iso: string | undefined | null): string {
   if (!iso) return '';
-  const s = String(iso).slice(0, 10);
+  const s = kalenderDag(String(iso));
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
 }
@@ -282,7 +301,8 @@ export function formatRelatief(iso: string | undefined | null, nu: number = Date
   const dagen = Math.round(sec / 86_400);
   if (dagen === 1) return 'gisteren';
   if (dagen < 14) return `${dagen} d geleden`;
-  return formatDateHuman(String(iso).slice(0, 10));
+  // Het tijdstip zelf doorgeven: formatDateHuman kiest de Brusselse dag.
+  return formatDateHuman(String(iso));
 }
 
 /**

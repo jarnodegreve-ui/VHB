@@ -82,12 +82,22 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
 
         {zichtbaar.length === 0 ? (
           <div className="px-4 py-3">
-            <EmptyState
-              kaal
-              title={historiek ? 'Geen meldingen gevonden' : 'Geen meldingen in deze selectie'}
- message={historiek ? 'Pas de zoekopdracht aan.' : 'Kies een ander filter om de overige registraties te bekijken.'}
-              action={meldingen.length > 0 ? <Button size="sm" onClick={wisFilters}>Toon alle meldingen</Button> : undefined}
-            />
+            {/* Niets gemeld is iets anders dan niets gevonden: zonder meldingen
+                valt er geen zoekopdracht of filter aan te passen. */}
+            {meldingen.length === 0 ? (
+              <EmptyState
+                kaal
+                title={historiek ? 'Nog geen eerdere ziekmeldingen' : 'Niemand is ziek gemeld'}
+                message={historiek ? 'Afgesloten registraties komen hier te staan.' : 'Een nieuwe melding registreer je met de knop Ziek melden.'}
+              />
+            ) : (
+              <EmptyState
+                kaal
+                title={historiek ? 'Geen meldingen gevonden' : 'Geen meldingen in deze selectie'}
+                message={historiek ? 'Pas de zoekopdracht aan.' : 'Kies een ander filter om de overige registraties te bekijken.'}
+                action={<Button size="sm" onClick={wisFilters}>Toon alle meldingen</Button>}
+              />
+            )}
           </div>
         ) : (
           <>

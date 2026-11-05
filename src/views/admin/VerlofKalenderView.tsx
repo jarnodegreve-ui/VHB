@@ -16,7 +16,8 @@ import { DetailPaneel } from '../../components/DetailPaneel';
 import { MaandNavigatie } from '../../components/MaandNavigatie';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { aanvragerNaam, useVerlofLimieten, VerlofBeoordelingInhoud, VerlofBeoordelingKnoppen } from '../../components/VerlofBeoordeling';
-import { formatDateHuman, formatDayLong, formatPeriodeDMJ, MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_SHORT_MON } from '../../lib/format';
+import { formatDateHuman, formatDayLong, formatPeriodeDMJ, hoofdletter, MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_SHORT_MON } from '../../lib/format';
+import { BEZETTING_LABEL, bezettingVanDag } from '../../lib/verlofBezetting';
 import { useRouteParam } from '../../app/router';
 import { limietVoorDag } from '../../../shared/schemas/verlofLimieten';
 import { AANVRAAG_STATUS, statusLabel } from '../../../shared/status';
@@ -189,7 +190,9 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
     return !u || teltInVerlofbezetting(u);
   }).length;
   const dagLimiet = gekozenDag ? limietVoorDag(limieten, gekozenDag) : 0;
-  const dagBezetting: 'vrij' | 'deels' | 'volzet' = dagBezet <= 0 ? 'vrij' : dagBezet < dagLimiet ? 'deels' : 'volzet';
+  // Zelfde regel als het verlofscherm (src/lib/verlofBezetting.ts): limiet 0
+  // is "geen verlof mogelijk", niet groen en niet volzet (04-11, punt 36).
+  const dagBezetting = bezettingVanDag(dagBezet, dagLimiet);
   const beoordeel = useMemo(
     () => (beoordeelId ? leaveRequests.find((r) => r.id === beoordeelId) ?? null : null),
     [beoordeelId, leaveRequests],
@@ -280,11 +283,11 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
         title={beoordeel ? aanvragerNaam(users, beoordeel) : dagTitel || 'Dag'}
         subtitle={beoordeel
           ? `Aangevraagd op ${formatDateHuman(beoordeel.createdAt)}`
-          : gekozenDag ? `${dagBezet} van ${dagLimiet} afwezig volgens de verloflimiet` : undefined}
+          : gekozenDag ? (dagBezetting === 'geen' ? 'Geen verlof mogelijk op deze dag volgens de verloflimiet' : `${dagBezet} van ${dagLimiet} afwezig volgens de verloflimiet`) : undefined}
         icon={beoordeel ? <Avatar naam={aanvragerNaam(users, beoordeel)} size="lg" /> : undefined}
         chip={!beoordeel && gekozenDag ? (
-          <Badge tone={dagBezetting === 'volzet' ? 'red' : dagBezetting === 'deels' ? 'amber' : 'emerald'} stil={dagBezetting !== 'volzet'} dot={dagBezetting === 'volzet'}>
-            {dagBezetting === 'volzet' ? 'Volzet' : dagBezetting === 'deels' ? 'Deels vrij' : 'Vrij'}
+          <Badge tone={dagBezetting === 'volzet' ? 'red' : dagBezetting === 'deels' ? 'amber' : dagBezetting === 'geen' ? 'slate' : 'emerald'} stil={dagBezetting !== 'volzet'} dot={dagBezetting === 'volzet'}>
+            {hoofdletter(BEZETTING_LABEL[dagBezetting])}
           </Badge>
         ) : undefined}
         footer={beoordeel ? (
