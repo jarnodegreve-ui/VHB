@@ -347,3 +347,49 @@ describe('Gebruikers: vervaldata die pas na het openen van Bewerken binnenkomen'
     expect(JSON.parse(String(putsNaar('/api/user-expiries')[0][1].body))).toEqual({ userId: CHAUFFEUR.id, soort: 'medische_schifting', validUntil: '2027-06-15' });
   });
 });
+
+// Meldingen en toestellen komen uit twee aparte GET's. Vroeger toonde de lijst
+// meteen "Uit" en 0, ook vóór die antwoorden er waren of als ze mislukten:
+// "Uit" las dan als "hij krijgt niets". Nu een plaatshouder tot ze binnen
+// zijn, en "onbekend" als het laden mislukt (controle 04-11).
+describe('Gebruikers: meldingen en toestellen pas tonen als de lijsten binnen zijn', () => {
+  beforeEach(() => zetBreedte(1280));
+  /** De waarde onder elk kopje Toestellen (kaarten op de telefoon), zonder de kolomkop van de tabel. */
+  const toestellenKaarten = () => screen.getAllByText('Toestellen').filter((el) => !el.closest('th')).map((el) => el.nextElementSibling?.textContent ?? '');
+
+  it('zolang de antwoorden uitblijven: geen Uit, geen 0 en geen teller in de kop', () => {
+    const hangend = new Promise<Response>(() => {});
+    apiFetchMock.mockImplementation((url: string) => ((url === '/api/push/subscribers' || url === '/api/devices') ? hangend : Promise.resolve(new Response('[]', { status: 200 }))));
+    render(<ManageUsersView currentUser={ADMIN} />);
+    expect(screen.queryByText('Uit')).toBeNull();
+    expect(screen.queryByText('Meldingen uit')).toBeNull();
+    expect(screen.queryByText(/van \d+ met meldingen/)).toBeNull();
+    expect(toestellenKaarten().every((t) => t === '')).toBe(true);
+  });
+
+  it('binnen: Aan/Uit per rij, de teller in de kop en het aantal goedgekeurde toestellen', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/push/subscribers') return Response.json({ userIds: [PLANNER.id] });
+      if (url === '/api/devices') return Response.json([{ userId: CHAUFFEUR.id, status: 'approved' }, { userId: CHAUFFEUR.id, status: 'approved' }, { userId: PLANNER.id, status: 'pending' }]);
+      return new Response('[]', { status: 200 });
+    });
+    render(<ManageUsersView currentUser={ADMIN} />);
+    // Actieve medewerkers: admin, planner en chauffeur (de gepauzeerde telt niet mee).
+    await screen.findByText('1 van 3 met meldingen');
+    expect(screen.getAllByText('Aan')).toHaveLength(1);
+    expect(screen.getAllByText('Meldingen aan')).toHaveLength(1);
+    expect(screen.getAllByText('Uit')).toHaveLength(3);
+    const kaart = screen.getAllByText(CHAUFFEUR.name).find((el) => !el.closest('tr'))!.closest('.p-5') as HTMLElement;
+    expect(within(kaart).getByText('2')).toBeTruthy();
+  });
+
+  it('mislukt het laden: onbekend, niet Uit en niet 0', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => ((url === '/api/push/subscribers' || url === '/api/devices') ? new Response('{}', { status: 500 }) : new Response('[]', { status: 200 })));
+    render(<ManageUsersView currentUser={ADMIN} />);
+    await screen.findByText('Meldingen niet geladen');
+    expect(screen.queryByText('Uit')).toBeNull();
+    expect(screen.queryByText('Meldingen uit')).toBeNull();
+    expect(screen.getAllByText('Onbekend').length).toBe(USERS.length);
+    await waitFor(() => expect(toestellenKaarten().every((t) => t === 'onbekend')).toBe(true));
+  });
+});
