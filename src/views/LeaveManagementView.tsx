@@ -39,6 +39,7 @@ import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
 import { uitersteVerlofdag, verlofGrensMelding } from '../../shared/verlofGrens';
 import { vandaagBrussel } from '../lib/brussel';
+import { BEZETTING_LABEL, bezettingVanDag } from '../lib/verlofBezetting';
 import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
 
 
@@ -47,17 +48,13 @@ import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, Verlo
 // een registratie die de planning meteen raakt, en ze komt telefonisch binnen
 // tijdens de rit — dus hoort ze in de cockpit, niet achter een menu-item dat
 // verder over aanvragen beoordelen gaat.
-/**
- * Bezetting van een kalenderdag in de verlofkalender (kleuren en titels
- * gekozen door Jarno 08-09): groen = vrij (niemand goedgekeurd afwezig),
- * oranje = deels vrij, rood = volzet. Volzet zodra de verloflimiet van die
- * dag bereikt is. Die limiet was een vaste 2; sinds 09-09 stelt de admin
- * hem in (standaard + uitzonderingsperiodes, bv. zomervakantie hoger), zie
- * shared/schemas/verlofLimieten.ts en de knop "Limieten" hierboven.
- */
-type Bezetting = 'vrij' | 'deels' | 'volzet';
-const bezettingVanDag = (afwezig: number, limiet: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < limiet ? 'deels' : 'volzet');
-const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
+// De bezetting per dag (vrij, deels vrij, volzet, geen verlof mogelijk) staat
+// in src/lib/verlofBezetting.ts; de legende hieronder volgt dezelfde vier.
+// De stip in de dagcel is één kleur per staat, met de tekst in aria-label
+// en title, zodat de staat nooit alleen aan de kleur te lezen is.
+const BEZETTING_STIP: Record<ReturnType<typeof bezettingVanDag>, string> = {
+  geen: 'bg-slate-400', vrij: 'bg-emerald-500', deels: 'bg-amber-500', volzet: 'bg-red-500',
+};
 
 const VERLEDEN_MELDING = 'Je kan geen verlof aanvragen in het verleden.';
 
@@ -707,6 +704,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 <Badge tone="emerald" stil>Vrij</Badge>
                 <Badge tone="amber" stil>Deels vrij</Badge>
                 <Badge tone="red" stil>Volzet</Badge>
+                <Badge tone="slate" stil>Geen verlof mogelijk</Badge>
                 {isPlanner && (
                   <span className="text-xs font-medium text-slate-500">
                     Limiet {limieten.standaard} tegelijk{limieten.periodes.length > 0 ? `, ${limieten.periodes.length} uitzonderingsperiode${limieten.periodes.length === 1 ? '' : 's'}` : ''}
@@ -722,7 +720,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 const occupancyCount = bezettingOp(dateStr);
                 const limiet = limietVoorDag(limieten, dateStr);
                 const bezetting = bezettingVanDag(occupancyCount, limiet);
-                const statusColor = bezetting === 'volzet' ? 'bg-red-500' : bezetting === 'deels' ? 'bg-amber-500' : 'bg-emerald-500';
+                const statusColor = BEZETTING_STIP[bezetting];
+                const bezettingTekst = `${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 && bezetting !== 'geen' ? `, ${occupancyCount} van ${limiet} afwezig` : ''}`;
                 const isSelected = selectedDate === dateStr;
                 const isInDraftRange = isDateWithinDraftRange(dateStr);
                 const isDraftEdge = isDraftBoundary(dateStr);
@@ -731,7 +730,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <button
                     key={day}
                     onClick={() => handleCalendarDateClick(dateStr)}
-                    aria-label={`${day}: ${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 ? `, ${occupancyCount} van ${limiet} afwezig` : ''}`}
+                    aria-label={`${day}: ${bezettingTekst}`}
+                    title={bezettingTekst}
                     className={cn(
                       'aspect-square rounded-2xl border transition-colors flex flex-col items-center justify-center relative group',
                       // Gekozen dag en getekend bereik = neutraal (punt 4): gedempt vlak, hairline-ladder, carbon cijfer.
