@@ -110,6 +110,8 @@ const metRuilRust = async <T extends { id: string }>(swaps: T[], staf: boolean, 
 
 /** Verwijdert de snake_case-databasealiassen uit een client-swaprecord, zodat
  *  alleen de camelCase-API-velden overblijven (zie toPublicSwap in helpers). */
+/** Bovengrens van de vrije reden bij een ruilverzoek (zoals de toelichting bij verlof). */
+const MAX_REDEN = 1000;
 const SWAP_DB_ALIASSEN = ["shiftid", "requesterid", "targetdriverid", "createdat", "decidedat", "return_date", "return_code", "swap_type", "shift_date", "shift_line", "target_seen_at"] as const;
 
 const stripSwapAliassen = (record: any): any => {
@@ -1186,6 +1188,7 @@ export function mountRuilRoutes(app: express.Express) {
       // nieuw = server-side uit de planning-rij, bestaand = opgeslagen waarde —
       // dit is de sleutel voor de automatische planning-doorvoer hieronder.
       const finalRecords: any[] = [];
+      const nu = new Date().toISOString();
       for (const rauw of recordsToWrite) {
         // Alleen de bekende camelCase-velden gaan door. saveSwapsData haalt de
         // records door toPublicSwap, en die valt voor élk veld terug op de
@@ -1196,6 +1199,10 @@ export function mountRuilRoutes(app: express.Express) {
         // (security-audit 07-09, bevinding 4).
         const n = stripSwapAliassen(rauw);
         const prev = previousById.get(String(n.id));
+        // Vrije tekst begrensd (05-11): de reden komt in mails, pushes en het log.
+        if ((!prev || String(prev.reason ?? "") !== String(n.reason ?? "")) && String(n.reason ?? "").length > MAX_REDEN) {
+          return res.status(400).json({ error: `De reden is te lang (maximaal ${MAX_REDEN} tekens).` });
+        }
         let shiftDate = prev?.shiftDate;
         let shiftLine = prev?.shiftLine;
         if (!prev) {
@@ -1244,6 +1251,9 @@ export function mountRuilRoutes(app: express.Express) {
           swapType: normalizeSwapType(prev ? prev.swapType : n.swapType),
           shiftDate,
           shiftLine,
+          // createdAt is van de server (05-11): nieuw = nu, bestaand = de
+          // opgeslagen waarde (voor een niet-open ruil bevroor dat al).
+          createdAt: prev ? (prev.createdAt ?? nu) : nu,
           decidedAt: decidedAtDef,
           // Gezien-bevestiging is nooit client-schrijfbaar via deze route: de
           // opgeslagen waarde wint altijd (nieuw record = nog niet bevestigd).

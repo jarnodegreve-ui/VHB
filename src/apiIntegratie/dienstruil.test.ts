@@ -2406,3 +2406,30 @@ describe('ruiloverzicht op dienstdatum (GET /api/swaps/uitgevoerd?op=dienst)', (
     expect(teLang.json.error).toMatch(/366 dagen/);
   });
 });
+
+describe('dienstruil: reden begrensd en createdAt van de server (05-11)', () => {
+  const nieuw = (over: Record<string, unknown> = {}) => ({
+    id: 's-nieuw', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+    reason: 'even weg', createdAt: '2000-01-01T00:00:00Z', returnDate: '2026-07-09', returnCode: 'VRIJ', ...over,
+  });
+  beforeEach(() => {
+    mem.planning = [
+      { id: 'sh-a', driverId: '3', date: '2026-07-01', line: '12' },
+      { id: 'sh-c', driverId: '3', date: '2026-07-08', line: '13' },
+    ];
+    mem.swaps = [{ id: 's-1', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-01T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
+  });
+
+  it('een reden van meer dan 1000 tekens wordt geweigerd', async () => {
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...mem.swaps, nieuw({ reason: 'x'.repeat(1001) })] });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('De reden is te lang (maximaal 1000 tekens).');
+    expect(mem.swaps.map((s: any) => s.id)).not.toContain('s-nieuw');
+  });
+
+  it('createdAt van een nieuwe ruil is het servertijdstip, niet wat de client meestuurt', async () => {
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...mem.swaps, nieuw()] });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-nieuw')?.createdAt).toBe(KLOK_ISO);
+  });
+});

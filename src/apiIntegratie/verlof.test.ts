@@ -1,6 +1,7 @@
 // @vitest-environment node
 import {
   api,
+  KLOK_ISO,
   mem,
 } from './harnas';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -981,5 +982,27 @@ describe('verlof: twee beslissers op hetzelfde moment (05-11)', () => {
     const res = await patch('tok-planner', { status: 'approved', ifStatus: 'pending' });
     expect(res.status).toBe(404);
     expect(await beslisMails()).toBe(0);
+  });
+});
+
+describe('verlof: toelichting begrensd en createdAt van de server (05-11)', () => {
+  const eigen = () => mem.leave.filter((l: any) => l.userId === '3');
+  const aanvraag = (over: Record<string, unknown> = {}) => ({ id: 'l-nieuw', userId: '3', startDate: '2027-12-20', endDate: '2027-12-21', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2000-01-01T00:00:00Z', ...over });
+
+  it('een toelichting van meer dan 1000 tekens wordt geweigerd, 1000 mag', async () => {
+    const teLang = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ comment: 'x'.repeat(1001) })] });
+    expect(teLang.status).toBe(400);
+    expect(teLang.json.error).toBe('De toelichting is te lang (maximaal 1000 tekens).');
+    expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeUndefined();
+    expect((await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ comment: 'x'.repeat(1000) })] })).status).toBe(200);
+  });
+
+  it('createdAt van een nieuwe aanvraag is het servertijdstip; een bestaande rij houdt haar opgeslagen waarde, ook via staf', async () => {
+    expect((await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag()] })).status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'l-nieuw')?.createdAt).toBe(KLOK_ISO);
+    // Staf schrijft de hele lijst: een gemanipuleerd createdAt op l-a1 blijft wat het was.
+    const lijst = mem.leave.map((l: any) => (l.id === 'l-a1' ? { ...l, comment: 'aangepast', createdAt: '1999-01-01T00:00:00Z' } : l));
+    expect((await api('POST', '/api/leave', { token: 'tok-planner', body: lijst })).status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'l-a1')?.createdAt).toBe('2026-06-01T08:00:00Z');
   });
 });
