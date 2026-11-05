@@ -1169,6 +1169,10 @@ describe('toestel-whitelist', () => {
     // De aparte fail-open-tak voor een ontbrekende tabel is weg (05-11):
     // user_devices zit in de basismigratie.
     expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-missingtable' })).status).toBe(503);
+    // Een technieker is evenmin staf: zelfde 503.
+    mem.users.push({ id: '5', name: 'Tom Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    invalidateUsersCache();
+    expect((await api('GET', '/api/updates', { token: 'tok-tech', device: 'dev-dberror' })).status).toBe(503);
   });
 
   it('staf met een toesteltoken valt bij een DB-fout OPEN: verder zonder gate, zoals staf zonder token (05-11)', async () => {
