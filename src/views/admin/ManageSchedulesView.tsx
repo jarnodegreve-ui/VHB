@@ -19,6 +19,7 @@ import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field, Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import type { VerwachtingAfwijking } from '../../../shared/coverageGaps';
+import { type RuilNietToepasbaar, beschrijfRuilNietToepasbaar } from '../../../shared/ruilNietToepasbaar';
 import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 import { meldSchrijffout } from '../../lib/fouten';
 import { Td, Th } from '../../components/TabelBasis';
@@ -125,6 +126,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     ziekTeRegistreren: ZiekteReeks[];
     /** Dag-type-lijsten die niet sporen met wat dit bestand echt rijdt. */
     verwachtingsCheck: VerwachtingAfwijking[];
+    /** Doorgevoerde ruilen die na deze import met de planning in tegenspraak
+     *  zijn: de dienst staat in de Excel bij iemand anders (06-11). */
+    ruilenNietToepasbaar: RuilNietToepasbaar[];
   }>(null);
   const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0 || matrixPreview.verlofConflicts.length > 0);
 
@@ -238,6 +242,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     chauffeursVerdwenen: Array.isArray(data.chauffeursVerdwenen) ? data.chauffeursVerdwenen : [],
     ziekTeRegistreren: Array.isArray(data.ziekTeRegistreren) ? data.ziekTeRegistreren : [],
     verwachtingsCheck: Array.isArray(data.verwachtingsCheck) ? data.verwachtingsCheck : [],
+    ruilenNietToepasbaar: Array.isArray(data.ruilenNietToepasbaar) ? data.ruilenNietToepasbaar : [],
   });
 
   // Eén-klik ziekte-registratie vanuit de preview: de reeks komt uit de Excel
@@ -371,6 +376,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         `Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen${periode}, ${data.generatedShifts || 0} roosterregels opgebouwd${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`,
         'success'
       );
+      // De gemiste ruilen nog eens bij naam na het importeren: het voorbeeld
+      // toonde ze al, het log draagt ze ook, maar wie doorklikte ziet zo
+      // meteen wie vandaag een dienst van de verkeerde persoon heeft (06-11).
+      const gemist: RuilNietToepasbaar[] = Array.isArray(data.ruilenNietToepasbaar) ? data.ruilenNietToepasbaar : [];
+      if (gemist.length > 0) {
+        notify(
+          `Let op: ${gemist.length === 1 ? 'een doorgevoerde ruil past' : `${gemist.length} doorgevoerde ruilen passen`} niet in deze Excel. ${gemist.slice(0, 3).map((r) => beschrijfRuilNietToepasbaar(r, formatDatumDMJ)).join('; ')}${gemist.length > 3 ? `; en nog ${gemist.length - 3}` : ''}.`,
+          'info',
+        );
+      }
       setMatrixPreviewOpen(false);
       setPendingMatrixBestand(null);
       setPendingMatrixFilename('');
@@ -907,7 +922,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <p className={cn('mt-0.5 text-sm', matrixPreviewHasIssues ? 'text-red-800' : 'text-emerald-800')}>
                       {matrixPreviewHasIssues
                         ? 'Los eerst de onbekende codes, niet-gematchte chauffeurs of verlofconflicten op (planningscodes toevoegen, naam corrigeren, Excel aanpassen of verlof annuleren).'
-                        : 'Geen onbekende codes, niet-gematchte chauffeurs of verlofconflicten.'}
+                        : `Geen onbekende codes, niet-gematchte chauffeurs of verlofconflicten.${matrixPreview.ruilenNietToepasbaar.length > 0 ? ` Wel ${matrixPreview.ruilenNietToepasbaar.length === 1 ? 'een doorgevoerde ruil die' : `${matrixPreview.ruilenNietToepasbaar.length} doorgevoerde ruilen die`} niet in deze Excel ${matrixPreview.ruilenNietToepasbaar.length === 1 ? 'past' : 'passen'}, zie de waarschuwing hieronder.` : ''}`}
                     </p>
                   </div>
                 </Card>
@@ -940,6 +955,30 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       </div>
                     </div>
                   </Card>
+                )}
+
+                {/* Doorgevoerde ruilen die deze Excel tegenspreekt (06-11): de
+                    dienst staat bij de gever noch de ontvanger. De import gaat
+                    door (waarschuwing, geen blokkade), maar zonder dit vak
+                    verdween zo'n wissel stil in "(n niet toepasbaar)" en bleef
+                    de ruil "Goedgekeurd" terwijl een derde de dienst reed. */}
+                {matrixPreview.ruilenNietToepasbaar.length > 0 && (
+                  <InklapSectie title="Doorgevoerde ruilen die niet in deze Excel passen" aantal={matrixPreview.ruilenNietToepasbaar.length} tone="amber" defaultOpen>
+                    <p className="text-xs font-medium text-amber-900/80">
+                      Goedgekeurd en doorgevoerd in het portaal, maar in dit bestand staat de dienst bij iemand anders. Importeer je toch, dan rijdt die andere chauffeur de dienst en blijft de ruil als goedgekeurd staan. Zet de dienst in de Excel bij de ontvanger, of controleer eerst wie hem moet rijden.
+                    </p>
+                    <ul className="mt-3 space-y-1.5 text-xs text-amber-900">
+                      {matrixPreview.ruilenNietToepasbaar.map((r) => (
+                        <li key={`${r.id}-${r.been}`} className="flex items-start gap-2">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                          <span>
+                            {beschrijfRuilNietToepasbaar(r, formatDatumDMJ)}
+                            {r.handmatig && <span className="text-amber-700"> · ingevoerd door de planner</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </InklapSectie>
                 )}
 
                 {/* Kolommen die de import bewust niet leest (ná "aantal"):

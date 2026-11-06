@@ -1,6 +1,6 @@
 import { variantenAfdruk } from "../../shared/dagtype.js";
 import type { AuthenticatedRequest } from "./types.js";
-import { DAG_DMJ, toLookupToken } from "./helpers.js";
+import { DAG_DMJ, isHandmatigeWissel, toLookupToken } from "./helpers.js";
 import { ROOSTER_MELDING_RUST_MINUTEN } from "../../shared/roosterMelding.js";
 import {
   type DagAfdrukken, gewijzigdeDagen, gewijzigdeDagenPerChauffeur, roosterAfdrukken, roosterDagAfdrukken, verstuurRoosterPushes,
@@ -11,6 +11,7 @@ import {
 } from "./storage.js";
 import { maakCodeDienstToets } from "./codeDienst.js";
 import { type HeropbouwPlan, bouwHeropbouwPlan } from "../../shared/heropbouwPlan.js";
+import { type RuilNietToepasbaar, beschrijfRuilNietToepasbaar } from "../../shared/ruilNietToepasbaar.js";
 
 /**
  * Planning heropbouwen uit de opgeslagen matrix: de ENE kern achter
@@ -39,7 +40,12 @@ type PlanningRij = {
 };
 
 type OpbouwSamenvatting = Awaited<ReturnType<typeof buildPlanningFromMatrix>>["summary"];
-type ReplayTelling = { applied: number; skipped: number; alVerwerkt: number; opBord?: number };
+type ReplayTelling = {
+  applied: number; skipped: number; alVerwerkt: number; opBord?: number;
+  /** De gemiste ruilen die ná de opbouw met de planning in tegenspraak zijn,
+   *  bij naam (06-11). Ontbreekt of leeg: niets te melden. */
+  nietToepasbaar?: RuilNietToepasbaar[];
+};
 
 export type HeropbouwUitkomst =
   | {
@@ -101,7 +107,26 @@ export const reapplyApprovedSwaps = async (
   // Code-diensten hebben geen rijen om te verhuizen; zonder deze toets telde
   // elke wissel van een schoolrit bij elke import als "niet toepasbaar".
   const [services, codes] = await Promise.all([getServicesData(), getPlanningCodesData()]);
-  return applySwapsToPlanningRows(shifts, relevant, maakCodeDienstToets(services as any[], codes as any[]));
+  const uit = applySwapsToPlanningRows(shifts, relevant, maakCodeDienstToets(services as any[], codes as any[]));
+  // De gemiste ruilen bij naam, zodat voorbeeld en log zeggen wie, welke
+  // dienst, welke dag en bij wie de dienst in de Excel wél staat (06-11: een
+  // telling "(7 niet toepasbaar)" verborg een wissel die stil verloren ging).
+  let nietToepasbaar: RuilNietToepasbaar[] = [];
+  if (uit.nietToepasbaar.length > 0) {
+    const users = await getUsersData();
+    const naam = (id: unknown) => users.find((u) => String(u.id) === String(id))?.name || `Onbekend (${String(id)})`;
+    nietToepasbaar = uit.nietToepasbaar.map(({ ruil, been, dienstBij }) => ({
+      id: String(ruil.id),
+      van: naam(ruil.requesterId),
+      naar: naam(ruil.targetDriverId),
+      dienst: String(been === "terug" ? ruil.returnCode : ruil.shiftLine),
+      dag: String(been === "terug" ? ruil.returnDate : ruil.shiftDate),
+      been,
+      dienstBij: dienstBij.map(naam),
+      handmatig: isHandmatigeWissel(ruil),
+    }));
+  }
+  return { applied: uit.applied, skipped: uit.skipped, alVerwerkt: uit.alVerwerkt, opBord: uit.opBord, nietToepasbaar };
 };
 
 // --- Wat telt als "het dienstoverzicht wijzigde" ---------------------------
@@ -282,8 +307,16 @@ export const verstuurRoosterMeldingen = async (nu = Date.now()): Promise<{ statu
 
 // --- De kern ------------------------------------------------------------------
 
-export const replayTekst = (reapplied: ReplayTelling) =>
-  `${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${(reapplied.opBord ?? 0) > 0 ? `, ${reapplied.opBord} van een code-dienst op het bord` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}`;
+/** Hoogstens zoveel gemiste ruilen voluit in één logregel. */
+const NIET_TOEPASBAAR_VOLUIT = 5;
+
+export const replayTekst = (reapplied: ReplayTelling) => {
+  const lijst = reapplied.nietToepasbaar ?? [];
+  const details = lijst.length > 0
+    ? `: ${lijst.slice(0, NIET_TOEPASBAAR_VOLUIT).map((r) => beschrijfRuilNietToepasbaar(r, DAG_DMJ)).join("; ")}${lijst.length > NIET_TOEPASBAAR_VOLUIT ? `; en nog ${lijst.length - NIET_TOEPASBAAR_VOLUIT}` : ""}`
+    : "";
+  return `${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${(reapplied.opBord ?? 0) > 0 ? `, ${reapplied.opBord} van een code-dienst op het bord` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar${details})` : ""}`;
+};
 
 const dienstLabel = (r: PlanningRij) => `${DAG_DMJ(tekst(r.date))} dienst ${tekst(r.line)}`;
 
@@ -346,7 +379,7 @@ export const heropbouwPlanning = async (
         namen,
         dagenInMatrix: summary.importedDays,
         periode: { van: dagen[0] ?? null, tot: dagen[dagen.length - 1] ?? null },
-        ruilen: { toegepast: reapplied.applied, nietToepasbaar: reapplied.skipped },
+        ruilen: { toegepast: reapplied.applied, nietToepasbaar: reapplied.skipped, lijst: reapplied.nietToepasbaar ?? [] },
       });
       return { status: "droog", plan };
     }

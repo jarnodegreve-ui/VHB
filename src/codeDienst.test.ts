@@ -77,4 +77,22 @@ describe('replayTekst', () => {
     expect(replayTekst({ applied: 2, skipped: 0, alVerwerkt: 0, opBord: 0 })).toBe('2 goedgekeurde ruil(en) opnieuw doorgevoerd');
     expect(replayTekst({ applied: 2, skipped: 1, alVerwerkt: 1, opBord: 3 })).toBe('2 goedgekeurde ruil(en) opnieuw doorgevoerd, 1 al in de Excel verwerkt, 3 van een code-dienst op het bord (1 niet toepasbaar)');
   });
+
+  it('noemt de gemiste ruilen bij naam, met bij wie de dienst in de Excel staat (06-11)', () => {
+    const ruil = { id: 's-2101', van: 'Bianca Taildeman', naar: 'Roeland Callay', dienst: '2101', dag: '2026-11-16', been: 'aangeboden' as const, dienstBij: ['Patrick Van De Walle'], handmatig: true };
+    expect(replayTekst({ applied: 0, skipped: 1, alVerwerkt: 0, opBord: 0, nietToepasbaar: [ruil] }))
+      .toBe('0 goedgekeurde ruil(en) opnieuw doorgevoerd (1 niet toepasbaar: Bianca Taildeman naar Roeland Callay, dienst 2101 op 16/11/2026: staat in de Excel bij Patrick Van De Walle, niet bij Roeland Callay)');
+    expect(replayTekst({ applied: 0, skipped: 1, alVerwerkt: 0, opBord: 0, nietToepasbaar: [{ ...ruil, dienstBij: [] }] }))
+      .toContain('dienst 2101 op 16/11/2026: staat die dag bij niemand in de Excel)');
+    expect(replayTekst({ applied: 0, skipped: 1, alVerwerkt: 0, opBord: 0, nietToepasbaar: [{ ...ruil, been: 'terug', dienst: '14' }] }))
+      .toContain('Roeland Callay naar Bianca Taildeman, terugdienst 14 op 16/11/2026: staat in de Excel bij Patrick Van De Walle, niet bij Bianca Taildeman');
+    // Hoogstens vijf voluit, de rest als telling: een logregel blijft leesbaar.
+    const zes = Array.from({ length: 6 }, (_, i) => ({ ...ruil, id: `s-${i}`, dienst: String(2100 + i) }));
+    const tekst = replayTekst({ applied: 0, skipped: 6, alVerwerkt: 0, opBord: 0, nietToepasbaar: zes });
+    expect(tekst).toContain('dienst 2104 op');
+    expect(tekst).not.toContain('dienst 2105 op');
+    expect(tekst).toContain('; en nog 1)');
+    // Zonder lijst blijft de tekst van vroeger.
+    expect(replayTekst({ applied: 0, skipped: 1, alVerwerkt: 0, opBord: 0, nietToepasbaar: [] })).toBe('0 goedgekeurde ruil(en) opnieuw doorgevoerd (1 niet toepasbaar)');
+  });
 });

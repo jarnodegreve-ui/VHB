@@ -255,17 +255,30 @@ export const swapRaaktBereik = (swap: SwapCarryFields, bereik: { van: string; to
  * Pure variant voor de heropbouw: past goedgekeurde ruilen toe op een
  * in-memory rijenset (muteert de rijen in place, volgorde van `swaps` =
  * toepassingsvolgorde; roep aan met decidedAt-oplopend zodat een latere
- * ruil op het resultaat van een eerdere werkt).
+ * ruil op het resultaat van een eerdere werkt). Geeft naast de tellingen
+ * de ruilen terug die na afloop met de rijen in tegenspraak zijn
+ * (`nietToepasbaar`, met bij wie de dienst dan wél staat), zodat import en
+ * heropbouw ze bij naam kunnen melden (06-11).
  */
-export const applySwapsToPlanningRows = (
+export type RuilReplayMismatch<T> = {
+  ruil: T;
+  /** Welk been in het eindbeeld bij de verkeerde persoon staat. */
+  been: 'aangeboden' | 'terug';
+  /** Wie de dienst die dag in de rijen wél heeft (id's, ontdubbeld); leeg = niemand. */
+  dienstBij: string[];
+};
+
+export const applySwapsToPlanningRows = <T extends SwapCarryFields>(
   rows: Array<Pick<ShiftRecord, 'date' | 'line' | 'driverId'>>,
-  swaps: SwapCarryFields[],
+  swaps: T[],
   /** Toets "is dit een code-dienst?" (api/_lib/codeDienst.ts). Zonder toets
    *  telt een ruil zonder rijen als overgeslagen, zoals voorheen. */
   isCodeDienst?: (line: unknown) => boolean,
-): { applied: number; skipped: number; alVerwerkt: number; opBord: number } => {
+): { applied: number; skipped: number; alVerwerkt: number; opBord: number; nietToepasbaar: Array<RuilReplayMismatch<T>> } => {
   let applied = 0;
   let skipped = 0;
+  // De échte mismatches, om na de lus op het eindbeeld te toetsen (zie onder).
+  const gemist: T[] = [];
   // Een ruil van code-diensten (schoolrit, bureau, garage) heeft geen rijen om
   // te verhuizen: het bord legt hem erover. Apart geteld, om dezelfde reden
   // als alVerwerkt hieronder.
@@ -302,9 +315,41 @@ export const applySwapsToPlanningRows = (
     if (touched) applied++;
     else if (alBijOntvanger) alVerwerkt++;
     else if (isCodeDienst?.(swap.shiftLine) && (!swapHasReturnShift(swap) || isCodeDienst(swap.returnCode))) opBord++;
-    else skipped++;
+    else { skipped++; gemist.push(swap); }
   }
-  return { applied, skipped, alVerwerkt, opBord };
+  // Welke gemiste ruilen zijn ná deze import écht een probleem? Getoetst op
+  // het eindbeeld, niet op het moment van overslaan: in een ketting (A→B
+  // overgeslagen, daarna C→B doorgevoerd) rijdt B toch, en dan is er niets
+  // te melden. Pas als de ontvanger de dienst in het eindbeeld niet heeft
+  // (of bij een 1-op-1 de gever de terugdienst niet), spreken planning en
+  // ruil elkaar tegen: dat is wat op 06-11 stil misging (dienst 2101 stond in
+  // de Excel bij een derde). Alleen dagen die de rijen bestrijken tellen: een
+  // dag buiten de set is niet "bij niemand", maar niet geïmporteerd.
+  const dagen = rows.map((r) => String(r.date ?? '')).filter(Boolean).sort();
+  const eerste = dagen[0] ?? '';
+  const laatste = dagen[dagen.length - 1] ?? '';
+  const inBereik = (date: string) => Boolean(eerste) && date >= eerste && date <= laatste;
+  const heeft = (date: string, line: string, driverId: string) =>
+    rows.some((r) => r.date === date && String(r.line) === line && String(r.driverId) === driverId);
+  const bijWie = (date: string, line: string) =>
+    [...new Set(rows.filter((r) => r.date === date && String(r.line) === line).map((r) => String(r.driverId)))];
+  const nietToepasbaar: Array<RuilReplayMismatch<T>> = [];
+  for (const swap of gemist) {
+    const dag = String(swap.shiftDate);
+    const dienst = String(swap.shiftLine);
+    const target = String(swap.targetDriverId);
+    if (inBereik(dag)) {
+      if (!heeft(dag, dienst, target)) nietToepasbaar.push({ ruil: swap, been: 'aangeboden', dienstBij: bijWie(dag, dienst) });
+      continue;
+    }
+    if (!swapHasReturnShift(swap)) continue;
+    const terugDag = String(swap.returnDate);
+    const terugDienst = String(swap.returnCode);
+    if (inBereik(terugDag) && !heeft(terugDag, terugDienst, String(swap.requesterId))) {
+      nietToepasbaar.push({ ruil: swap, been: 'terug', dienstBij: bijWie(terugDag, terugDienst) });
+    }
+  }
+  return { applied, skipped, alVerwerkt, opBord, nietToepasbaar };
 };
 
 /**
