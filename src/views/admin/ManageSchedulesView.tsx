@@ -968,7 +968,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       Goedgekeurd en doorgevoerd in het portaal, maar in dit bestand staat de dienst bij iemand anders. Importeer je toch, dan rijdt die andere chauffeur de dienst en blijft de ruil als goedgekeurd staan. Zet de dienst in de Excel bij de ontvanger, of controleer eerst wie hem moet rijden.
                     </p>
                     <ul className="mt-3 space-y-1.5 text-xs text-amber-900">
-                      {matrixPreview.ruilenNietToepasbaar.map((r) => (
+                      {matrixPreview.ruilenNietToepasbaar.slice(0, 8).map((r) => (
                         <li key={`${r.id}-${r.been}`} className="flex items-start gap-2">
                           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
                           <span>
@@ -977,6 +977,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           </span>
                         </li>
                       ))}
+                      {matrixPreview.ruilenNietToepasbaar.length > 8 && (
+                        <li className="italic text-amber-700">… en nog {matrixPreview.ruilenNietToepasbaar.length - 8} meer, het activiteitenlog noemt ze na de import.</li>
+                      )}
                     </ul>
                   </InklapSectie>
                 )}
