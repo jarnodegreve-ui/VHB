@@ -247,7 +247,7 @@ jobs:
       # GitHub meldde dat de gratis Actions-opslag van het account bijna vol zat.
       - name: Lighthouse-rapporten als artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lighthouse
           path: .lighthouseci/rapporten
@@ -390,7 +390,7 @@ jobs:
       # over, dus het artefact waarnaar de samenvatting verwees bestond niet.
       - name: Diff-afbeeldingen als artifact
         if: steps.vergelijk.outputs.afwijkend == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visuele-regressie
           path: .visueel/verschil
