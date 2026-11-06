@@ -24,7 +24,7 @@ export type RuilNietToepasbaar = {
   /** 'aangeboden': de aangeboden dienst hoort bij de ontvanger te staan;
    *  'terug': de terugdienst van een 1-op-1-ruil hoort bij de gever. */
   been: "aangeboden" | "terug";
-  /** Bij wie de dienst die dag in de Excel staat; leeg = bij niemand. */
+  /** Bij wie de dienst na de opbouw (Excel plus de andere ruilen) staat; leeg = bij niemand. */
   dienstBij: string[];
   /** Ingevoerd door de planner (handmatige wissel) in plaats van aangevraagd. */
   handmatig: boolean;
@@ -37,8 +37,7 @@ export const beschrijfRuilNietToepasbaar = (r: RuilNietToepasbaar, dmj: (iso: st
     ? `${r.naar} naar ${r.van}, terugdienst ${r.dienst} op ${dmj(r.dag)}`
     : `${r.van} naar ${r.naar}, dienst ${r.dienst} op ${dmj(r.dag)}`;
   const wie = r.been === "terug" ? r.van : r.naar;
-  const bij = r.dienstBij.length > 0
-    ? `staat in de Excel bij ${r.dienstBij.join(" en ")}, niet bij ${wie}`
-    : `staat die dag bij niemand in de Excel`;
-  return `${kop}: ${bij}`;
+  return r.dienstBij.length > 0
+    ? `${kop}: komt bij ${r.dienstBij.join(" en ")} te staan, niet bij ${wie}`
+    : `${kop}: komt bij niemand te staan, niet bij ${wie}`;
 };

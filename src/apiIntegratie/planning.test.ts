@@ -2613,7 +2613,7 @@ describe('matrix-import: een doorgevoerde ruil die de Excel tegenspreekt wordt b
     expect(mem.planning.find((p: any) => p.date === DAG && String(p.line) === '12')?.driverId).toBe('7');
     expect(mem.swaps.find((sw: any) => sw.id === 's-2101')?.status).toBe('approved');
     const log = mem.activity.find((a: any) => a.action === 'Matrix import bevestigd');
-    expect(String(log?.message)).toContain('(1 niet toepasbaar: Chauffeur A naar Chauffeur B, dienst 12 op 16/11/2030: staat in de Excel bij Chauffeur C, niet bij Chauffeur B)');
+    expect(String(log?.message)).toContain('(1 niet toepasbaar). Let op, ruilen die de planning nu tegenspreekt: Chauffeur A naar Chauffeur B, dienst 12 op 16/11/2030: komt bij Chauffeur C te staan, niet bij Chauffeur B');
   });
 
   it('staat de dienst in de Excel al bij de ontvanger, dan is er niets te melden', async () => {
@@ -2621,6 +2621,32 @@ describe('matrix-import: een doorgevoerde ruil die de Excel tegenspreekt wordt b
     expect(res.status).toBe(200);
     expect(res.json.ruilenNietToepasbaar).toEqual([]);
     expect(res.json.reappliedSwaps).toMatchObject({ applied: 0, skipped: 0, alVerwerkt: 1 });
+  });
+
+  it('een ketting A naar B, daarna B naar C, met de Excel al bij C: niets te melden (tegenlezing 06-11)', async () => {
+    mem.swaps = [aNaarB, { ...aNaarB, id: 's-door', requesterId: '4', targetDriverId: '7', decidedAt: '2030-11-06T16:10:00Z' }];
+    const res = await stuur('/api/planning-matrix/preview', [KOP, [serial(DAG), 'W', '', '', '12', 1]]);
+    expect(res.status).toBe(200);
+    expect(res.json.ruilenNietToepasbaar).toEqual([]);
+    expect(res.json.reappliedSwaps).toMatchObject({ applied: 0, skipped: 1, alVerwerkt: 1 });
+  });
+
+  it('een voorbije dag wordt niet bij naam genoemd, telt wel mee; de rest staat op dag, eerstvolgende eerst', async () => {
+    const voorbij = { ...aNaarB, id: 's-oud', shiftDate: '2020-01-06', decidedAt: '2019-12-20T08:00:00Z' };
+    const later = { ...aNaarB, id: 's-later', shiftDate: '2030-11-17', decidedAt: '2030-11-06T15:00:00Z' };
+    mem.swaps = [voorbij, later, aNaarB];
+    const res = await stuur('/api/planning-matrix/preview', [KOP, [serial('2020-01-06'), 'W', '', '', '12', 1], [serial(DAG), 'W', '', '', '12', 1], [serial('2030-11-17'), 'W', '', '', '12', 1]]);
+    expect(res.status).toBe(200);
+    expect(res.json.reappliedSwaps).toMatchObject({ skipped: 3 });
+    expect(res.json.ruilenNietToepasbaar.map((r: any) => r.id)).toEqual(['s-2101', 's-later']);
+  });
+
+  it('de droge heropbouw toont dezelfde ruil in het plan', async () => {
+    const imp = await stuur('/api/planning-matrix/import', [KOP, [serial(DAG), 'W', '', '', '12', 1]]);
+    expect(imp.status).toBe(200);
+    const droog = await api('POST', '/api/planning/sync-from-matrix?droog=1', { token: 'tok-admin' });
+    expect(droog.status).toBe(200);
+    expect(droog.json.plan.ruilen.lijst).toEqual([verwacht]);
   });
 
   it('een latere ruil die de dienst alsnog bij de ontvanger brengt: niets te melden', async () => {

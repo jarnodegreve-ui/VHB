@@ -172,6 +172,49 @@ describe('applySwapsToPlanningRows, gemiste ruilen bij naam (06-11)', () => {
     expect(rijen[0].driverId).toBe('4');
   });
 
+  it('ketting A naar B, daarna B naar C, de Excel al bij C: de laatste schakel beslist, niets te melden', () => {
+    const rijen = [{ date: DAG, line: '2101', driverId: '7' }];
+    const res = applySwapsToPlanningRows(rijen, [
+      biancaNaarRoeland,
+      { requesterId: '4', targetDriverId: '7', swapType: 'overname' as const, shiftDate: DAG, shiftLine: '2101' },
+    ]);
+    expect(res).toEqual({ applied: 0, skipped: 1, alVerwerkt: 1, opBord: 0, nietToepasbaar: [] });
+  });
+
+  it('ketting waarvan de laatste schakel niet klopt: alleen die schakel wordt genoemd', () => {
+    const doorgeven = { requesterId: '4', targetDriverId: '8', swapType: 'overname' as const, shiftDate: DAG, shiftLine: '2101' };
+    const res = applySwapsToPlanningRows([{ date: DAG, line: '2101', driverId: '7' }], [biancaNaarRoeland, doorgeven]);
+    expect(res.nietToepasbaar).toEqual([{ ruil: doorgeven, been: 'aangeboden', dienstBij: ['7'] }]);
+  });
+
+  it('1-op-1 op één dag: het terugbeen komt terug, het aangeboden been staat bij een derde: dat been wordt genoemd', () => {
+    const ruil = { ...biancaNaarRoeland, swapType: 'ruil' as const, returnDate: DAG, returnCode: '14' };
+    const rijen = [{ date: DAG, line: '2101', driverId: '7' }, { date: DAG, line: '14', driverId: '4' }];
+    const res = applySwapsToPlanningRows(rijen, [ruil]);
+    // Telt als doorgevoerd (het terugbeen verhuisde), maar 2101 staat bij 7.
+    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0, opBord: 0, nietToepasbaar: [{ ruil, been: 'aangeboden', dienstBij: ['7'] }] });
+    expect(rijen[1].driverId).toBe('3');
+  });
+
+  it('1-op-1: het aangeboden been staat al bij de ontvanger, de terugdienst bij een derde: het terugbeen wordt genoemd', () => {
+    const ruil = { ...biancaNaarRoeland, swapType: 'ruil' as const, returnDate: DAG, returnCode: '14' };
+    const res = applySwapsToPlanningRows([{ date: DAG, line: '2101', driverId: '4' }, { date: DAG, line: '14', driverId: '9' }], [ruil]);
+    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 1, opBord: 0, nietToepasbaar: [{ ruil, been: 'terug', dienstBij: ['9'] }] });
+  });
+
+  it('een been dat een code-dienst is, wordt nooit op rijen getoetst; het andere been wel', () => {
+    const isCode = (line: unknown) => String(line ?? '').toLowerCase().startsWith('eek');
+    const ruil = { ...biancaNaarRoeland, swapType: 'ruil' as const, shiftLine: 'EEK6', returnDate: DAG, returnCode: '14' };
+    const res = applySwapsToPlanningRows([{ date: DAG, line: '14', driverId: '9' }], [ruil], isCode);
+    expect(res.nietToepasbaar).toEqual([{ ruil, been: 'terug', dienstBij: ['9'] }]);
+  });
+
+  it('een dag zonder enige rij (gat in de matrix) wordt niet gemeld', () => {
+    const rijen = [{ date: '2026-11-10', line: '14', driverId: '7' }, { date: '2026-11-20', line: '14', driverId: '7' }];
+    const res = applySwapsToPlanningRows(rijen, [biancaNaarRoeland]);
+    expect(res.nietToepasbaar).toEqual([]);
+  });
+
   it('een dag buiten de heropgebouwde rijen is niet "bij niemand": niets te melden', () => {
     const res = applySwapsToPlanningRows([{ date: '2026-12-01', line: '2101', driverId: '7' }], [biancaNaarRoeland]);
     expect(res).toEqual({ applied: 0, skipped: 1, alVerwerkt: 0, opBord: 0, nietToepasbaar: [] });

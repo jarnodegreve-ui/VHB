@@ -1,6 +1,6 @@
 import { variantenAfdruk } from "../../shared/dagtype.js";
 import type { AuthenticatedRequest } from "./types.js";
-import { DAG_DMJ, isHandmatigeWissel, toLookupToken } from "./helpers.js";
+import { DAG_DMJ, brusselsDay, isHandmatigeWissel, toLookupToken } from "./helpers.js";
 import { ROOSTER_MELDING_RUST_MINUTEN } from "../../shared/roosterMelding.js";
 import {
   type DagAfdrukken, gewijzigdeDagen, gewijzigdeDagenPerChauffeur, roosterAfdrukken, roosterDagAfdrukken, verstuurRoosterPushes,
@@ -109,18 +109,27 @@ export const reapplyApprovedSwaps = async (
   const [services, codes] = await Promise.all([getServicesData(), getPlanningCodesData()]);
   const uit = applySwapsToPlanningRows(shifts, relevant, maakCodeDienstToets(services as any[], codes as any[]));
   // De gemiste ruilen bij naam, zodat voorbeeld en log zeggen wie, welke
-  // dienst, welke dag en bij wie de dienst in de Excel wél staat (06-11: een
+  // dienst, welke dag en bij wie de dienst dan wel staat (06-11: een
   // telling "(7 niet toepasbaar)" verborg een wissel die stil verloren ging).
+  // Alleen vandaag en later: aan een voorbije dag valt niets meer te doen,
+  // en zulke regels verdrongen de verse wissel (tegenlezing 06-11). Die
+  // tellen nog mee in de telling. Volgorde: eerstvolgende dag eerst, daarbinnen
+  // de jongste beslissing.
   let nietToepasbaar: RuilNietToepasbaar[] = [];
-  if (uit.nietToepasbaar.length > 0) {
+  const vandaag = brusselsDay(new Date().toISOString());
+  const komend = uit.nietToepasbaar
+    .map((m) => ({ ...m, dag: String(m.been === "terug" ? m.ruil.returnDate : m.ruil.shiftDate) }))
+    .filter((m) => m.dag >= vandaag)
+    .sort((a, b) => a.dag.localeCompare(b.dag) || String(b.ruil.decidedAt ?? "").localeCompare(String(a.ruil.decidedAt ?? "")));
+  if (komend.length > 0) {
     const users = await getUsersData();
     const naam = (id: unknown) => users.find((u) => String(u.id) === String(id))?.name || `Onbekend (${String(id)})`;
-    nietToepasbaar = uit.nietToepasbaar.map(({ ruil, been, dienstBij }) => ({
+    nietToepasbaar = komend.map(({ ruil, been, dienstBij, dag }) => ({
       id: String(ruil.id),
       van: naam(ruil.requesterId),
       naar: naam(ruil.targetDriverId),
       dienst: String(been === "terug" ? ruil.returnCode : ruil.shiftLine),
-      dag: String(been === "terug" ? ruil.returnDate : ruil.shiftDate),
+      dag,
       been,
       dienstBij: dienstBij.map(naam),
       handmatig: isHandmatigeWissel(ruil),
@@ -307,15 +316,18 @@ export const verstuurRoosterMeldingen = async (nu = Date.now()): Promise<{ statu
 
 // --- De kern ------------------------------------------------------------------
 
-/** Hoogstens zoveel gemiste ruilen voluit in één logregel. */
-const NIET_TOEPASBAAR_VOLUIT = 5;
+/** Hoogstens zoveel gemiste ruilen voluit in één logregel; het voorbeeld en
+ *  het heropbouw-venster tonen ze altijd allemaal. */
+const NIET_TOEPASBAAR_VOLUIT = 20;
 
 export const replayTekst = (reapplied: ReplayTelling) => {
+  const basis = `${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${(reapplied.opBord ?? 0) > 0 ? `, ${reapplied.opBord} van een code-dienst op het bord` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}`;
   const lijst = reapplied.nietToepasbaar ?? [];
-  const details = lijst.length > 0
-    ? `: ${lijst.slice(0, NIET_TOEPASBAAR_VOLUIT).map((r) => beschrijfRuilNietToepasbaar(r, DAG_DMJ)).join("; ")}${lijst.length > NIET_TOEPASBAAR_VOLUIT ? `; en nog ${lijst.length - NIET_TOEPASBAAR_VOLUIT}` : ""}`
-    : "";
-  return `${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${(reapplied.opBord ?? 0) > 0 ? `, ${reapplied.opBord} van een code-dienst op het bord` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar${details})` : ""}`;
+  if (lijst.length === 0) return basis;
+  // Ook bij een 1-op-1 die als doorgevoerd telt kan een been verloren gaan,
+  // dus de lijst staat los van de telling "niet toepasbaar".
+  const rest = lijst.length > NIET_TOEPASBAAR_VOLUIT ? `; en nog ${lijst.length - NIET_TOEPASBAAR_VOLUIT}` : "";
+  return `${basis}. Let op, ruilen die de planning nu tegenspreekt: ${lijst.slice(0, NIET_TOEPASBAAR_VOLUIT).map((r) => beschrijfRuilNietToepasbaar(r, DAG_DMJ)).join("; ")}${rest}`;
 };
 
 const dienstLabel = (r: PlanningRij) => `${DAG_DMJ(tekst(r.date))} dienst ${tekst(r.line)}`;

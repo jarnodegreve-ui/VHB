@@ -23,8 +23,6 @@ const SOORT_LABEL: Record<HeropbouwPlanDag['soort'], string> = { erbij: 'erbij',
 const SOORT_TINT: Record<HeropbouwPlanDag['soort'], string> = { erbij: 'text-emerald-700', weg: 'text-red-700', gewijzigd: 'text-amber-700' };
 /** Hoogstens zoveel dagen per chauffeur voluit; daarboven één regel "+n dagen". */
 const DAGEN_VOLUIT = 6;
-/** Hoogstens zoveel gemiste ruilen voluit; daarboven één regel "+n meer". */
-const RUILEN_VOLUIT = 8;
 
 function DagRegel({ dag }: { dag: HeropbouwPlanDag }) {
   const was = dag.was.length > 0 ? dag.was.join(' en ') : 'niets';
@@ -95,12 +93,9 @@ export function HeropbouwPlanModal({ open, stand, bezig, onClose, onBevestig, on
               {plan.ruilen.lijst && plan.ruilen.lijst.length > 0 && (
                 <Callout tone="warning" title="Doorgevoerde ruilen die niet in de matrix passen" role="status">
                   <ul className="space-y-1">
-                    {plan.ruilen.lijst.slice(0, RUILEN_VOLUIT).map((r) => (
+                    {plan.ruilen.lijst.map((r) => (
                       <li key={`${r.id}-${r.been}`}>{beschrijfRuilNietToepasbaar(r, formatDatumDMJ)}.</li>
                     ))}
-                    {plan.ruilen.lijst.length > RUILEN_VOLUIT && (
-                      <li>+ {aantal(plan.ruilen.lijst.length - RUILEN_VOLUIT, 'ruil', 'ruilen')} meer, zie het activiteitenlog na het opbouwen.</li>
-                    )}
                   </ul>
                 </Callout>
               )}
