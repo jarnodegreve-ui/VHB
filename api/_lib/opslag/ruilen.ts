@@ -255,15 +255,26 @@ export const swapRaaktBereik = (swap: SwapCarryFields, bereik: { van: string; to
  * Pure variant voor de heropbouw: past goedgekeurde ruilen toe op een
  * in-memory rijenset (muteert de rijen in place, volgorde van `swaps` =
  * toepassingsvolgorde; roep aan met decidedAt-oplopend zodat een latere
- * ruil op het resultaat van een eerdere werkt).
+ * ruil op het resultaat van een eerdere werkt). Geeft naast de tellingen
+ * de ruilen terug die na afloop met de rijen in tegenspraak zijn
+ * (`nietToepasbaar`, met bij wie de dienst dan wél staat), zodat import en
+ * heropbouw ze bij naam kunnen melden (06-11).
  */
-export const applySwapsToPlanningRows = (
+export type RuilReplayMismatch<T> = {
+  ruil: T;
+  /** Welk been in het eindbeeld bij de verkeerde persoon staat. */
+  been: 'aangeboden' | 'terug';
+  /** Wie de dienst die dag in de rijen wél heeft (id's, ontdubbeld); leeg = niemand. */
+  dienstBij: string[];
+};
+
+export const applySwapsToPlanningRows = <T extends SwapCarryFields>(
   rows: Array<Pick<ShiftRecord, 'date' | 'line' | 'driverId'>>,
-  swaps: SwapCarryFields[],
+  swaps: T[],
   /** Toets "is dit een code-dienst?" (api/_lib/codeDienst.ts). Zonder toets
    *  telt een ruil zonder rijen als overgeslagen, zoals voorheen. */
   isCodeDienst?: (line: unknown) => boolean,
-): { applied: number; skipped: number; alVerwerkt: number; opBord: number } => {
+): { applied: number; skipped: number; alVerwerkt: number; opBord: number; nietToepasbaar: Array<RuilReplayMismatch<T>> } => {
   let applied = 0;
   let skipped = 0;
   // Een ruil van code-diensten (schoolrit, bureau, garage) heeft geen rijen om
@@ -276,35 +287,71 @@ export const applySwapsToPlanningRows = (
   // toepasbaar" meldt — dat woord hoort een échte mismatch te betekenen
   // (dienst intussen handmatig verlegd).
   let alVerwerkt = 0;
-  for (const swap of swaps) {
+  // Elk been van elke ruil, in replayvolgorde, met of de dienst bij gever of
+  // ontvanger gevonden werd. Na de lus getoetst op het eindbeeld (06-11).
+  const benen: Array<{ ruil: T; been: 'aangeboden' | 'terug'; date: string; line: string; houder: string; volgnr: number; gevonden: boolean }> = [];
+  swaps.forEach((swap, volgnr) => {
     const target = String(swap.targetDriverId ?? '');
     if (!swap.shiftDate || !swap.shiftLine || !target) {
       // Legacy-ruil van vóór de shift_info-migratie (of backfill vond de rij
       // niet meer): niet toepasbaar, telt als overgeslagen.
       skipped++;
-      continue;
+      return;
     }
     let touched = false;
     let alBijOntvanger = false;
     const verhuis = (date: string, line: string, van: string, naar: string) => {
+      let gevonden = false;
       for (const row of rows) {
         if (row.date !== date || String(row.line) !== line) continue;
         if (String(row.driverId) === van) {
           row.driverId = naar;
           touched = true;
+          gevonden = true;
         } else if (String(row.driverId) === naar) {
           alBijOntvanger = true;
+          gevonden = true;
         }
       }
+      return gevonden;
     };
-    verhuis(swap.shiftDate, String(swap.shiftLine), String(swap.requesterId), target);
-    if (swapHasReturnShift(swap)) verhuis(String(swap.returnDate), String(swap.returnCode), target, String(swap.requesterId));
+    const aangeboden = verhuis(swap.shiftDate, String(swap.shiftLine), String(swap.requesterId), target);
+    benen.push({ ruil: swap, been: 'aangeboden', date: String(swap.shiftDate), line: String(swap.shiftLine), houder: target, volgnr, gevonden: aangeboden });
+    if (swapHasReturnShift(swap)) {
+      const terug = verhuis(String(swap.returnDate), String(swap.returnCode), target, String(swap.requesterId));
+      benen.push({ ruil: swap, been: 'terug', date: String(swap.returnDate), line: String(swap.returnCode), houder: String(swap.requesterId), volgnr, gevonden: terug });
+    }
     if (touched) applied++;
     else if (alBijOntvanger) alVerwerkt++;
     else if (isCodeDienst?.(swap.shiftLine) && (!swapHasReturnShift(swap) || isCodeDienst(swap.returnCode))) opBord++;
     else skipped++;
+  });
+  // Welke benen spreken ná deze opbouw de ruil tegen? Per been, niet per
+  // ruil: bij een 1-op-1 kan het ene been terugkomen en het andere niet, en
+  // dan rijdt een derde de dienst terwijl de ruil als doorgevoerd telt.
+  // Een been telt alleen als:
+  //  - de dienst bij gever noch ontvanger gevonden werd (gevonden = verhuisd
+  //    of al bij de ontvanger; dan heeft de houder hem),
+  //  - het geen code-dienst is (die heeft nooit rijen, het bord legt de ruil
+  //    erover),
+  //  - de dag in de rijen voorkomt (een dag zonder rijen is niet
+  //    geïmporteerd, bv. een gat tussen twee perioden),
+  //  - geen latere ruil dezelfde dienst op dezelfde dag raakt (een ketting
+  //    A→B, daarna B→C of C→B: de laatste schakel beslist),
+  //  - en de houder de dienst in het eindbeeld niet heeft.
+  const dagenMetRijen = new Set(rows.map((r) => String(r.date ?? '')));
+  const heeft = (date: string, line: string, driverId: string) =>
+    rows.some((r) => r.date === date && String(r.line) === line && String(r.driverId) === driverId);
+  const bijWie = (date: string, line: string) =>
+    [...new Set(rows.filter((r) => r.date === date && String(r.line) === line).map((r) => String(r.driverId)))];
+  const nietToepasbaar: Array<RuilReplayMismatch<T>> = [];
+  for (const b of benen) {
+    if (b.gevonden || isCodeDienst?.(b.line) || !dagenMetRijen.has(b.date)) continue;
+    if (benen.some((o) => o.volgnr > b.volgnr && o.date === b.date && o.line === b.line)) continue;
+    if (heeft(b.date, b.line, b.houder)) continue;
+    nietToepasbaar.push({ ruil: b.ruil, been: b.been, dienstBij: bijWie(b.date, b.line) });
   }
-  return { applied, skipped, alVerwerkt, opBord };
+  return { applied, skipped, alVerwerkt, opBord, nietToepasbaar };
 };
 
 /**

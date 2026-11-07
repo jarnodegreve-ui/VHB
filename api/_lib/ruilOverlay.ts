@@ -23,6 +23,15 @@ import type { SwapRecord } from "./types.js";
  *    doorvoeren blijft onmogelijk, de aanduiding blijft.
  * 3. Niemand heeft de dienst (intussen handmatig verlegd, of buiten het
  *    bereik): niets doen.
+ * 4. De ontvanger staat niet op het bord (uit dienst gegaan na de ruil, of
+ *    verwijderd; nr. 48, 05-11): de gever wordt vrij met het weg-merk en
+ *    `swapToBuitenBord`, zodat de planner ziet dat niemand op het bord de
+ *    dienst rijdt (de rijen staan op de ontvanger). Tot 05-11 werd zo'n ruil
+ *    helemaal overgeslagen en bleef de dienst op de gever staan, terwijl de
+ *    dekking hem als ingevuld telde. Het spiegelbeeld (gever buiten het bord,
+ *    ontvanger erop) is bewust nog niet gebouwd: zo'n ruil wordt nog
+ *    overgeslagen, ook het terugbeen van een 1-op-1 met een ontvanger
+ *    buiten het bord.
  *
  * Volgorde = beslisvolgorde (decidedAt), zodat kettingen (A→B, daarna B→C)
  * kloppen: de laatste ruil op een cel bepaalt het merk. 'completed' telt
@@ -42,6 +51,10 @@ export type OverlayCel = {
   swapAway?: boolean;
   /** Naam van de chauffeur die de dienst overnam (alleen bij `swapAway`). */
   swapTo?: string;
+  /** De ontvanger staat niet op het bord (uit dienst of verwijderd, nr. 48,
+   *  05-11): de dienst is weggegeven, maar niemand op het bord rijdt hem. De
+   *  gever is wél vrij, want de planningrijen staan op de ontvanger. */
+  swapToBuitenBord?: boolean;
   /** De ruil is afgehandeld ('completed'): de wissel blijft staan, maar
    *  terugdraaien kan niet meer (de state-machine laat geen overgang meer
    *  toe uit een afgehandelde status). */
@@ -63,6 +76,9 @@ export type OverlayUitkomst = {
   gemarkeerd: number;
   /** Niets gevonden om te wisselen of te markeren. */
   overgeslagen: number;
+  /** Gever gemarkeerd als weggeruild naar iemand buiten het bord (uit dienst
+   *  of verwijderd): de dienst heeft op het bord geen rijder meer. */
+  buitenBord: number;
 };
 
 /** De cel van de gever na een wissel als de ontvanger geen dienst had: een
@@ -77,7 +93,7 @@ export function legRuilenOverMaandbeeld(
   opts: { dates: Iterable<string>; chauffeurIds: Set<string>; naamVanId: (id: string) => string; vrijCel?: OverlayCel },
 ): OverlayUitkomst {
   const dateSet = new Set(opts.dates);
-  const uit: OverlayUitkomst = { gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 };
+  const uit: OverlayUitkomst = { gewisseld: 0, gemarkeerd: 0, overgeslagen: 0, buitenBord: 0 };
   const vrijCel = opts.vrijCel ?? VRIJ_CEL;
   const toontCode = (cel: OverlayCel | undefined, code: string): cel is OverlayCel =>
     !!cel && toLookupToken(cel.code) === toLookupToken(code);
@@ -121,13 +137,30 @@ export function legRuilenOverMaandbeeld(
     .filter((sw) => sw?.status === "approved" || sw?.status === "completed")
     .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
 
+  // Situatie 4: de gever staat op het bord, de ontvanger niet. Alleen als de
+  // gever de dienst nog toont wordt hij vrij met het weg-merk; toont hij hem
+  // niet (meer), dan is er niets te markeren.
+  const markeerWegNaarBuitenBord = (date: string, vanId: string, naarId: string, verwachtCode: string, merk: { swapId: string; swapManual: boolean; swapDone?: boolean }) => {
+    const vanCel = cells[vanId]?.[date];
+    if (!toontCode(vanCel, verwachtCode)) { uit.overgeslagen += 1; return; }
+    cells[vanId][date] = { ...vrijCel, ...merk, swapAway: true, swapTo: opts.naamVanId(naarId), swapToBuitenBord: true };
+    uit.buitenBord += 1;
+  };
+
   for (const sw of doorgevoerd) {
     const van = String(sw.requesterId ?? "");
     const naar = String(sw.targetDriverId ?? "");
-    if (!opts.chauffeurIds.has(van) || !opts.chauffeurIds.has(naar)) continue;
+    if (!opts.chauffeurIds.has(van)) continue;
     const dienstDag = String(sw.shiftDate ?? "");
     const dienstCode = String(sw.shiftLine ?? "").trim();
     const merk = { swapId: String(sw.id), swapManual: isHandmatigeWissel(sw), swapDone: sw.status === "completed", swapFrom: opts.naamVanId(van) };
+    if (!opts.chauffeurIds.has(naar)) {
+      // Het terugbeen van een 1-op-1 zou de gever een dienst geven die uit de
+      // cel van iemand buiten het bord moet komen: spiegelbeeld, nog niet
+      // gebouwd (zie het kopblok).
+      if (dienstDag && dienstCode && dateSet.has(dienstDag)) markeerWegNaarBuitenBord(dienstDag, van, naar, dienstCode, merk);
+      continue;
+    }
     // Zonder dienst-info (aanvraag van vóór de shift_info-migratie) valt er
     // niets veilig te wisselen of te markeren.
     if (dienstDag && dienstCode && dateSet.has(dienstDag)) wisselCel(dienstDag, van, naar, dienstCode, merk);

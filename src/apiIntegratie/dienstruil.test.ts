@@ -1148,6 +1148,31 @@ describe('handmatige dienstwissel, code-diensten (schoolrit, bureau, garage)', (
     expect(mem.swaps).toHaveLength(0);
   });
 
+  // Nr. 48 (05-11): dienst 2116 stond op het bord bij Patrick, de rijen bij
+  // Daniel Decock (uit dienst) door een ruil. De 409 zei alleen "staat niet
+  // (meer) op naam van"; nu noemt hij de houder en wat de planner doet.
+  it('noemt de echte houder van de rijen, met "(uit dienst)" en de weg via het celdetail', async () => {
+    const usersVoor = mem.users;
+    const planningVoor = mem.planning;
+    try {
+      mem.users = [...usersVoor, { id: '5', name: 'Daniel Decock', email: 'd@vhb.be', role: 'chauffeur', isActive: false } as (typeof mem.users)[number]];
+      mem.planning = [{ id: 'sh-2116', driverId: '5', date: DAG, line: '2116' } as (typeof mem.planning)[number]];
+      matrix({ 'Chauffeur A': '2116', 'Chauffeur B': 'vrij' });
+      const res = await wissel({ line: '2116', fromDriverId: '3', toDriverId: '4' });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe('Dienst 2116 op 24/07/2026 staat op naam van Daniel Decock (uit dienst), niet van Chauffeur A. Draai de wissel in het celdetail van Chauffeur A terug, dan kan je opnieuw wisselen.');
+      expect(mem.swaps).toHaveLength(0);
+      // Houder actief: de planning is gewoon gewijzigd, vernieuwen volstaat.
+      mem.planning = [{ id: 'sh-2116b', driverId: '4', date: DAG, line: '2116' } as (typeof mem.planning)[number]];
+      const res2 = await wissel({ line: '2116', fromDriverId: '3', toDriverId: '4' });
+      expect(res2.status).toBe(409);
+      expect(String(res2.json?.error)).toBe('Dienst 2116 op 24/07/2026 staat op naam van Chauffeur B, niet van Chauffeur A. Vernieuw de pagina en probeer opnieuw.');
+    } finally {
+      mem.users = usersVoor;
+      mem.planning = planningVoor;
+    }
+  });
+
   it('weigert een tweede keer: na de wissel staat de rit niet meer bij de gever', async () => {
     expect((await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' })).status).toBe(200);
     const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' });

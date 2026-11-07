@@ -393,3 +393,51 @@ describe('Gebruikers: meldingen en toestellen pas tonen als de lijsten binnen zi
     await waitFor(() => expect(toestellenKaarten().every((t) => t === 'onbekend')).toBe(true));
   });
 });
+
+// Nr. 48 (05-11): wie uit dienst gaat of gepauzeerd wordt, houdt zijn
+// toekomstige diensten op naam. Het scherm zegt dat vooraf, en schrijft niets extra.
+describe('Gebruikers: waarschuwing over toekomstige diensten op naam', () => {
+  const saveUser = () => (dataCtx as unknown as { saveUser: ReturnType<typeof vi.fn> }).saveUser;
+  const toekomst = [
+    { id: 's1', driverId: '3', date: '2099-01-05', line: '2116', startTime: '06:00', endTime: '10:00' },
+    { id: 's2', driverId: '3', date: '2099-01-05', line: '2116', startTime: '14:00', endTime: '18:00' },
+    { id: 's3', driverId: '3', date: '2099-01-06', line: '2214', startTime: '06:00', endTime: '14:00' },
+    { id: 's4', driverId: '4', date: '2099-01-06', line: '2300', startTime: '06:00', endTime: '14:00' },
+  ];
+  const kiesActie = async (naam: string, label: string) => {
+    const trigger = screen.getAllByRole('button', { name: `Meer acties voor ${naam}` })[0];
+    await act(async () => { fireEvent.click(trigger); });
+    const menu = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+    const knop = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find((b) => b.textContent?.trim() === label)!;
+    await act(async () => { fireEvent.click(knop); });
+  };
+
+  it('Uit dienst toont hoeveel diensten er nog op naam staan (gesplitste dienst één keer) en de eerste dag', async () => {
+    Object.assign(dataCtx, { shifts: toekomst });
+    render(<ManageUsersView currentUser={ADMIN} />);
+    await kiesActie(CHAUFFEUR.name, 'Uit dienst');
+    const dialoog = await screen.findByRole('dialog', { name: 'Uit dienst' });
+    expect(dialoog.textContent).toContain('Staat nog op 2 diensten vanaf vandaag (eerste 05/01/2099). De diensten blijven op naam staan en verschijnen in Openstaande diensten.');
+  });
+
+  it('Pauzeren vraagt eerst een bevestiging als er diensten op naam staan, en slaat pas daarna op', async () => {
+    Object.assign(dataCtx, { shifts: toekomst });
+    render(<ManageUsersView currentUser={ADMIN} />);
+    await kiesActie(CHAUFFEUR.name, 'Gebruiker pauzeren');
+    expect(saveUser()).not.toHaveBeenCalled();
+    const dialoog = await screen.findByRole('dialog');
+    expect(dialoog.textContent).toContain('Chauffeur A staat nog op 2 diensten vanaf vandaag');
+    await act(async () => { fireEvent.click(within(dialoog).getByRole('button', { name: 'Toch pauzeren' })); });
+    await waitFor(() => expect(saveUser()).toHaveBeenCalled());
+    expect(saveUser().mock.calls[0][0]).toMatchObject({ id: '3', isActive: false });
+  });
+
+  it('zonder diensten op naam pauzeert het meteen, zoals voorheen', async () => {
+    Object.assign(dataCtx, { shifts: toekomst });
+    render(<ManageUsersView currentUser={ADMIN} />);
+    await kiesActie(PLANNER.name, 'Gebruiker pauzeren');
+    await waitFor(() => expect(saveUser()).toHaveBeenCalled());
+    expect(saveUser().mock.calls[0][0]).toMatchObject({ id: '2', isActive: false });
+    expect(screen.queryByRole('button', { name: 'Toch pauzeren' })).toBeNull();
+  });
+});

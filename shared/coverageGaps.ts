@@ -137,6 +137,13 @@ export function resolveDayTypeMetBron(
   return { dayType, bron: periode ? { soort: 'periode', vanaf: periode.vanaf } : { soort: 'basis' } };
 }
 
+/** Uitval-redenen die geen afwezigheid zijn: de dienst staat via een ruil op
+ *  naam van een account dat uit dienst is of verwijderd (nr. 48, 05-11). De
+ *  dekking (server) schrijft ze, scherm en rapport lezen ze. */
+export const REDEN_UIT_DIENST = "uit dienst";
+export const REDEN_ACCOUNT_VERWIJDERD = "account verwijderd";
+export const isUitDienstReden = (reden: string): boolean => reden === REDEN_UIT_DIENST || reden === REDEN_ACCOUNT_VERWIJDERD;
+
 export type DayGap = {
   date: string;
   dayType: string;
@@ -147,8 +154,11 @@ export type DayGap = {
   /** dienstnummers die ontbreken (niet toegekend die dag) */
   missing: string[];
   /** Per opengevallen dienst (genormaliseerde code): wie viel uit en waarom.
-   *  Alleen gevuld als het gat door een goedgekeurde afwezigheid komt —
-   *  een dienst die nooit toegewezen was, heeft geen uitval-info. */
+   *  Alleen gevuld als het gat door een goedgekeurde afwezigheid komt (reden
+   *  ziek, verlof, klein verlet) of doordat de dienst via een ruil op naam
+   *  staat van een account dat uit dienst is of verwijderd (reden "uit
+   *  dienst", "account verwijderd"; 05-11). Een dienst die nooit toegewezen
+   *  was, heeft geen uitval-info. */
   uitval?: Record<string, { name: string; reason: string }>;
   /** Per verwachte dienst (genormaliseerde code) die GEEN gat meer is doordat
    *  een collega hem overnam van een afwezige: wie viel uit, waarom, en wie

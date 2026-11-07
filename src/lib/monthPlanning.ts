@@ -31,6 +31,9 @@ export type MonthCell = {
   swapAway?: boolean;
   /** Naam van de chauffeur die de dienst overnam (alleen bij `swapAway`). */
   swapTo?: string;
+  /** De ontvanger staat niet (meer) op het bord: uit dienst of verwijderd.
+   *  Niemand op het bord rijdt deze dienst (05-11). */
+  swapToBuitenBord?: boolean;
   /** De ruil is afgehandeld: de wissel blijft staan, terugdraaien kan niet meer. */
   swapDone?: boolean;
 };

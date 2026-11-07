@@ -820,6 +820,9 @@ export function mountPlanningRoutes(app: express.Express) {
         perDriver: generatedPlanning.summary.perDriver,
         ziekteDiensten,
         parserWaarschuwingen,
+        // Gemiste ruilen bij naam (06-11), voor de melding na het importeren;
+        // het log hierboven draagt ze al via replayTekst.
+        ruilenNietToepasbaar: reapplied.nietToepasbaar ?? [],
         startDate,
         endDate,
         fileStartDate,
@@ -1011,6 +1014,9 @@ export function mountPlanningRoutes(app: express.Express) {
         // De import meldde de replay wél in de log, het voorbeeld verzweeg hem —
         // terwijl de cijfers hierboven er al door beïnvloed zijn.
         reappliedSwaps: reapplied,
+        // De gemiste ruilen bij naam, met bij wie de dienst in de Excel wél
+        // staat: de waarschuwing vóór het bevestigen (06-11, dienst 2101).
+        ruilenNietToepasbaar: reapplied.nietToepasbaar ?? [],
         parserWaarschuwingen,
         chauffeursNieuw,
         chauffeursVerdwenen,

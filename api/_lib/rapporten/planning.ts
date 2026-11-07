@@ -147,7 +147,7 @@ export type OpenstaandeBron = {
   grenzen: { eerste: string | null; laatste: string | null };
 };
 
-const REDEN_LABEL: Record<string, string> = { ziek: "Ziek", verlof: "Verlof", "klein verlet": "Klein verlet" };
+const REDEN_LABEL: Record<string, string> = { ziek: "Ziek", verlof: "Verlof", "klein verlet": "Klein verlet", "uit dienst": "Uit dienst", "account verwijderd": "Account verwijderd" };
 const redenTekst = (info: { name: string; reason: string } | undefined): string =>
   (info ? `${REDEN_LABEL[info.reason] ?? info.reason}: ${info.name}` : "Niet toegewezen");
 

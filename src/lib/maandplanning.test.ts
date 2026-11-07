@@ -81,6 +81,11 @@ describe('celTitel', () => {
       .toBe('Dienst · 4102 · handmatig overgezet van een collega, klik voor details');
     expect(celTitel(cel('vrij', 'absence', { swapId: 's1', swapAway: true, swapTo: 'Anna' }), false))
       .toBe('Afwezig · vrij · dienst weggeruild naar Anna, klik voor details');
+    // Nr. 48 (05-11): de ontvanger staat niet meer op het bord.
+    expect(celTitel(cel('vrij', 'absence', { swapId: 's1', swapAway: true, swapTo: 'Daniel Decock (uit dienst)', swapToBuitenBord: true }), false))
+      .toBe('Afwezig · vrij · dienst weggeruild naar Daniel Decock (uit dienst), niemand op het bord rijdt hem, klik voor details');
+    expect(celTitel(cel('vrij', 'absence', { swapId: 's1', swapAway: true, swapManual: true, swapTo: '', swapToBuitenBord: true }), false))
+      .toBe('Afwezig · vrij · dienst overgezet naar een verwijderd account, niemand op het bord rijdt hem, klik voor details');
   });
 });
 
