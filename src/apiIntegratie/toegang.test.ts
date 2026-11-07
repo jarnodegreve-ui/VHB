@@ -1898,5 +1898,19 @@ describe('toestel uitloggen, blokkeren en schrappen beëindigen de Supabase-sess
     expect(res.json.sessieBeeindigd).toBe(false);
     expect(mem.beeindigdeSessies).toEqual([]);
     expect(mem.devices.some((d: any) => d.deviceToken === 'dev-oud')).toBe(false);
+describe('aanmeldcontrole bij een databasefout (beveiligingstest 07-11, keuze 5)', () => {
+  it('geeft 503 auth_unavailable als de profiel-lezing faalt, in plaats van een onafgevangen fout', async () => {
+    invalidateUsersCache();
+    mem.usersFaalt = true;
+    try {
+      const res = await api('GET', '/api/me', { token: 'tok-a' });
+      expect(res.status).toBe(503);
+      expect(res.json.code).toBe('auth_unavailable');
+    } finally {
+      mem.usersFaalt = false;
+      invalidateUsersCache();
+    }
+    // Zodra de database weer antwoordt, werkt dezelfde sessie gewoon verder.
+    expect((await api('GET', '/api/me', { token: 'tok-a' })).status).toBe(200);
   });
 });

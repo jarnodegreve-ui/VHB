@@ -300,7 +300,10 @@ export function mountSysteemRoutes(app: express.Express) {
         userId: verifiedUser ? verifiedUser.id : claimedId ? `onbevestigd:${claimedId}` : "",
         release: cut(b.release, 40) || undefined,
         view: cut(b.view, 60) || undefined,
-        role: verifiedUser ? verifiedUser.role : cut(b.role, 20) || undefined,
+        // De rol alleen van de server: zonder sessie is een opgegeven rol niet
+        // te vertrouwen en stond "admin" anders zo in Systeemstatus › Fouten
+        // (beveiligingstest 07-11, keuze 7). Het id blijft als onbevestigd staan.
+        role: verifiedUser ? verifiedUser.role : undefined,
         online: typeof b.online === "boolean" ? b.online : undefined,
         breadcrumbs,
       };
