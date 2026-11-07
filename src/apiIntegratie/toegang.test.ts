@@ -1898,6 +1898,9 @@ describe('toestel uitloggen, blokkeren en schrappen beëindigen de Supabase-sess
     expect(res.json.sessieBeeindigd).toBe(false);
     expect(mem.beeindigdeSessies).toEqual([]);
     expect(mem.devices.some((d: any) => d.deviceToken === 'dev-oud')).toBe(false);
+  });
+});
+
 describe('aanmeldcontrole bij een databasefout (beveiligingstest 07-11, keuze 5)', () => {
   it('geeft 503 auth_unavailable als de profiel-lezing faalt, in plaats van een onafgevangen fout', async () => {
     invalidateUsersCache();
