@@ -221,3 +221,58 @@ export const revokeAllDevices = async (userId: string): Promise<number> => {
   if (error) throw error;
   return (data ?? []).length;
 };
+
+/** Herkent "functie bestaat niet" (migratie niet gedraaid): Postgres 42883,
+ *  PostgREST PGRST202 (schema-cache kent de functie niet). */
+const isMissingFunctionError = (err: unknown): boolean => {
+  const code = String((err as { code?: unknown })?.code ?? '');
+  const msg = String((err as { message?: unknown })?.message ?? '').toLowerCase();
+  return code === '42883' || code === 'PGRST202' || /could not find the function/.test(msg) || /function .* does not exist/.test(msg);
+};
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let sessieFunctieGemeld = false;
+
+/**
+ * Beëindigt één Supabase-sessie via public.beeindig_auth_sessie(uuid)
+ * (supabase/2026-11-07_auth_sessie_beeindigen.sql): de rij in auth.sessions
+ * gaat weg en de refresh-tokens cascaderen, dus het toestel kan niet meer
+ * verversen en meldt zich af. true = beëindigd, false = onbekend of al weg,
+ * null = niets gedaan: geen uuid, of de functie ontbreekt omdat de migratie
+ * nog niet gedraaid is (dan geldt het oude gedrag, één keer gelogd).
+ */
+export const beeindigAuthSessie = async (sessionId: string): Promise<boolean | null> => {
+  if (!UUID_RE.test(String(sessionId ?? ''))) return null;
+  const client = requireDb();
+  const { data, error } = await client.rpc('beeindig_auth_sessie', { p_session_id: sessionId });
+  if (error) {
+    if (isMissingFunctionError(error)) {
+      if (!sessieFunctieGemeld) {
+        sessieFunctieGemeld = true;
+        console.error('beeindig_auth_sessie ontbreekt, migratie 2026-11-07_auth_sessie_beeindigen.sql nog niet gedraaid:', error.message);
+      }
+      return null;
+    }
+    throw error;
+  }
+  return data === true;
+};
+
+/** De auth-sessies die op de toestellen van één gebruiker vastliggen (uit
+ *  dienst, pauzeren): die beëindigt trekToegangIn naast de Auth-ban. */
+export const listSessionIdsForUser = async (userId: string): Promise<string[]> => {
+  if (!sessieKolomBruikbaar()) return [];
+  const client = requireDb();
+  const { data, error } = await client
+    .from('user_devices')
+    .select('session_id')
+    .eq('user_id', String(userId))
+    .not('session_id', 'is', null);
+  if (error) {
+    if (isMissingColumnError(error)) {
+      meldSessieKolomOntbreekt(error);
+      return [];
+    }
+    throw error;
+  }
+  return [...new Set((data ?? []).map((r: any) => String(r.session_id)).filter(Boolean))];
+};
