@@ -189,6 +189,19 @@ describe('Dagadministratie: tot en met vandaag (Europe/Brussels), Jarno 23-09', 
   const zetNu = (iso: string) => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(iso)); };
   afterEach(() => { vi.useRealTimers(); });
 
+  it('weigert een onbestaande kalenderdag en een onbestaande maand op elke route (beveiligingstest 07-11, keuze 6)', async () => {
+    // 30 februari past in het patroon JJJJ-MM-DD maar bestaat niet; vroeger
+    // opende dat een dag die er niet is (201) en las hij hem terug (200).
+    expect((await api('POST', '/api/dagafsluiting/2026-02-30/openen', { token: 'tok-planner' })).status).toBe(400);
+    expect((await api('GET', '/api/dagafsluiting/2026-02-30', { token: 'tok-planner' })).status).toBe(400);
+    expect((await api('POST', '/api/dagafsluiting/2026-02-30/afsluiten', { token: 'tok-planner' })).status).toBe(400);
+    expect((await api('POST', '/api/dagafsluiting/2026-02-30/heropenen', { token: 'tok-planner', body: { reden: 'test' } })).status).toBe(400);
+    expect((await api('PUT', '/api/dagafsluiting/2026-02-30/rijen/x', { token: 'tok-planner', body: { geredenCode: '12' } })).status).toBe(400);
+    expect((await api('GET', '/api/dagafsluiting?maand=2026-13', { token: 'tok-planner' })).status).toBe(400);
+    expect((await api('GET', '/api/loon/export?maand=2026-00', { token: 'tok-planner' })).status).toBe(400);
+    expect(mem.loonRijen.dag_afsluitingen).toEqual([]);
+  });
+
   it('verleden en vandaag openen en afsluiten; morgen geweigerd zonder iets te bewaren', async () => {
     zetNu('2026-09-23T10:00:00Z');
     expect((await api('POST', '/api/dagafsluiting/2026-07-01/openen', { token: 'tok-planner' })).status).toBe(201);
