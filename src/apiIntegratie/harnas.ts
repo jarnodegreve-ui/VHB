@@ -195,6 +195,12 @@ const mem = vi.hoisted(() => ({
   // true = saveUsersData kan een nieuw profiel niet aan zijn Auth-account
   // koppelen (koppelAuthIdStil mislukt): geen authId in createdAccounts.
   koppelMislukt: false,
+  // Sessies die de toestelroutes lieten beëindigen (beeindigAuthSessie), en
+  // true = de databasefunctie ontbreekt (migratie 2026-11-07 nog niet gedraaid).
+  beeindigdeSessies: [] as string[],
+  sessieFunctieOntbreekt: false,
+  // true = de users-lezing faalt (databasefout), zoals PostgREST dan gooit.
+  usersFaalt: false,
 }));
 
 vi.mock('../../api/_lib/db.js', () => {
@@ -459,7 +465,10 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
     },
     getAppSetting: async (key: string) => mem.appSettings[key] ?? null,
     setAppSetting: async (key: string, value: unknown) => { mem.appSettings[key] = value; },
-    getUsersData: async () => mem.users,
+    getUsersData: async () => {
+      if (mem.usersFaalt) throw { code: 'PGRST301', message: 'Invalid API key' };
+      return mem.users;
+    },
     getRecentLogins: async () => [],
     koppelAuthId: async (userId: string, authId: string) => { const u = mem.users.find((x: any) => String(x.id) === String(userId)); if (u) u.authId = authId; },
     getPlanningNotes: async (o: any) => mem.planningNotes.filter((n: any) => (!o.driverId || n.driverId === o.driverId) && n.date >= o.fromIso && n.date <= o.toIso),
@@ -1057,6 +1066,13 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
       return { device, created: true };
     },
     listAllDevices: async () => mem.devices,
+    beeindigAuthSessie: async (sessionId: string) => {
+      if (mem.sessieFunctieOntbreekt) return null;
+      mem.beeindigdeSessies.push(sessionId);
+      return true;
+    },
+    listSessionIdsForUser: async (userId: string) =>
+      [...new Set(mem.devices.filter((d: any) => String(d.userId) === String(userId) && d.sessionId).map((d: any) => String(d.sessionId)))],
     listRevokedSessionIds: async () =>
       mem.devices.filter((d: any) => d.status === 'revoked' && d.sessionId).map((d: any) => String(d.sessionId)),
     setDeviceStatus: async (userId: string, deviceToken: string, status: string) => {
@@ -1204,6 +1220,9 @@ beforeEach(() => {
   invalidateOnderhoudCache();
   mem.supabaseAdmin = null;
   mem.koppelMislukt = false;
+  mem.beeindigdeSessies = [];
+  mem.sessieFunctieOntbreekt = false;
+  mem.usersFaalt = false;
   mem.appSettings = {};
   mem.opslag.clear();
   mem.opslagTijd.clear();

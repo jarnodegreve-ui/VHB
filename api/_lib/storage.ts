@@ -212,6 +212,8 @@ export {
   renameDevice,
   deleteDevice,
   revokeAllDevices,
+  beeindigAuthSessie,
+  listSessionIdsForUser,
 } from "./opslag/toestellen.js";
 export {
   getSwapsData,

@@ -15,6 +15,9 @@ const mem = vi.hoisted(() => ({
   logActivity: vi.fn(async () => undefined),
   saveUsersData: vi.fn(async () => ({ createdAccounts: [] })),
   meldToestelWijziging: vi.fn(),
+  // Sessies van de toestellen (07-11): twee sessies, allebei echt beëindigd.
+  listSessions: vi.fn(async (_id: string) => ['s-1', 's-2']),
+  beeindigSessie: vi.fn(async (_sid: string): Promise<boolean | null> => true),
 }));
 
 vi.mock('../api/_lib/db.js', () => ({ db: null, supabase: null, supabaseAdmin: null }));
@@ -36,6 +39,8 @@ vi.mock('../api/_lib/storage.js', () => ({
   kopieerOnthaalDocumentenNaar: vi.fn(async () => 0),
   logActivity: (...args: unknown[]) => mem.logActivity(...(args as [])),
   revokeAllDevices: (id: string) => mem.revokeAllDevices(id),
+  listSessionIdsForUser: (id: string) => mem.listSessions(id),
+  beeindigAuthSessie: (sid: string) => mem.beeindigSessie(sid),
   saveDiversionsData: vi.fn(),
   saveUpdatesData: vi.fn(),
   saveUsersData: () => mem.saveUsersData(),
@@ -55,6 +60,8 @@ beforeEach(() => {
   mem.deletePush.mockClear();
   mem.logActivity.mockClear();
   mem.meldToestelWijziging.mockClear();
+  mem.listSessions.mockClear();
+  mem.beeindigSessie.mockClear();
 });
 
 describe('gedeactiveerdeIds', () => {
@@ -79,7 +86,9 @@ describe('verwerkUsersOpslag, deactiveren via PUT/collectie', () => {
     // Zonder dit bleef een net ingetrokken toestel tot 30 s 'approved' in de gate-cache.
     expect(mem.meldToestelWijziging).toHaveBeenCalledTimes(1);
     expect(mem.deletePush).toHaveBeenCalledWith('a');
-    expect(resultaat.ingetrokken).toEqual({ a: { toestellen: 2, push: 1, fouten: [] } });
+    // Ook de Supabase-sessies van die toestellen zijn beëindigd (07-11).
+    expect(mem.beeindigSessie.mock.calls.map((c) => c[0])).toEqual(['s-1', 's-2']);
+    expect(resultaat.ingetrokken).toEqual({ a: { toestellen: 2, push: 1, sessies: 2, fouten: [] } });
     const titels = mem.logActivity.mock.calls.map((c: any[]) => c[2]);
     expect(titels).toContain('Toegang ingetrokken');
   });
@@ -102,9 +111,16 @@ describe('verwerkUsersOpslag, deactiveren via PUT/collectie', () => {
 describe('trekToegangIn', () => {
   it('is best-effort: een ontbrekende toestel-tabel is geen fout, een andere fout wel', async () => {
     mem.revokeAllDevices.mockRejectedValueOnce({ code: '42P01' });
-    expect(await trekToegangIn('x')).toEqual({ toestellen: 0, push: 1, fouten: [] });
+    expect(await trekToegangIn('x')).toEqual({ toestellen: 0, push: 1, sessies: 2, fouten: [] });
     mem.revokeAllDevices.mockRejectedValueOnce(new Error('kapot'));
+    mem.listSessions.mockRejectedValueOnce(new Error('kapot'));
     mem.deletePush.mockRejectedValueOnce(new Error('kapot'));
-    expect(await trekToegangIn('x')).toEqual({ toestellen: 0, push: 0, fouten: ['toestellen', 'push'] });
+    expect(await trekToegangIn('x')).toEqual({ toestellen: 0, push: 0, sessies: 0, fouten: ['toestellen', 'sessies', 'push'] });
+  });
+
+  it('zonder de databasefunctie (migratie 07-11 nog niet gedraaid) beëindigt het niets en meldt het geen fout', async () => {
+    mem.beeindigSessie.mockResolvedValue(null);
+    expect(await trekToegangIn('x')).toEqual({ toestellen: 2, push: 1, sessies: 0, fouten: [] });
+    mem.beeindigSessie.mockResolvedValue(true);
   });
 });

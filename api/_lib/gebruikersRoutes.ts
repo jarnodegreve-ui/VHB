@@ -517,8 +517,12 @@ export function mountGebruikersRoutes(app: express.Express) {
       else stappen.push({ stap: "push", ok: true, detail: `${push} push-abonnement${push === 1 ? "" : "en"} gewist.` });
 
       // (4) Sessies: de ban uit stap 1 blokkeert nieuwe logins en token-
-      // refreshes; lopende access-tokens verlopen vanzelf (max. 1 uur).
-      stappen.push({ stap: "sessies", ok: true, detail: "Auth-account geblokkeerd, lopende sessies stoppen bij tokenverloop." });
+      // refreshes, en sinds 07-11 beëindigt trekToegangIn ook de sessies van
+      // de toestellen zelf (refresh-tokens weg); een lopend toegangstoken
+      // verloopt vanzelf (max. 1 uur) en wordt in de API al geweigerd.
+      const sessies = intrek.sessies;
+      if (intrek.fouten.includes("sessies")) stappen.push({ stap: "sessies", ok: false, detail: "Auth-account geblokkeerd, maar de sessies beëindigen is mislukt; ze stoppen bij tokenverloop." });
+      else stappen.push({ stap: "sessies", ok: true, detail: `Auth-account geblokkeerd, ${sessies} sessie${sessies === 1 ? "" : "s"} beëindigd; een lopend toegangstoken verloopt binnen het uur.` });
 
       // (5) Eén samenvattende auditregel.
       await logActivity(

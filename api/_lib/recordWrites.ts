@@ -20,6 +20,8 @@ import {
   kopieerOnthaalDocumentenNaar,
   logActivity,
   revokeAllDevices,
+  beeindigAuthSessie,
+  listSessionIdsForUser,
   saveDiversionsData,
   saveUpdatesData,
   saveUsersData,
@@ -83,8 +85,10 @@ type WriteOpts = {
 export type ToegangIngetrokken = {
   toestellen: number;
   push: number;
+  /** Supabase-sessies van die toestellen die echt beëindigd zijn (07-11). */
+  sessies: number;
   /** Stappen die mislukten (best-effort: de deactivering zelf staat al). */
-  fouten: Array<"toestellen" | "push">;
+  fouten: Array<"toestellen" | "push" | "sessies">;
 };
 
 /**
@@ -97,7 +101,7 @@ export type ToegangIngetrokken = {
  * aanroep geeft nullen.
  */
 export const trekToegangIn = async (userId: string): Promise<ToegangIngetrokken> => {
-  const resultaat: ToegangIngetrokken = { toestellen: 0, push: 0, fouten: [] };
+  const resultaat: ToegangIngetrokken = { toestellen: 0, push: 0, sessies: 0, fouten: [] };
   try {
     resultaat.toestellen = await revokeAllDevices(userId);
     // De aanroepers wissen de users-cache al (isActive wijzigt), maar dit pad
@@ -108,6 +112,21 @@ export const trekToegangIn = async (userId: string): Promise<ToegangIngetrokken>
     if (!isMissingTableError(err)) {
       console.error("Toegang intrekken: toestellen intrekken is mislukt.", err?.message || err);
       resultaat.fouten.push("toestellen");
+    }
+  }
+  // Ook de Supabase-sessies van die toestellen beëindigen (07-11): de Auth-ban
+  // blokkeert verversen, maar een toestel met een nog geldig toegangstoken en
+  // een lopend refresh-token las anders tot de volgende verversing verder via
+  // PostgREST en Realtime. Best-effort per sessie; zonder de functie
+  // (migratie nog niet gedraaid) gebeurt er niets, zoals vroeger.
+  try {
+    for (const sessionId of await listSessionIdsForUser(userId)) {
+      if ((await beeindigAuthSessie(sessionId)) === true) resultaat.sessies += 1;
+    }
+  } catch (err: any) {
+    if (!isMissingTableError(err)) {
+      console.error("Toegang intrekken: sessies beëindigen is mislukt.", err?.message || err);
+      resultaat.fouten.push("sessies");
     }
   }
   try {

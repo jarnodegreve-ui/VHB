@@ -13,6 +13,8 @@ import {
   deleteDevice,
   renameDevice,
   setAppSetting,
+  beeindigAuthSessie,
+  getDevice,
 } from "./storage.js";
 import { deviceRegisterRateLimit } from "./rateLimit.js";
 import { meldToestelWijziging } from "./deviceCache.js";
@@ -22,6 +24,27 @@ import type { AuthenticatedRequest } from "./types.js";
 // medewerker heeft er een paar, dus dit raakt niemand — het stopt alleen de
 // aanmaak-flood via geroteerde tokens (registratie is device-gate-exempt).
 const MAX_DEVICES_PER_USER = 15;
+
+/**
+ * Beëindigt de Supabase-sessie van een toestelrij (migratie
+ * 2026-11-07_auth_sessie_beeindigen.sql), best-effort: de toestelrij is op
+ * dat moment al ingetrokken of weg, en een fout hier (functie ontbreekt,
+ * databasehik) mag de route niet laten falen. Tot 07-11 bleef het
+ * refresh-token van een uitgelogd of geblokkeerd toestel werken, dus las dat
+ * toestel via PostgREST en Realtime zijn eigen rijen gewoon verder
+ * (beveiligingstest 07-11, keuze 9). Zonder sessie op de rij (registratie van
+ * vóór 09-09) valt er niets te beëindigen. Geeft terug of er echt een sessie
+ * wegging.
+ */
+const beeindigSessieVan = async (sessionId: string | null | undefined, context: string): Promise<boolean> => {
+  if (!sessionId) return false;
+  try {
+    return (await beeindigAuthSessie(sessionId)) === true;
+  } catch (err) {
+    console.error(`Sessie beëindigen (${context}) is mislukt:`, (err as { message?: unknown })?.message ?? err);
+    return false;
+  }
+};
 
 /**
  * Toestel-whitelist — registratie + admin-beheer.
@@ -111,9 +134,13 @@ export const mountDeviceRoutes = (app: express.Express) => {
       // Vroeger zetten we hier 'revoked', waardoor een zelf uitgelogd
       // toestel voorgoed "geblokkeerd" was (bevinding 15-09).
       const anderen = (await listAllDevices()).filter((d) => d.userId === String(appUser.id) && d.deviceToken !== ownToken && d.status !== "revoked");
+      let sessies = 0;
       try {
         for (const d of anderen) {
           await deleteDevice(String(appUser.id), d.deviceToken);
+          // Ook de aanmelding op dat toestel zelf stopt (07-11); de client doet
+          // daarnaast nog signOut({ scope: 'others' }) voor sessies zonder toestelrij.
+          if (await beeindigSessieVan(d.sessionId, "andere toestellen")) sessies += 1;
         }
       } finally {
         // Ook bij een fout halverwege: wat al weg is moet overal meteen gelden
@@ -121,9 +148,9 @@ export const mountDeviceRoutes = (app: express.Express) => {
         if (anderen.length > 0) meldToestelWijziging();
       }
       if (anderen.length > 0) {
-        await logActivity(req, "system", "Uitgelogd op andere toestellen", `${appUser.name}: ${anderen.length} toestel${anderen.length === 1 ? "" : "len"} ingetrokken.`);
+        await logActivity(req, "system", "Uitgelogd op andere toestellen", `${appUser.name}: ${anderen.length} toestel${anderen.length === 1 ? "" : "len"} ingetrokken, ${sessies} sessie${sessies === 1 ? "" : "s"} beëindigd.`);
       }
-      res.json({ success: true, aantal: anderen.length });
+      res.json({ success: true, aantal: anderen.length, sessies });
     } catch (err: any) {
       if (isMissingTableError(err)) return res.json({ success: true, aantal: 0 });
       console.error("Andere toestellen uitloggen is mislukt.", err);
@@ -149,9 +176,14 @@ export const mountDeviceRoutes = (app: express.Express) => {
       if (toestel.status !== "revoked") {
         await deleteDevice(String(appUser.id), toestel.deviceToken);
         meldToestelWijziging();
-        await logActivity(req, "system", "Toestel uitgelogd", `${appUser.name}: ${toestel.name}.`);
       }
-      res.json({ success: true, id });
+      // De aanmelding op dat toestel stopt echt (07-11), ook als een admin het
+      // al blokkeerde: de rij blijft dan staan, de sessie niet.
+      const sessieBeeindigd = await beeindigSessieVan(toestel.sessionId, "toestel uitloggen");
+      if (toestel.status !== "revoked") {
+        await logActivity(req, "system", "Toestel uitgelogd", `${appUser.name}: ${toestel.name}${sessieBeeindigd ? ", sessie beëindigd" : ""}.`);
+      }
+      res.json({ success: true, id, sessieBeeindigd });
     } catch (err: any) {
       if (isMissingTableError(err)) return res.status(404).json({ error: "Toestel niet gevonden." });
       console.error("Toestel uitloggen is mislukt.", err);
@@ -215,6 +247,10 @@ export const mountDeviceRoutes = (app: express.Express) => {
       // header.
       const nieuweSessieOpIngetrokken = !created && device.status === "revoked" && Boolean(sessie) && vorigeSessie !== sessie;
       if (created || nieuweSessieOpIngetrokken) meldToestelWijziging();
+      // Een geblokkeerd toestel dat zich aanmeldt: die sessie stopt meteen
+      // (07-11), zodat het toestel ook buiten de API om (PostgREST, Realtime)
+      // niets meer leest. De registratie zelf antwoordt gewoon 'revoked'.
+      if (!created && device.status === "revoked" && sessie) await beeindigSessieVan(sessie, "aanmelding op geblokkeerd toestel");
       // Bestond het toestel al als 'wachtend' terwijl de schakelaar uit
       // staat: alsnog goedkeuren (zelfde belofte: elke login komt erin).
       // Geblokkeerd blijft geblokkeerd — de schakelaar heropent geen
@@ -346,12 +382,15 @@ export const mountDeviceRoutes = (app: express.Express) => {
       if (userId === String(req.appUser!.id) && deviceToken === ownToken) {
         return res.status(400).json({ error: "Je kunt het toestel waarop je nu werkt niet blokkeren." });
       }
+      const toestel = await getDevice(userId, deviceToken);
       await setDeviceStatus(userId, deviceToken, "revoked", String(req.appUser!.id));
       // Intrekken: lokaal meteen, elders via de epoch binnen ±2 s. Dezelfde
       // aanroep wist ook de lijst met ingetrokken sessies (zelfde cache).
       meldToestelWijziging();
+      // En de aanmelding op dat toestel zelf stopt (07-11).
+      const sessieBeeindigd = await beeindigSessieVan(toestel?.sessionId, "blokkeren");
       const owner = (await getUsersData()).find((u) => String(u.id) === userId);
-      await logActivity(req, "system", "Toestel geblokkeerd", `${owner?.name ?? userId}.`);
+      await logActivity(req, "system", "Toestel geblokkeerd", `${owner?.name ?? userId}${sessieBeeindigd ? ", sessie beëindigd" : ""}.`);
       res.json({ success: true });
     } catch (err: any) {
       console.error("Toestel blokkeren is mislukt.", err);
@@ -379,10 +418,14 @@ export const mountDeviceRoutes = (app: express.Express) => {
           code: "last_device",
         });
       }
+      const toestel = await getDevice(userId, deviceToken);
       await deleteDevice(userId, deviceToken);
       meldToestelWijziging();
+      // Schrappen laat de sessie niet leven (07-11): anders bleef een
+      // geschrapt toestel aangemeld tot het opnieuw registreerde.
+      const sessieBeeindigd = await beeindigSessieVan(toestel?.sessionId, "schrappen");
       const owner = (await getUsersData()).find((u) => String(u.id) === userId);
-      await logActivity(req, "system", "Toestel geschrapt", `${owner?.name ?? userId}.`);
+      await logActivity(req, "system", "Toestel geschrapt", `${owner?.name ?? userId}${sessieBeeindigd ? ", sessie beëindigd" : ""}.`);
       res.json({ success: true });
     } catch (err: any) {
       console.error("Toestel schrappen is mislukt.", err);

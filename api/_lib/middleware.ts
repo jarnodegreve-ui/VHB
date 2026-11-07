@@ -264,7 +264,19 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   }
   const authUser = { id: check.id, email: check.email ?? undefined };
 
-  const gevonden = await findAppUser({ id: check.id, email: check.email });
+  // De profiel-lezing kan falen (users-tabel onbereikbaar, sleutel geweigerd).
+  // Dat is dezelfde storing als een onbereikbare aanmelddienst hierboven en
+  // krijgt dezelfde 503, zodat de client zijn sessie houdt. Zonder deze vangst
+  // stierf de functie met een UnhandledPromiseRejection: Express 4 geeft een
+  // async-afwijzing niet door aan de foutafhandelaar (beveiligingstest 07-11,
+  // keuze 5).
+  let gevonden: Awaited<ReturnType<typeof findAppUser>>;
+  try {
+    gevonden = await findAppUser({ id: check.id, email: check.email });
+  } catch (err) {
+    console.error("Profiel-lezing in authenticate mislukt:", (err as { message?: unknown })?.message ?? err);
+    return res.status(503).json({ error: "Aanmeldcontrole is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "auth_unavailable" });
+  }
   markeer(res, "profiel");
   if (gevonden === "koppeling") {
     return res.status(403).json({ error: "Dit profiel is aan een andere aanmelding gekoppeld. Neem contact op met de planning." });

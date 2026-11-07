@@ -1,6 +1,7 @@
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
+import { isIsoDag } from "../../shared/rapporten/periode.js";
 import {
   getAppSetting, getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, laadDagtypeKalender, logActivity, setAppSetting,
 } from "./storage.js";
@@ -37,6 +38,12 @@ const fout = (res: express.Response, err: unknown, tekst: string) => {
 
 const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_MAAND = /^\d{4}-\d{2}$/;
+// Een echte kalenderdag, niet alleen het patroon: 2026-02-30 kwam door de
+// regex en opende een dag die niet bestaat (beveiligingstest 07-11, keuze 6).
+// Zelfde regel als verlof, vervaldata en de ziekmelding.
+const geldigeDag = (datum: string) => ISO_DAG.test(datum) && isIsoDag(datum);
+const geldigeMaand = (maand: string) => ISO_MAAND.test(maand) && Number(maand.slice(5)) >= 1 && Number(maand.slice(5)) <= 12;
+const ONGELDIGE_DAG = "Geef een geldige datum (YYYY-MM-DD).";
 const maandVan = (datum: string) => datum.slice(0, 7);
 const laatsteDagVan = (maand: string) => {
   const [j, m] = maand.split("-").map(Number);
@@ -180,7 +187,7 @@ export function mountLoonRoutes(app: express.Express) {
   app.get("/api/dagafsluiting", ...staf, async (req: AuthenticatedRequest, res) => {
     try {
       const maand = String(req.query.maand ?? "");
-      if (!ISO_MAAND.test(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
+      if (!geldigeMaand(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
       const van = `${maand}-01`; const tot = laatsteDagVan(maand);
       const [dagen, prestaties, rows] = await Promise.all([getDagAfsluitingen(van, tot), getDagPrestatiesPeriode(van, tot), getPlanningMatrixRows()]);
       const planningDagen = new Set(rows.map((r: any) => String(r.source_date)).filter((d) => d.startsWith(`${maand}-`)));
@@ -201,7 +208,7 @@ export function mountLoonRoutes(app: express.Express) {
 
   app.get("/api/dagafsluiting/:datum", ...staf, async (req: AuthenticatedRequest, res) => {
     const datum = String(req.params.datum);
-    if (!ISO_DAG.test(datum)) return res.status(400).json({ error: "Geef een geldige datum (YYYY-MM-DD)." });
+    if (!geldigeDag(datum)) return res.status(400).json({ error: ONGELDIGE_DAG });
     try {
       const [dag, planning, codes] = await Promise.all([getDagAfsluiting(datum), planningVanDag(datum), getLoonCodes()]);
       const bekend = new Set(codes.map((c) => c.code));
@@ -236,7 +243,7 @@ export function mountLoonRoutes(app: express.Express) {
 
   app.post("/api/dagafsluiting/:datum/openen", ...staf, async (req: AuthenticatedRequest, res) => {
     const datum = String(req.params.datum);
-    if (!ISO_DAG.test(datum)) return res.status(400).json({ error: "Geef een geldige datum (YYYY-MM-DD)." });
+    if (!geldigeDag(datum)) return res.status(400).json({ error: ONGELDIGE_DAG });
     if (inToekomst(datum)) return res.status(400).json({ error: TOEKOMST_FOUT });
     try {
       if (await getDagAfsluiting(datum)) return res.status(409).json({ error: "Deze dag is al geopend." });
@@ -252,6 +259,7 @@ export function mountLoonRoutes(app: express.Express) {
   });
 
   const openDagOfFout = async (datum: string, res: express.Response) => {
+    if (!geldigeDag(datum)) { res.status(400).json({ error: ONGELDIGE_DAG }); return null; }
     if (inToekomst(datum)) { res.status(400).json({ error: TOEKOMST_FOUT }); return null; }
     const dag = await getDagAfsluiting(datum);
     if (!dag) { res.status(404).json({ error: "Deze dag is nog niet geopend." }); return null; }
@@ -345,6 +353,7 @@ export function mountLoonRoutes(app: express.Express) {
 
   app.post("/api/dagafsluiting/:datum/heropenen", ...staf, async (req: AuthenticatedRequest, res) => {
     const datum = String(req.params.datum);
+    if (!geldigeDag(datum)) return res.status(400).json({ error: ONGELDIGE_DAG });
     if (inToekomst(datum)) return res.status(400).json({ error: TOEKOMST_FOUT });
     const body = valideerRecord(res, heropenBodySchema, req.body ?? {});
     if (!body) return;
@@ -403,7 +412,7 @@ export function mountLoonRoutes(app: express.Express) {
   app.get("/api/loon/export/controle", ...staf, async (req: AuthenticatedRequest, res) => {
     try {
       const maand = String(req.query.maand ?? "");
-      if (!ISO_MAAND.test(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
+      if (!geldigeMaand(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
       const { controle, blokkerend } = await bouwExport(maand);
       res.setHeader("Cache-Control", "no-store");
       res.json({ ...controle, blokkerend });
@@ -413,7 +422,7 @@ export function mountLoonRoutes(app: express.Express) {
   app.get("/api/loon/export", ...staf, async (req: AuthenticatedRequest, res) => {
     try {
       const maand = String(req.query.maand ?? "");
-      if (!ISO_MAAND.test(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
+      if (!geldigeMaand(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
       const forceer = String(req.query.forceer ?? "") === "1" && req.appUser!.role === "admin";
       const { rijen, controle, blokkerend } = await bouwExport(maand);
       if (blokkerend && !forceer) return res.status(409).json({ error: "De export is nog niet klaar: open en sluit alle dagen met planning af en los de meldingen op.", ...controle });
