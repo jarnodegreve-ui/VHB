@@ -34,6 +34,9 @@ import { LegeLijst, NietGevonden } from '../../components/illustraties';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 import { UitnodigingRegel, useUitnodigen, useUitnodigingen } from './Uitnodigen';
 import { uitnodigingBeletsel } from '../../../shared/uitnodiging';
+import { Callout } from '../../components/Callout';
+import { vandaagBrussel } from '../../lib/brussel';
+import { toekomstOpNaam, uitDienstWaarschuwing } from '../../lib/uitDienstWaarschuwing';
 
 type UserDraft = User & { password?: string };
 
@@ -220,6 +223,8 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   // toestellen wordt vooraf geteld zodat de bevestiging concreet is;
   // null = nog aan het tellen.
   const [uitDienstUser, setUitDienstUser] = useState<User | null>(null);
+  // Pauzeren met toekomstige diensten op naam vraagt eerst een bevestiging (nr. 48).
+  const [pauzeerUser, setPauzeerUser] = useState<User | null>(null);
   const [uitDienstToestellen, setUitDienstToestellen] = useState<number | null>(null);
   const [uitDienstReden, setUitDienstReden] = useState('');
   const [isUitDienstBezig, setIsUitDienstBezig] = useState(false);
@@ -258,6 +263,11 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const aantalNietInPlanning = actieveChauffeurs.filter(nietInPlanning).length;
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
+  // Nr. 48 (05-11): wie uit dienst gaat of gepauzeerd wordt, houdt zijn
+  // toekomstige diensten op naam (het bord en de dekking tonen die dan als
+  // weggeruild naar iemand uit dienst, resp. als gat). Alleen een
+  // waarschuwing, geteld uit de rijen en ruilen die de staf al heeft.
+  const toekomstWaarschuwing = (u: User) => uitDienstWaarschuwing(toekomstOpNaam(shifts, swaps, u.id, vandaagBrussel()));
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
 
   // Het technische 'beheerder'-account blijft verborgen tenzij je het zelf bent.
@@ -475,6 +485,8 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   };
   const quickToggleActive = async (u: User) => {
     if (u.isActive !== false && isProtectedAdmin(u)) return notify('Je kunt de laatste actieve admin niet pauzeren.', 'error');
+    // Staan er nog diensten op naam, dan eerst de bevestiging (zie pauzeerUser).
+    if (u.isActive !== false && toekomstWaarschuwing(u)) { setPauzeerUser(u); return; }
     const gewijzigd = { ...u, isActive: u.isActive === false };
     await onSaveUser(gewijzigd);
   };
@@ -558,6 +570,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   };
   const sluitUitDienst = () => { setUitDienstUser(null); setUitDienstReden(''); };
   const uitDienstVuil = !!uitDienstUser && uitDienstReden.trim() !== '';
+  const uitDienstToekomst = uitDienstUser ? toekomstWaarschuwing(uitDienstUser) : null;
   // Uit dienst is idempotent op de server (POST /api/users/:id/uitdienst):
   // nogmaals op een al gedeactiveerde gebruiker geeft 200 met nullen, zonder
   // meldingen, alleen een extra auditregel "was al gedeactiveerd"
@@ -1045,6 +1058,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
       </TableShell>
 
       {uitnodigen.venster}
+      <ConfirmationModal open={!!pauzeerUser} onClose={() => setPauzeerUser(null)} onConfirm={async () => { if (pauzeerUser) await onSaveUser({ ...pauzeerUser, isActive: false }); }} title="Gebruiker pauzeren" message={pauzeerUser ? `${pauzeerUser.name} ${toekomstWaarschuwing(pauzeerUser) ?? ''}` : ''} confirmText="Toch pauzeren" variant="warning" />
       <ConfirmationModal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
       <ConfirmationModal open={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
       <ConfirmationModal open={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
@@ -1245,6 +1259,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 <li className="flex items-start gap-2.5"><Send size={16} className="mt-0.5 shrink-0 text-slate-500" /><span>Pushmeldingen stoppen.</span></li>
                 <li className="flex items-start gap-2.5"><CalendarOff size={16} className="mt-0.5 shrink-0 text-slate-500" /><span>De agenda-koppeling vervalt.</span></li>
               </ul>
+              {uitDienstToekomst && <Callout tone="warning" compact>{hoofdletter(uitDienstToekomst)}</Callout>}
               <Field label="Reden (optioneel)" htmlFor="uitdienst-reden" hint="Komt in het activiteitenlogboek.">
                 <Input id="uitdienst-reden" value={uitDienstReden} onChange={(e) => setUitDienstReden(e.target.value)} placeholder="Bv. einde contract" maxLength={200} />
               </Field>

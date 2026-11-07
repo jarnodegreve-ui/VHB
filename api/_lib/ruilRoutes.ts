@@ -1591,6 +1591,18 @@ export function mountRuilRoutes(app: express.Express) {
       if (aangebodenOpBord) {
         const opCel = bord.isCodeDienst(line) ? dienstOpCel(bord.celVan(fromDriverId), line) : null;
         if (!opCel) {
+          // Liggen de rijen van die dienst bij iemand anders, zeg dan bij wie.
+          // Nr. 48 (05-11): een ruil naar een chauffeur die daarna uit dienst
+          // ging; het bord toonde de gever nog en de planner kreeg alleen
+          // "staat niet (meer) op naam van".
+          const andere = dayRows.find((r) => toLookupToken(r.line) === lineToken && String(r.driverId) !== fromDriverId);
+          if (andere) {
+            const houder = users.find((u) => String(u.id) === String(andere.driverId));
+            const uitDienst = !houder || houder.isActive === false;
+            const naam = houder ? `${houder.name}${houder.isActive === false ? " (uit dienst)" : ""}` : "een verwijderd account";
+            const vervolg = uitDienst ? `Draai de wissel in het celdetail van ${fromUser.name} terug, dan kan je opnieuw wisselen.` : "Vernieuw de pagina en probeer opnieuw.";
+            return res.status(409).json({ error: `Dienst ${line} op ${DAG_DMJ(date)} staat op naam van ${naam}, niet van ${fromUser.name}. ${vervolg}` });
+          }
           return res.status(409).json({ error: `Dienst ${line} op ${DAG_DMJ(date)} staat niet (meer) op naam van ${fromUser.name}, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
         }
         dienstLine = opCel;

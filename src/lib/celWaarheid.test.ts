@@ -57,6 +57,22 @@ describe('berekenCelWaarheid', () => {
   });
 });
 
+describe('berekenCelWaarheid, ruil naar een account buiten het bord (nr. 48, 05-11)', () => {
+  it('de gever wordt vrij met "Naam (uit dienst)" en swapToBuitenBord; het inactieve account krijgt geen cel', () => {
+    const swaps = [{ id: 's9', requesterId: '1', targetDriverId: '5', status: 'approved', decidedAt: '2026-08-20T10:00:00Z', shiftDate: '2026-09-01', shiftLine: '2102', swapType: 'overname', reason: '' }];
+    const uit = berekenCelWaarheid('2026-09', { rows, users, services, codes, leave: [], swaps: swaps as any });
+    expect(uit.cells['1']['2026-09-01']).toMatchObject({ code: 'vrij', kind: 'absence', label: 'Vrij', swapId: 's9', swapAway: true, swapTo: 'Oud Weg (uit dienst)', swapToBuitenBord: true });
+    expect(uit.cells['5']).toBeUndefined();
+    expect(uit.chauffeurs.map((c) => c.id)).not.toContain('5');
+  });
+
+  it('een verwijderd account: lege naam, zelfde merk', () => {
+    const swaps = [{ id: 's9', requesterId: '1', targetDriverId: 'weg', status: 'approved', decidedAt: '2026-08-20T10:00:00Z', shiftDate: '2026-09-01', shiftLine: '2102', swapType: 'overname', reason: '' }];
+    const uit = berekenCelWaarheid('2026-09', { rows, users, services, codes, leave: [], swaps: swaps as any });
+    expect(uit.cells['1']['2026-09-01']).toMatchObject({ code: 'vrij', swapAway: true, swapTo: '', swapToBuitenBord: true });
+  });
+});
+
 describe('berekenCelWaarheid met afwijkingen per dagtype (10-10)', () => {
   const school = [{ id: '7', name: 'Jelle School', role: 'chauffeur', isActive: true, section: 'Schoolvervoer', startDate: '2019-01-01' }];
   const eek6 = {

@@ -39,7 +39,7 @@ import {
   type CoverageWeekdayPeriod,
   type DayGap,
 } from '../lib/coverage';
-import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking, type VerwachtingVoorstel } from '../../shared/coverageGaps';
+import { isUitDienstReden, normalizeCode, type DayTypeBron, type VerwachtingAfwijking, type VerwachtingVoorstel } from '../../shared/coverageGaps';
 import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
 import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
 import { useRouteParam } from '../app/router';
@@ -607,19 +607,22 @@ export function CoverageView() {
   // gemelde afwezigheid (één zieke collega kan de hele teller kleuren); een
   // kaal gat heeft écht nog geen chauffeur. Dat onderscheid vertelt in één
   // regel of het structureel is of niet.
+  // Een dienst op naam van een account uit dienst (via een ruil, 05-11) is
+  // een derde soort: geen afwezigheid, maar ook geen chauffeur.
   const uitvalSplit = useMemo(() => {
     let doorAfwezigheid = 0;
+    let uitDienst = 0;
     const namen = new Set<string>();
     for (const d of gaps) {
       for (const svc of d.missing) {
         const info = d.uitval?.[normalizeCode(svc)];
-        if (info) {
-          doorAfwezigheid += 1;
-          namen.add(info.name);
-        }
+        if (!info) continue;
+        if (isUitDienstReden(info.reason)) { uitDienst += 1; continue; }
+        doorAfwezigheid += 1;
+        namen.add(info.name);
       }
     }
-    return { doorAfwezigheid, zonderChauffeur: totalMissing - doorAfwezigheid, namen: [...namen] };
+    return { doorAfwezigheid, uitDienst, zonderChauffeur: totalMissing - doorAfwezigheid - uitDienst, namen: [...namen] };
   }, [gaps, totalMissing]);
   const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);
   const visibleDays = onlyGaps ? gaps.filter((d) => d.missing.length > 0) : gaps;
@@ -728,7 +731,9 @@ export function CoverageView() {
               ? 'text-emerald-700'
               : info?.reason === 'klein verlet'
                 ? 'text-blue-700'
-                : 'text-slate-600';
+                : info && isUitDienstReden(info.reason)
+                  ? 'text-amber-700'
+                  : 'text-slate-600';
           return (
             // rauw: dienst-chip met samengestelde inhoud (code · naam · reden) in de
             // rode gat-toon — Chip is niet klikbaar en FilterChip kent geen inhoud-slots
@@ -1180,9 +1185,13 @@ export function CoverageView() {
           {totalMissing > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-red-700 tabular-nums">
               <AlertTriangle size={16} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand
-              {uitvalSplit.doorAfwezigheid > 0 && (
+              {(uitvalSplit.doorAfwezigheid > 0 || uitvalSplit.uitDienst > 0) && (
                 <span className="font-medium text-slate-500">
-                 , {uitvalSplit.zonderChauffeur > 0 ? `${uitvalSplit.zonderChauffeur} zonder chauffeur · ` : ''}{uitvalSplit.doorAfwezigheid} door afwezigheid{uitvalSplit.namen.length === 1 ? ` (${uitvalSplit.namen[0]})` : ` (${uitvalSplit.namen.length} chauffeurs)`}
+                 , {[
+                   uitvalSplit.zonderChauffeur > 0 ? `${uitvalSplit.zonderChauffeur} zonder chauffeur` : '',
+                   uitvalSplit.doorAfwezigheid > 0 ? `${uitvalSplit.doorAfwezigheid} door afwezigheid${uitvalSplit.namen.length === 1 ? ` (${uitvalSplit.namen[0]})` : ` (${uitvalSplit.namen.length} chauffeurs)`}` : '',
+                   uitvalSplit.uitDienst > 0 ? `${uitvalSplit.uitDienst} op naam van iemand uit dienst` : '',
+                 ].filter(Boolean).join(' · ')}
                 </span>
               )}
             </span>

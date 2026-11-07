@@ -145,7 +145,15 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
 
   // Goedgekeurde dienstruilen over het maandbeeld (api/_lib/ruilOverlay.ts).
-  const naamVanId = (id: string) => chauffeurs.find((c) => c.id === id)?.name ?? "";
+  // De naam komt uit élk account, niet alleen uit het bord: een ontvanger die
+  // intussen uit dienst is heet "Naam (uit dienst)" op de cel van de gever
+  // (nr. 48, 05-11); een verwijderd account geeft "" en de weergave zegt dat.
+  const accountById = new Map(users.map((u) => [String(u.id), u]));
+  const naamVanId = (id: string) => {
+    const u = accountById.get(id);
+    if (!u) return "";
+    return u.isActive === false ? `${u.name} (uit dienst)` : u.name;
+  };
   // De “vrij”-cel voor een gever wiens ontvanger geen dienst had, met het
   // label uit de planningscodes (valt terug op de vaste cel).
   const vrijResolved = resolve("vrij");

@@ -1,3 +1,4 @@
+import type { RuilNietToepasbaar } from "./ruilNietToepasbaar.js";
 
 /**
  * Droge run van "Planning opnieuw opbouwen" (verbeterronde 09-10, punt 10,
@@ -31,7 +32,8 @@ export type HeropbouwPlan = {
   diensten: number;
   dagenInMatrix: number;
   periode: { van: string | null; tot: string | null };
-  ruilen: { toegepast: number; nietToepasbaar: number };
+  /** `lijst`: de gemiste ruilen die met de planning in tegenspraak zijn, bij naam (06-11). */
+  ruilen: { toegepast: number; nietToepasbaar: number; lijst?: RuilNietToepasbaar[] };
   /** Alleen chauffeurs met minstens één gewijzigde dag, op naam gesorteerd. */
   chauffeurs: HeropbouwPlanChauffeur[];
   totaal: { chauffeurs: number; dagen: number; erbij: number; weg: number; gewijzigd: number };
@@ -66,7 +68,8 @@ export const bouwHeropbouwPlan = (invoer: {
   namen: ReadonlyMap<string, string>;
   dagenInMatrix: number;
   periode: { van: string | null; tot: string | null };
-  ruilen: { toegepast: number; nietToepasbaar: number };
+  /** `lijst`: de gemiste ruilen die met de planning in tegenspraak zijn, bij naam (06-11). */
+  ruilen: { toegepast: number; nietToepasbaar: number; lijst?: RuilNietToepasbaar[] };
 }): HeropbouwPlan => {
   const was = perChauffeurPerDag(invoer.vorige);
   const wordt = perChauffeurPerDag(invoer.nieuw);
