@@ -1,5 +1,6 @@
 import { RotateCcw } from 'lucide-react';
 import type { HeropbouwPlan, HeropbouwPlanDag } from '../../shared/heropbouwPlan';
+import { beschrijfRuilNietToepasbaar } from '../../shared/ruilNietToepasbaar';
 import { aantal, formatDatumDMJ, formatPeriodeDMJ } from '../lib/format';
 import { Modal } from './Modal';
 import { Button, MicroLabel } from './primitives';
@@ -87,6 +88,17 @@ export function HeropbouwPlanModal({ open, stand, bezig, onClose, onBevestig, on
                 {' '}{aantal(plan.ruilen.toegepast, 'goedgekeurde ruil', 'goedgekeurde ruilen')} opnieuw doorgevoerd
                 {plan.ruilen.nietToepasbaar > 0 ? `, ${plan.ruilen.nietToepasbaar} niet toepasbaar` : ''}.
               </p>
+              {/* Gemiste ruilen die de matrix tegenspreekt (06-11): na het
+                  opbouwen rijdt iemand anders die dienst, de ruil blijft staan. */}
+              {plan.ruilen.lijst && plan.ruilen.lijst.length > 0 && (
+                <Callout tone="warning" title="Doorgevoerde ruilen die niet in de matrix passen" role="status">
+                  <ul className="space-y-1">
+                    {plan.ruilen.lijst.map((r) => (
+                      <li key={`${r.id}-${r.been}`}>{beschrijfRuilNietToepasbaar(r, formatDatumDMJ)}.</li>
+                    ))}
+                  </ul>
+                </Callout>
+              )}
               {nietsTeDoen ? (
                 <Callout tone="success" title="Niets te doen" role="status">
                   De planning is al gelijk aan de matrix en het dienstoverzicht. Opnieuw opbouwen verandert niets.
