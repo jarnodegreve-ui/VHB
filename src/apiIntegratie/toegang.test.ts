@@ -5,6 +5,7 @@ import {
   mem,
 } from './harnas';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 
 describe('authenticatie & rollen', () => {
   // Sessie-identiteit = Auth-uid (controle-ronde 05-09, security 7): de
@@ -1830,6 +1831,73 @@ describe('gebruikers pauzeren/activeren en 2FA-reset: alleen admin (tranche 3B)'
       expect(gewist).toEqual(['f-1']);
       expect(mem.activity.filter((a) => a.action === 'Twee-stapsverificatie gereset')).toHaveLength(1);
     });
+  });
+});
+
+describe('toestel uitloggen, blokkeren en schrappen beëindigen de Supabase-sessie (beveiligingstest 07-11, keuze 9)', () => {
+  const idVan = (deviceToken: string) => createHash('sha256').update(deviceToken).digest('hex').slice(0, 16);
+  const jwt = (email: string, sub: string, sessie: string) =>
+    `x.${Buffer.from(JSON.stringify({ sub, email, session_id: sessie })).toString('base64')}.y`;
+  beforeEach(() => {
+    mem.devices[0].sessionId = 'sess-a';
+    mem.devices[1].sessionId = 'sess-b';
+    mem.devices.push({ userId: '3', deviceToken: 'dev-oud', name: 'Mac · browser', status: 'approved', createdAt: '2026-06-01T00:00:00Z', lastSeenAt: '2026-06-02T00:00:00Z', approvedAt: '2026-06-01T00:00:00Z', approvedBy: 'auto', sessionId: 'sess-oud' });
+  });
+
+  it('één eigen toestel uitloggen beëindigt precies die sessie', async () => {
+    const res = await api('POST', `/api/me/toestellen/${idVan('dev-oud')}/uitloggen`, { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.sessieBeeindigd).toBe(true);
+    expect(mem.beeindigdeSessies).toEqual(['sess-oud']);
+    expect(mem.activity.find((a) => a.action === 'Toestel uitgelogd')?.message).toContain('sessie beëindigd');
+  });
+
+  it('alle andere toestellen uitloggen beëindigt hun sessies, niet die van dit toestel', async () => {
+    const res = await api('POST', '/api/me/toestellen/uitloggen-anderen', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ aantal: 1, sessies: 1 });
+    expect(mem.beeindigdeSessies).toEqual(['sess-oud']);
+  });
+
+  it('een admin die een toestel blokkeert beëindigt ook de aanmelding erop', async () => {
+    const res = await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '4', deviceToken: 'dev-ok' } });
+    expect(res.status).toBe(200);
+    expect(mem.beeindigdeSessies).toEqual(['sess-b']);
+    expect(mem.devices.find((d: any) => d.userId === '4')?.status).toBe('revoked');
+  });
+
+  it('een admin die een toestel schrapt beëindigt ook de aanmelding erop', async () => {
+    const res = await api('POST', '/api/devices/delete', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-oud' } });
+    expect(res.status).toBe(200);
+    expect(mem.beeindigdeSessies).toEqual(['sess-oud']);
+  });
+
+  it('wie zich op een geblokkeerd toestel aanmeldt, verliest die nieuwe sessie meteen', async () => {
+    mem.devices[0].status = 'revoked';
+    const token = jwt('a@vhb.be', 'auth-tok-a', 'sess-nieuw');
+    const reg = await api('POST', '/api/devices/register', { token, device: 'dev-ok', body: { name: 'iPhone · app' } });
+    expect(reg.status).toBe(200);
+    expect(reg.json.status).toBe('revoked');
+    expect(mem.beeindigdeSessies).toEqual(['sess-nieuw']);
+  });
+
+  it('uit dienst beëindigt de sessies van alle toestellen van die persoon', async () => {
+    const res = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect([...mem.beeindigdeSessies].sort()).toEqual(['sess-a', 'sess-oud']);
+    expect(res.json.stappen.find((s: any) => s.stap === 'sessies')).toMatchObject({ ok: true });
+    expect(res.json.stappen.find((s: any) => s.stap === 'sessies').detail).toContain('2 sessies beëindigd');
+    // De samenvatting blijft zoals de client ze kent.
+    expect(res.json.samenvatting).toEqual({ toestellen: 2, push: 0, sessies: 'gebannen' });
+  });
+
+  it('zonder de databasefunctie (migratie nog niet gedraaid) werkt alles zoals vroeger', async () => {
+    mem.sessieFunctieOntbreekt = true;
+    const res = await api('POST', `/api/me/toestellen/${idVan('dev-oud')}/uitloggen`, { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.sessieBeeindigd).toBe(false);
+    expect(mem.beeindigdeSessies).toEqual([]);
+    expect(mem.devices.some((d: any) => d.deviceToken === 'dev-oud')).toBe(false);
   });
 });
 

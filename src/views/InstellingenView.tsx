@@ -94,7 +94,7 @@ function ToestellenSectie() {
     : !data.beschikbaar
       ? 'Toestelregistratie staat uit op deze server; alleen de sessie op dit toestel is bekend.'
       : data.gateActief
-        ? 'Toestellen waarop je bent aangemeld. Een toestel uitloggen verwijdert het hier; op dat toestel meld je je daarna gewoon opnieuw aan.'
+        ? 'Toestellen waarop je bent aangemeld. Een toestel uitloggen beëindigt de aanmelding op dat toestel; daar meld je je daarna gewoon opnieuw aan.'
         : 'Toestel-goedkeuring staat uit, dus elk toestel wordt bij aanmelden meteen toegelaten; dit is wat er bekend is.';
 
   return (
