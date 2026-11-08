@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 /**
@@ -51,6 +52,15 @@ type RealtimeRefetchers = {
   refetchMeldingen?: () => void | Promise<void>;
   meldingenUserId?: string;
 };
+
+/** Het kanaal van de live-updates. Privé sinds 07-11 (beveiligingstest keuze
+ *  2): Realtime toetst de join aan de policy op realtime.messages uit
+ *  supabase/2026-11-07_realtime_prive_kanaal.sql, zodat het project daarna
+ *  publieke kanalen helemaal kan weigeren ("Private channels only"). Weigert
+ *  Realtime de privé-join (policy nog niet gedraaid), dan valt de hook één keer
+ *  terug op een publieke join: de live-updates blijven werken, in welke
+ *  volgorde migratie en deploy ook komen. */
+export const KANAAL = 'vhb-realtime';
 
 /** Tabblad minstens zo lang weg = catch-up bij terugkeer. */
 export const WEG_DREMPEL_MS = 60_000;
@@ -168,8 +178,12 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
       });
     };
 
-    let channel = supabase
-      .channel('vhb-realtime')
+    // De listeners staan los van het kanaal zelf: na een geweigerde
+    // privé-join hangen ze opnieuw aan de publieke terugval.
+    let gestopt = false;
+    let teruggevallen = false;
+    const koppel = (kanaal: RealtimeChannel): RealtimeChannel => {
+    let channel = kanaal
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'leave' },
@@ -229,8 +243,23 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
             refRef.current.refetchMatrix?.();
           });
         },
-      )
-      .subscribe((status) => {
+      );
+      return channel;
+    };
+    const bouw = (prive: boolean): RealtimeChannel =>
+      koppel(supabase!.channel(KANAAL, prive ? { config: { private: true } } : undefined)).subscribe((status) => {
+        // Privé geweigerd (policy nog niet gedraaid, of een oudere stand van
+        // het project): één keer terug naar een publieke join, zodat de
+        // live-updates niet stilvallen. Eerst het oude kanaal echt weg, anders
+        // geeft supabase.channel() hetzelfde (geweigerde) kanaal terug.
+        if (status === 'CHANNEL_ERROR' && prive && !teruggevallen) {
+          teruggevallen = true;
+          const oud = huidig;
+          void supabase!.removeChannel(oud).catch(() => undefined).then(() => {
+            if (!gestopt) huidig = bouw(false);
+          });
+          return;
+        }
         // Na élke (her)aansluiting één catch-up: events die tijdens een dode
         // socket vielen (telefoon in de zak, nacht) zijn definitief gemist —
         // zonder deze refetch keek een heropende PWA naar de staat van
@@ -247,6 +276,7 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
           vraagCatchUp('volledig');
         }
       });
+    let huidig = bouw(true);
 
     // Heropenen van de app (tab/PWA weer zichtbaar na ≥ 60s weg): catch-up
     // volgens `kiesCatchUp`. visibilitychange is betrouwbaarder dan
@@ -267,10 +297,11 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
+      gestopt = true;
       timers.forEach((t) => clearTimeout(t));
       timers.clear();
       document.removeEventListener('visibilitychange', onVisibility);
-      supabase!.removeChannel(channel);
+      void supabase!.removeChannel(huidig);
     };
   }, [enabled, meldingenUserId]);
 }
