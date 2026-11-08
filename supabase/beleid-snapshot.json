@@ -1,6 +1,12 @@
 {
   "functies": [
     {
+      "definitie": "CREATE OR REPLACE FUNCTION public.beeindig_auth_sessie(p_session_id uuid) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $function$ declare n integer; begin if p_session_id is null then return false; end if; delete from auth.sessions where id = p_session_id; get diagnostics n = row_count; return n > 0; end $function$",
+      "execute": [],
+      "functie": "beeindig_auth_sessie(p_session_id uuid)",
+      "security_definer": true
+    },
+    {
       "definitie": "CREATE OR REPLACE FUNCTION public.bump_planning_version() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $function$ begin insert into public.planning_version (id, version, updated_at) values (true, 1, now()) on conflict (id) do update set version = public.planning_version.version + 1, updated_at = now(); return null; end; $function$",
       "execute": [],
       "functie": "bump_planning_version()",
@@ -2423,6 +2429,18 @@
       "tabel": "messages",
       "using": null,
       "with_check": "((realtime.topic() = 'vhb-aanwezigheid'::text) AND (extension = 'presence'::text) AND (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))"
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "vhb_realtime_lezen",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "realtime",
+      "tabel": "messages",
+      "using": "((realtime.topic() = 'vhb-realtime'::text) AND ( SELECT public.is_active_app_user() AS is_active_app_user))",
+      "with_check": null
     }
   ],
   "tabellen": [
