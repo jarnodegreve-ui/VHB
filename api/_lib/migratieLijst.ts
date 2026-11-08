@@ -96,6 +96,7 @@ export const VERWACHTE_MIGRATIES: readonly string[] = [
   "2026-10-15_indexen_groei.sql",
   "2026-11-07_auth_sessie_beeindigen.sql",
   "2026-11-07_realtime_prive_kanaal.sql",
+  "2026-11-08_realtime_presence_leespolicy_breed.sql",
 ];
 
 /** Wat de code verwacht en niet in het register van de omgeving staat. */
