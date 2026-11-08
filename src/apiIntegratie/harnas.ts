@@ -195,6 +195,8 @@ const mem = vi.hoisted(() => ({
   // true = saveUsersData kan een nieuw profiel niet aan zijn Auth-account
   // koppelen (koppelAuthIdStil mislukt): geen authId in createdAccounts.
   koppelMislukt: false,
+  // true = de users-lezing faalt (databasefout), zoals PostgREST dan gooit.
+  usersFaalt: false,
 }));
 
 vi.mock('../../api/_lib/db.js', () => {
@@ -459,7 +461,10 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
     },
     getAppSetting: async (key: string) => mem.appSettings[key] ?? null,
     setAppSetting: async (key: string, value: unknown) => { mem.appSettings[key] = value; },
-    getUsersData: async () => mem.users,
+    getUsersData: async () => {
+      if (mem.usersFaalt) throw { code: 'PGRST301', message: 'Invalid API key' };
+      return mem.users;
+    },
     getRecentLogins: async () => [],
     koppelAuthId: async (userId: string, authId: string) => { const u = mem.users.find((x: any) => String(x.id) === String(userId)); if (u) u.authId = authId; },
     getPlanningNotes: async (o: any) => mem.planningNotes.filter((n: any) => (!o.driverId || n.driverId === o.driverId) && n.date >= o.fromIso && n.date <= o.toIso),
@@ -1204,6 +1209,7 @@ beforeEach(() => {
   invalidateOnderhoudCache();
   mem.supabaseAdmin = null;
   mem.koppelMislukt = false;
+  mem.usersFaalt = false;
   mem.appSettings = {};
   mem.opslag.clear();
   mem.opslagTijd.clear();

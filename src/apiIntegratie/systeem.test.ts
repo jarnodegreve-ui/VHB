@@ -180,9 +180,9 @@ describe('foutgroepen (fingerprint, groepering, status, regressie)', () => {
   it('neemt de rol van de sessie, niet van de client', async () => {
     await api('POST', '/api/client-errors', { token: 'tok-a', body: { message: 'boem', role: 'admin' } });
     expect(mem.clientErrors[0].role).toBe('chauffeur');
-    // Zonder sessie: de opgegeven rol blijft (afgekapt), zoals de rest van de context.
+    // Zonder sessie is een opgegeven rol niet te vertrouwen: hij valt weg (beveiligingstest 07-11, keuze 7).
     await api('POST', '/api/client-errors', { body: { message: 'boem2', role: 'planner' } });
-    expect(mem.clientErrors[1].role).toBe('planner');
+    expect(mem.clientErrors[1].role).toBeUndefined();
   });
 
   it('GET ?groepeer=1 groepeert per fingerprint (admin), met aantal, releases en unieke gebruikers', async () => {
