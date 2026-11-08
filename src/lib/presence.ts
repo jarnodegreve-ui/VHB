@@ -139,8 +139,11 @@ export function useAanwezigheid(
       return () => zetAnderen([]);
     }
     // private: true = Realtime past de RLS-policy op realtime.messages toe
-    // (migratie 2026-09-07_realtime_presence_private.sql): alleen actieve staf
-    // mag dit topic lezen en beschrijven. Zonder dat kon iedereen met de
+    // (migraties 2026-09-07_realtime_presence_private.sql en
+    // 2026-11-08_realtime_presence_leespolicy_breed.sql): alleen actieve staf
+    // mag dit topic lezen en beschrijven. De leespolicy laat broadcast én
+    // presence toe, omdat de join-controle van Realtime het broadcast-leesrecht
+    // toetst (gemeten op staging 08-11). Zonder dit alles kon iedereen met de
     // publieke projectconfig meeluisteren wie van de staf waar zat, en zelf
     // een 'planner' nabootsen (security-audit 07-09, bevinding 2).
     const kanaal = supabase!.channel(KANAAL, { config: { private: true, presence: { key: eigenRef.current.userId } } });

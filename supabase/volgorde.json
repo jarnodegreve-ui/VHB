@@ -87,7 +87,8 @@
     "supabase/2026-10-14_bump_active_sessions_search_path.sql",
     "supabase/2026-10-15_indexen_groei.sql",
     "supabase/2026-11-07_auth_sessie_beeindigen.sql",
-    "supabase/2026-11-07_realtime_prive_kanaal.sql"
+    "supabase/2026-11-07_realtime_prive_kanaal.sql",
+    "supabase/2026-11-08_realtime_presence_leespolicy_breed.sql"
   ],
   "overgeslagen": {
     "supabase/consolidate_users_columns.sql": "Leest camelCase-kolommen die alleen het historische productieschema had; faalt op een verse database.",
