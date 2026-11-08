@@ -2415,7 +2415,7 @@
       ],
       "schema": "realtime",
       "tabel": "messages",
-      "using": "((realtime.topic() = 'vhb-aanwezigheid'::text) AND (extension = 'presence'::text) AND (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))",
+      "using": "((realtime.topic() = 'vhb-aanwezigheid'::text) AND (extension = ANY (ARRAY['broadcast'::text, 'presence'::text])) AND (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))",
       "with_check": null
     },
     {
