@@ -183,9 +183,11 @@ describe('dienstruil: rechtstreeks afhandelen kan alleen een admin, en dan als e
         expect(goedgekeurd.message).toContain('dienst 12 op 08/07/2026: 1 rij(en) doorgevoerd');
         expect(voltooid.message).toContain('(approved → completed)');
         expect(voltooid.message).not.toContain('doorgevoerd');
-        // De melding van een goedkeuring naar beide chauffeurs, geen tweede voor de afhandeling.
-        expect(mem.pushesSent.map((p) => [p.payload.title, [...p.userIds].sort()])).toEqual([['Dienstruil goedgekeurd', ['3', '4']]]);
-        expect(mem.pushesSent[0].payload.body).toContain(`${van} → approved`);
+        // De melding van een goedkeuring naar beide chauffeurs, elk precies één
+        // keer en elk met wat voor hem verandert; geen tweede voor de afhandeling.
+        expect(mem.pushesSent.flatMap((p) => p.userIds.map((id) => [id, p.payload.title])).sort()).toEqual([['3', 'Dienstruil goedgekeurd'], ['4', 'Dienstruil goedgekeurd']]);
+        expect(mem.pushesSent.find((p) => p.userIds.includes('4'))?.payload.body).toBe('Goedgekeurd: je rijdt dienst 12 op wo 08/07.');
+        expect(mem.pushesSent.find((p) => p.userIds.includes('3'))?.payload.body).toBe('Goedgekeurd: je bent vrij op wo 08/07, Chauffeur B rijdt dienst 12.');
       });
     }
 
@@ -312,7 +314,8 @@ describe('dienstruil: rechtstreeks afhandelen kan alleen een admin, en dan als e
       expect(goedgekeurd.message).toContain('(accepted → approved)');
       expect(goedgekeurd.message).toContain('dienst 12 op 08/07/2026: 1 rij(en) doorgevoerd; terugruil 14 op 02/07/2026: 1 rij(en) doorgevoerd');
       expect(voltooid.message).toContain('(approved → completed)');
-      expect(mem.pushesSent.map((p) => [p.payload.title, [...p.userIds].sort()])).toEqual([['Dienstruil goedgekeurd', ['3', '4']]]);
+      // Beide chauffeurs, elk precies één keer.
+      expect(mem.pushesSent.flatMap((p) => p.userIds.map((id) => [id, p.payload.title])).sort()).toEqual([['3', 'Dienstruil goedgekeurd'], ['4', 'Dienstruil goedgekeurd']]);
     });
   }
 

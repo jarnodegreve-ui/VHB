@@ -177,3 +177,270 @@ describe('dienst toegewezen, deel 1: wie krijgt de melding (ongewijzigd)', () =>
     expect(mem.pushesSent.map((p) => p.payload.title)).toEqual(['Dienst toegewezen']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// DEEL 2: wat er in de melding staat. Toegevoegd met de tekstwijziging; deel 1
+// hierboven is daarbij niet gewijzigd.
+// ---------------------------------------------------------------------------
+
+type Tekst = { titel: string; body: string };
+
+/** Per ontvanger de melding die hij kreeg; twee meldingen voor één ontvanger laten de test falen. */
+const perOntvanger = (): Record<string, Tekst> => {
+  const uit: Record<string, Tekst> = {};
+  for (const p of mem.pushesSent) {
+    for (const id of p.userIds) {
+      expect(uit[id], `ontvanger ${id} kreeg meer dan één melding`).toBeUndefined();
+      uit[id] = { titel: p.payload.title, body: p.payload.body };
+    }
+  }
+  return uit;
+};
+
+/** Wat nooit in een melding mag staan. */
+const VERBODEN: Array<[string, RegExp]> = [
+  ['een intern statuswoord', /\b(pending|accepted|approved|rejected|completed|cancelled)\b/i],
+  ['een pijl', /→|->/],
+  ['undefined of null', /undefined|null|NaN|\[object/i],
+  ['lege haakjes', /\(\s*\)/],
+  ['een em dash', /—/],
+  ['een rauwe ISO-datum', /\d{4}-\d{2}-\d{2}/],
+  ['een dienst zonder nummer', /\bdienst\s*(?:[-,.)]|$)/],
+  ['een onbekende gebruiker', /Onbekende gebruiker/],
+];
+const gebreken = (): string[] => mem.pushesSent.flatMap((p) => [p.payload.title, p.payload.body].flatMap((veld: unknown) => {
+  if (typeof veld !== 'string' || veld.trim() === '') return ['lege titel of tekst'];
+  return VERBODEN.filter(([, patroon]) => patroon.test(veld)).map(([naam]) => `${naam} in “${veld}”`);
+}));
+
+const woord = (soort: Soort) => (soort === 'overname' ? 'overname' : 'ruil');
+const beide = (tekst: Tekst) => ({ [A]: tekst, [B]: tekst });
+
+/** De melding per ontvanger, per soort ruil. Chauffeur A geeft dienst 12 van
+ *  wo 08/07 aan Chauffeur B; als tegenprestatie dienst 14 van do 02/07, een
+ *  vrije dag op wo 08/07, of niets (overname). */
+const GOEDGEKEURD = (soort: Soort): Record<string, Tekst> => ({
+  [A]: {
+    titel: 'Dienstruil goedgekeurd',
+    body: soort === 'dienst'
+      ? 'Goedgekeurd: je rijdt dienst 14 op do 02/07, Chauffeur B rijdt dienst 12 op wo 08/07.'
+      : 'Goedgekeurd: je bent vrij op wo 08/07, Chauffeur B rijdt dienst 12.',
+  },
+  [B]: {
+    titel: 'Dienstruil goedgekeurd',
+    body: soort === 'dienst'
+      ? 'Goedgekeurd: je rijdt dienst 12 op wo 08/07, Chauffeur A rijdt dienst 14 op do 02/07.'
+      : 'Goedgekeurd: je rijdt dienst 12 op wo 08/07.',
+  },
+});
+const TERUGGEDRAAID = (titel: string) => (soort: Soort): Record<string, Tekst> => ({
+  [A]: {
+    titel,
+    body: soort === 'dienst'
+      ? 'De planning draaide de ruil terug: je rijdt dienst 12 op wo 08/07 weer zelf, Chauffeur B rijdt dienst 14 op do 02/07.'
+      : `De planning draaide de ${woord(soort)} terug: je rijdt dienst 12 op wo 08/07 weer zelf.`,
+  },
+  [B]: {
+    titel,
+    body: soort === 'dienst'
+      ? 'De planning draaide de ruil terug: je rijdt dienst 14 op do 02/07 weer zelf, Chauffeur A rijdt dienst 12 op wo 08/07.'
+      : `De planning draaide de ${woord(soort)} terug: Chauffeur A rijdt dienst 12 op wo 08/07 weer zelf.`,
+  },
+});
+const AFGEWEZEN = (soort: Soort) => beide({ titel: 'Dienstruil afgewezen', body: `De planning wees de ${woord(soort)} van wo 08/07 (dienst 12) af.` });
+const GEANNULEERD = (soort: Soort) => beide({ titel: 'Dienstruil geannuleerd', body: `De planning annuleerde de ${woord(soort)} van wo 08/07 (dienst 12).` });
+const INGETROKKEN = (): Record<string, Tekst> => ({ [B]: { titel: 'Dienstruil geannuleerd', body: 'Chauffeur A trok de aanvraag voor wo 08/07 (dienst 12) in.' } });
+
+const TEKSTEN: Record<string, (soort: Soort) => Record<string, Tekst>> = {
+  'de collega accepteert': (soort) => {
+    const validatie: Tekst = {
+      titel: 'Dienstruil wacht op validatie',
+      body: {
+        dienst: 'Chauffeur B accepteerde de ruil van Chauffeur A: dienst 12 op wo 08/07 tegen dienst 14 op do 02/07. Rij- en rusttijden checken.',
+        vrij: 'Chauffeur B accepteerde de ruil van Chauffeur A: dienst 12 op wo 08/07 tegen een vrije dag op wo 08/07. Rij- en rusttijden checken.',
+        overname: 'Chauffeur B wil dienst 12 van wo 08/07 overnemen van Chauffeur A, zonder tegenprestatie. Rij- en rusttijden checken.',
+      }[soort],
+    };
+    return {
+      [A]: {
+        titel: 'Dienstruil geaccepteerd',
+        body: soort === 'overname'
+          ? 'Chauffeur B wil je dienst 12 van wo 08/07 overnemen, de planning moet nog goedkeuren.'
+          : 'Chauffeur B accepteerde je ruil van wo 08/07 (dienst 12), de planning moet nog goedkeuren.',
+      },
+      [ADMIN]: validatie,
+      [PLANNER]: validatie,
+    };
+  },
+  'de collega weigert': (soort) => ({ [A]: { titel: 'Dienstruil geweigerd', body: `Chauffeur B weigerde de ${woord(soort)} van wo 08/07 (dienst 12).` } }),
+  'de planner keurt goed': GOEDGEKEURD,
+  'een admin keurt goed zonder het antwoord van de collega': GOEDGEKEURD,
+  'een admin handelt een open ruil rechtstreeks af': GOEDGEKEURD,
+  'de planner handelt een goedgekeurde ruil af': () => ({}),
+  'de planner wijst een open aanvraag af': AFGEWEZEN,
+  'de planner wijst een geaccepteerde ruil af': AFGEWEZEN,
+  'de planner wijst een goedgekeurde ruil alsnog af': TERUGGEDRAAID('Dienstruil afgewezen'),
+  'de aanvrager trekt een open aanvraag in': INGETROKKEN,
+  'de aanvrager trekt een geaccepteerde ruil in': INGETROKKEN,
+  'de planner annuleert een open aanvraag': GEANNULEERD,
+  'de planner annuleert een geaccepteerde ruil': GEANNULEERD,
+  'de planner annuleert een goedgekeurde ruil': TERUGGEDRAAID('Dienstruil geannuleerd'),
+};
+
+describe('ruilmeldingen, deel 2: wat er in de melding staat', () => {
+  it('elke overgang uit deel 1 heeft hier zijn tekst', () => {
+    expect(Object.keys(TEKSTEN).sort()).toEqual(OVERGANGEN.map((o) => o.naam).sort());
+  });
+
+  describe('een nieuwe aanvraag zegt wat de collega krijgt en wat de aanvrager ervoor neemt', () => {
+    const AANVRAAG: Record<Soort, Tekst> = {
+      dienst: { titel: 'Nieuwe dienstruil-aanvraag', body: 'Chauffeur A vraagt een ruil: jij krijgt dienst 12 op wo 08/07, in ruil voor jouw dienst 14 op do 02/07.' },
+      vrij: { titel: 'Nieuwe dienstruil-aanvraag', body: 'Chauffeur A vraagt een ruil: jij krijgt dienst 12 op wo 08/07, in ruil voor jouw vrije dag op wo 08/07.' },
+      overname: { titel: 'Vraag om een dienst over te nemen', body: 'Chauffeur A vraagt of je dienst 12 van wo 08/07 wil overnemen, zonder tegenprestatie.' },
+    };
+    for (const soort of SOORTEN) {
+      it(soort, async () => {
+        // Zonder dienst-info in de aanvraag: de server leest dienst en dag zelf uit de planning.
+        const { shiftDate: _d, shiftLine: _l, ...nieuw } = ruil(soort, 'pending', { id: 's-nieuw' });
+        const eigen = mem.swaps.filter((s: any) => s.requesterId === A || s.targetDriverId === A);
+        expect((await api('POST', '/api/swaps', { token: 'tok-a', body: [...eigen, nieuw] })).status).toBe(200);
+        expect(perOntvanger()).toEqual({ [B]: AANVRAAG[soort] });
+        expect(gebreken()).toEqual([]);
+      });
+    }
+  });
+
+  for (const o of OVERGANGEN) {
+    for (const weg of o.wegen) {
+      for (const soort of SOORTEN) {
+        it(`${o.naam} (${weg}, ${soort})`, async () => {
+          zaai(soort, o.van);
+          expect((await wissel(weg, o.door, o.naar)).status).toBe(200);
+          expect(perOntvanger()).toEqual(TEKSTEN[o.naam](soort));
+          expect(gebreken()).toEqual([]);
+        });
+      }
+    }
+  }
+
+  it('dezelfde tekst staat onder de bel: de rij in het meldingencentrum is de melding van die ontvanger', async () => {
+    zaai('dienst', 'accepted');
+    expect((await wissel('PATCH', PLANNER, 'approved')).status).toBe(200);
+    const rijen = mem.meldingen.map((m: any) => [m.userId, m.titel, m.tekst, m.soort, m.doel]).sort();
+    expect(rijen).toEqual([
+      [A, 'Dienstruil goedgekeurd', 'Goedgekeurd: je rijdt dienst 14 op do 02/07, Chauffeur B rijdt dienst 12 op wo 08/07.', 'ruil', 'dienstruil/s-m'],
+      [B, 'Dienstruil goedgekeurd', 'Goedgekeurd: je rijdt dienst 12 op wo 08/07, Chauffeur A rijdt dienst 14 op do 02/07.', 'ruil', 'dienstruil/s-m'],
+    ]);
+  });
+
+  describe('"je rijdt" staat er alleen als de planning het na de beslissing aantoont', () => {
+    for (const weg of ['PATCH', 'lijst'] as const) {
+      it(`${weg}: een oude ruil zonder dienst-info wordt goedgekeurd zonder doorvoer, dus zonder zin over wie rijdt`, async () => {
+        mem.swaps = [{ id: 's-m', shiftId: 'sh-a', requesterId: A, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
+        const voor = JSON.stringify(mem.planning);
+        expect((await wissel(weg, PLANNER, 'approved')).status).toBe(200);
+        expect(JSON.stringify(mem.planning)).toBe(voor);
+        expect(perOntvanger()).toEqual(beide({ titel: 'Dienstruil goedgekeurd', body: 'De planning keurde de ruil goed. Bekijk je rooster.' }));
+        // Eén tekst voor beiden: dan ook één verzending, zoals vroeger.
+        expect(mem.pushesSent).toHaveLength(1);
+        expect(gebreken()).toEqual([]);
+      });
+
+      it(`${weg}: de terugdienst staat niet meer bij de collega: alleen wat verhuisde staat in de melding`, async () => {
+        zaai('dienst', 'accepted');
+        // Dienst 14 van do 02/07 ging intussen naar een derde: de aangeboden dienst verhuist, de terugdienst niet.
+        mem.planning = mem.planning.map((p: any) => (p.id === 'sh-b' ? { ...p, driverId: '9' } : p));
+        expect((await wissel(weg, PLANNER, 'approved')).status).toBe(200);
+        expect(mem.planning.find((p: any) => p.id === 'sh-c')?.driverId).toBe(B);
+        expect(mem.planning.find((p: any) => p.id === 'sh-b')?.driverId).toBe('9');
+        expect(perOntvanger()).toEqual({
+          [A]: { titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: Chauffeur B rijdt dienst 12 op wo 08/07. Bekijk je rooster.' },
+          [B]: { titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: je rijdt dienst 12 op wo 08/07. Bekijk je rooster.' },
+        });
+        expect(gebreken()).toEqual([]);
+      });
+
+      it(`${weg}: stond de wissel al in de planning (halve doorvoer), dan toont de planning hem en zegt de melding wie rijdt`, async () => {
+        zaai('dienst', 'accepted');
+        voerDoorInPlanning('dienst');
+        expect((await wissel(weg, PLANNER, 'approved')).status).toBe(200);
+        expect(perOntvanger()).toEqual(GOEDGEKEURD('dienst'));
+      });
+
+      it(`${weg}: een goedgekeurde ruil waarvan de rijen niet meer terug te vinden zijn wordt geannuleerd zonder zin over wie rijdt`, async () => {
+        zaai('overname', 'approved');
+        // De dienst staat intussen bij een derde: er valt niets terug te zetten.
+        mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: '9' } : p));
+        expect((await wissel(weg, PLANNER, 'cancelled')).status).toBe(200);
+        expect(mem.planning.find((p: any) => p.id === 'sh-c')?.driverId).toBe('9');
+        expect(perOntvanger()).toEqual(beide({ titel: 'Dienstruil geannuleerd', body: 'De planning draaide de goedgekeurde overname van wo 08/07 (dienst 12) terug. Bekijk je rooster.' }));
+        expect(gebreken()).toEqual([]);
+      });
+    }
+
+    it('lijstroute: de tekst beschrijft het record zoals het doorgevoerd is; wie daar niet in zit krijgt de neutrale zin', async () => {
+      // Een admin keurt een open overname goed en zet ze in dezelfde save op
+      // naam van een andere collega. De ontvangers komen zoals altijd uit het
+      // opgeslagen record (A en B); de dienst gaat naar C.
+      mem.users.push({ id: '5', name: 'Chauffeur C', email: 'c@vhb.be', role: 'chauffeur', isActive: true });
+      mem.planningMatrix = [{ id: 'm-1', source_date: DAG, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'bv', 'Chauffeur C': 'vrij' }, raw_row: '' }];
+      zaai('overname', 'pending');
+      const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s: any) => ({ ...s, status: 'approved', targetDriverId: '5' })) });
+      expect(res.status).toBe(200);
+      expect(mem.planning.find((p: any) => p.id === 'sh-c')?.driverId).toBe('5');
+      expect(perOntvanger()).toEqual({
+        [A]: { titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: je bent vrij op wo 08/07, Chauffeur C rijdt dienst 12.' },
+        [B]: { titel: 'Dienstruil goedgekeurd', body: 'De planning keurde de overname van wo 08/07 (dienst 12) goed. Bekijk je rooster.' },
+      });
+      expect(gebreken()).toEqual([]);
+    });
+  });
+
+  it('een verwijderd account in de ruil: "je collega", geen id en geen "Onbekende gebruiker"', async () => {
+    // Het account van de aanvrager bestaat niet meer; de ruil staat er nog.
+    zaai('vrij', 'pending');
+    mem.users = mem.users.filter((u: any) => u.id !== A);
+    expect((await wissel('PATCH', B, 'accepted')).status).toBe(200);
+    expect(perOntvanger()[PLANNER]).toEqual({
+      titel: 'Dienstruil wacht op validatie',
+      body: 'Chauffeur B accepteerde de ruil: dienst 12 op wo 08/07 tegen een vrije dag op wo 08/07. Rij- en rusttijden checken.',
+    });
+    expect(gebreken()).toEqual([]);
+    mem.pushesSent = [];
+    expect((await wissel('PATCH', PLANNER, 'cancelled')).status).toBe(200);
+    expect(perOntvanger()[B]).toEqual({ titel: 'Dienstruil geannuleerd', body: 'De planning annuleerde de ruil van wo 08/07 (dienst 12).' });
+    expect(gebreken()).toEqual([]);
+    // En omgekeerd: het account van de collega is weg, de aanvrager leest "je collega".
+    mem.pushesSent = [];
+    mem.users = [...mem.users.filter((u: any) => u.id !== B), { id: A, name: 'Chauffeur A', email: 'a@vhb.be', role: 'chauffeur', isActive: true }];
+    mem.swaps = [ruil('vrij', 'accepted')];
+    mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: B } : p));
+    expect((await wissel('PATCH', PLANNER, 'approved')).status).toBe(200);
+    expect(perOntvanger()[A]).toEqual({ titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: je bent vrij op wo 08/07, je collega rijdt dienst 12.' });
+    expect(gebreken()).toEqual([]);
+  });
+});
+
+describe('dienst toegewezen, deel 2: de melding noemt weekdag, datum en uren', () => {
+  const wijsToe = (serviceNumber: string) =>
+    api('POST', '/api/planning/assign-service', { token: 'tok-planner', body: { date: DAG, serviceNumber, driverId: B } });
+
+  it('een dienst in één stuk: de uren zoals ze in de planning komen', async () => {
+    expect((await wijsToe('14')).status).toBe(200);
+    expect(mem.pushesSent[0].payload).toMatchObject({ title: 'Dienst toegewezen', body: 'Je rijdt dienst 14 op wo 08/07: 10:00–18:00.' });
+    expect(mem.planning.filter((p: any) => p.date === DAG && p.line === '14').map((p: any) => [p.driverId, p.startTime, p.endTime])).toEqual([[B, '10:00', '18:00']]);
+    expect(gebreken()).toEqual([]);
+  });
+
+  it('de uren in de melding zijn precies de blokken die op naam van de chauffeur in de planning komen', async () => {
+    // Het harnas geeft van een dienst alleen het eerste blok (zijn
+    // getServiceSegments). Alle delen van een gesplitste dienst, op de echte
+    // blokken uit het dienstoverzicht, staan in src/meldingTeksten.test.ts.
+    mem.services.push({ id: 'd-vroeg', serviceNumber: '2116', startTime: '06:45', endTime: '10:00', startTime2: '15:45', endTime2: '19:35' });
+    expect((await wijsToe('2116')).status).toBe(200);
+    const blokken = mem.planning.filter((p: any) => p.date === DAG && p.line === '2116' && p.driverId === B).map((p: any) => `${p.startTime}–${p.endTime}`);
+    expect(blokken.length).toBeGreaterThan(0);
+    expect(mem.pushesSent[0].payload.body).toBe(`Je rijdt dienst 2116 op wo 08/07: ${blokken.join(' en ')}.`);
+    expect(gebreken()).toEqual([]);
+  });
+});
