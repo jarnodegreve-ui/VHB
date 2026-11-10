@@ -581,6 +581,40 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     });
   };
 
+  // Beheertabel op desktop (ronde 6, punt 16): Afwijzen is daar één klik op een
+  // icoon, dus eerst een bevestiging die zegt over welke ruil het gaat. De
+  // status die de planner zag toen ze opende gaat mee als seenStatus, zoals bij
+  // handleAdminForceApprove: besliste iemand anders intussen, dan weigert de
+  // server.
+  const vraagAfwijzen = (swap: SwapRequest) => {
+    const info = shiftInfoFor(swap);
+    const collega = swap.targetDriverId ? ` met ${naamVan(swap.targetDriverId) ?? 'een onbekende collega'}` : '';
+    setConfirmAction({
+      title: 'Dienstruil afwijzen?',
+      message: `De aanvraag van ${naamVan(swap.requesterId) ?? 'een onbekende chauffeur'}${collega} voor ${info.line !== '--' ? `dienst ${info.line}` : 'de dienst'}${info.date ? ` op ${formatDateHuman(info.date)}` : ''} wordt afgewezen.`,
+      confirmText: 'Afwijzen',
+      variant: 'danger',
+      run: () => handleStatusUpdate(swap.id, 'rejected', swap.status),
+    });
+  };
+
+  // Te weinig rust: Goedkeuren in de desktoprij opent eerst het paneel met de
+  // rustregels. De rijknop ligt onder de voet van dat paneel, dus de tweede
+  // klik van een dubbelklik viel op Afwijzen of Goedkeuren daar en besliste
+  // meteen (gemeten van 768 tot 1920 px breed). Opent het paneel langs deze
+  // weg, dan doen de knoppen in de voet daarom even niets. Een teller, geen
+  // vlag: elke opening langs deze weg start de grendel opnieuw.
+  const [voetOpSlot, setVoetOpSlot] = useState(0);
+  useEffect(() => {
+    if (!voetOpSlot) return;
+    const klaar = window.setTimeout(() => setVoetOpSlot(0), 700);
+    return () => window.clearTimeout(klaar);
+  }, [voetOpSlot]);
+  const bekijkEerstRust = (swap: SwapRequest) => {
+    setVoetOpSlot((n) => n + 1);
+    setReviewSwap(swap);
+  };
+
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
   const handleAccept = (swapId: string) => {
     const swap = swaps.find((s) => s.id === swapId);
@@ -1041,6 +1075,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     {actionableSwaps.map(swap => {
                       const info = shiftInfoFor(swap);
                       const requester = users.find(u => u.id === swap.requesterId);
+                      // Te weinig rust (ronde 6, punt 16): zichtbaar in de rij, en
+                      // Goedkeuren opent dan eerst het paneel met de rustregels;
+                      // het blijft een waarschuwing, geen blokkade. Alleen voor een
+                      // ruil die nog beslist moet worden: na een goedkeuring draagt
+                      // de lokale kopie het oude `rust`-veld nog tot de lijst ververst.
+                      const teWeinigRust = (swap.status === 'pending' || swap.status === 'accepted') && !!swap.rust?.some((r) => r.teKort);
                       return (
                         <tr key={swap.id} className="hover:bg-surface-soft-hover transition-colors">
                           <Td>
@@ -1080,6 +1120,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   ? <Badge tone="emerald" stil icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>Gezien</Badge>
                                   : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">Niet bevestigd</Badge>
                               )}
+                              {teWeinigRust && <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge>}
                             </span>
                             <RuilVerloop compact swap={voorVerloop(swap)} naamVan={naamVan} className="mt-1.5 space-y-0.5" />
                           </Td>
@@ -1088,19 +1129,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <Button variant="ghost" size="sm" icon={<History size={16} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistorySwap(swap)} />
                               {swap.status === 'accepted' && (
                                 <>
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Goedkeuren" title="Goedkeuren (rij-/rusttijden ok)" onClick={() => handleStatusUpdate(swap.id, 'approved')} />
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label={teWeinigRust ? 'Goedkeuren, bekijk eerst de rusttijd' : 'Goedkeuren'} title={teWeinigRust ? 'Bekijk eerst de rusttijd' : 'Goedkeuren (rij-/rusttijden ok)'} onClick={() => (teWeinigRust ? bekijkEerstRust(swap) : handleStatusUpdate(swap.id, 'approved'))} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => vraagAfwijzen(swap)} />
                                 </>
                               )}
                               {swap.status === 'pending' && (isAdmin ? (
                                 <>
-                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Direct goedkeuren" title="Direct goedkeuren, collega heeft nog niet bevestigd" onClick={() => handleAdminForceApprove(swap.id)} />
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label={teWeinigRust ? 'Direct goedkeuren, bekijk eerst de rusttijd' : 'Direct goedkeuren'} title={teWeinigRust ? 'Bekijk eerst de rusttijd, collega heeft nog niet bevestigd' : 'Direct goedkeuren, collega heeft nog niet bevestigd'} onClick={() => (teWeinigRust ? bekijkEerstRust(swap) : handleAdminForceApprove(swap.id))} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => vraagAfwijzen(swap)} />
                                 </>
                               ) : (
                                 <>
                                   <Badge tone="amber" stil className="whitespace-nowrap">Wacht op collega</Badge>
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => vraagAfwijzen(swap)} />
                                 </>
                               ))}
                               {swap.status === 'approved' && (
@@ -1604,7 +1645,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         subtitle={reviewSwap ? `Aangevraagd op ${formatDateHuman(reviewSwap.createdAt)}` : undefined}
         icon={reviewSwap ? <Avatar naam={users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend'} size="lg" /> : undefined}
         footer={reviewSwap ? (
-          <div className="flex items-center gap-2">
+          <div className={cn('flex items-center gap-2', voetOpSlot > 0 && 'pointer-events-none')}>
             <Button
               variant="ghost"
               size="md"
