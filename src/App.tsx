@@ -161,7 +161,9 @@ export default function App() {
     const onBundel = (e: Event) => {
       e.preventDefault(); // bevestigt aan openRitblad dat wij het doen
       // De dag (13-10): de bundel van de dienstregelingversie die dan geldt.
-      setBundel({ datum: (e as CustomEvent<RitbladBundelDetail>).detail?.datum });
+      // De dienstnummers (11-11): het rooster vraagt het blad van één dienst.
+      const { datum, dienstnummer } = (e as CustomEvent<RitbladBundelDetail>).detail ?? {};
+      setBundel({ datum, dienstnummer });
     };
     window.addEventListener(RITBLAD_BUNDEL_EVENT, onBundel);
     return () => window.removeEventListener(RITBLAD_BUNDEL_EVENT, onBundel);

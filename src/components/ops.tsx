@@ -218,7 +218,9 @@ export function OpsRow({
   /** Badges boven de tekst; vervangen het icoonvak als er geen leading is. */
   badges?: ReactNode;
   primary: string;
-  secondary?: string;
+  /** Tweede regel: tekst op één lijn, afgekapt. Een eigen element mag ook,
+   *  voor de rij die haar regel laat omlopen (Komende diensten, 11-11). */
+  secondary?: ReactNode;
   meta?: string;
   /** Optioneel element rechts (bv. een dienstnummer-chip). */
   trailing?: ReactNode;

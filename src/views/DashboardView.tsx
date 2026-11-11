@@ -6,6 +6,7 @@ import { activeDiversions, lopendeDiversions, omleidingsPeriode, omleidingsTijds
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { isRijdend } from '../types';
 import { telDienstdagen } from '../lib/dienstTelling';
+import { komendeDagNummers, komendeDagStukken, komendeDienstDagen } from '../lib/komendeDiensten';
 import { LijnTegel } from '../components/LijnTegel';
 import { lijnLabel } from '../../shared/lijnen';
 import type { Diversion, LeaveRequest, Shift, SwapRequest, User, View } from '../types';
@@ -174,17 +175,10 @@ export function DashboardView({ notes = [],
   // (melding Jarno 14-09: "27 diensten" waar het 15 dagen waren).
   const thisMonthShiftCount = telDienstdagen(myShifts.filter((s) => s.date.startsWith(monthPrefix)));
 
-  // Volgende geplande diensten (toekomst, oplopend gesorteerd) — voor de
-  // Planning-panel bij chauffeurs.
-  const upcomingShifts = myShifts
-    .map((s) => {
-      const [year, month, day] = s.date.split('-').map(Number);
-      const startMin = parseHHMM(s.startTime) ?? 0;
-      return { ...s, startDateTime: new Date(year, month - 1, day, 0, startMin) };
-    })
-    .filter((s) => s.startDateTime > now)
-    .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())
-    .slice(0, 3);
+  // De eerstvolgende drie DAGEN met een dienst, voor het paneel Komende
+  // diensten (11-11): vroeger de eerste drie planningsrijen, en een gesplitste
+  // dienst vult er twee (src/lib/komendeDiensten.ts).
+  const komendeDagen = komendeDienstDagen(myShifts, now);
 
 
 
@@ -334,7 +328,7 @@ export function DashboardView({ notes = [],
         onSeeAll={onNavigate ? () => onNavigate('rooster') : undefined}
         seeAllLabel="Mijn rooster"
       >
-        {upcomingShifts.length === 0 ? (
+        {komendeDagen.length === 0 ? (
           /* Neutrale lege staat: geen groen vlak voor een rusttoestand. */
           <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
@@ -350,14 +344,24 @@ export function DashboardView({ notes = [],
             {/* Alleen de eerstvolgende dienst krijgt goud; de rest blijft
                 neutraal — hooguit twee gouden accenten per scherm (naam in de
                 groet + Vandaag-tegel), controle 05-09 nr. 20. */}
-            {upcomingShifts.map((shift, i) => (
-              <Fragment key={shift.id}>
+            {/* Eén rij per dag: de uren van alle delen op de tweede regel. Past
+                die niet (twee tijdvakken zijn breder dan de rij op een telefoon
+                van 375 of 360 px), dan loopt ze om tussen de stukken in plaats
+                van de eindtijd af te kappen; een tijdvak zelf breekt nooit. */}
+            {komendeDagen.map((dag, i) => (
+              <Fragment key={dag.datum}>
                 <OpsRow
                   tone={i === 0 ? 'oker' : 'slate'}
                   icon={<Calendar size={16} />}
-                  primary={formatShortDayPadded(shift.date)}
-                  secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
-                  trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone={i === 0 ? 'oker' : 'slate'} />}
+                  primary={formatShortDayPadded(dag.datum)}
+                  secondary={(
+                    <span className="block whitespace-normal">
+                      {komendeDagStukken(dag).map((stuk, j) => (
+                        <Fragment key={j}>{j > 0 && ' · '}<span className="whitespace-nowrap">{stuk}</span></Fragment>
+                      ))}
+                    </span>
+                  )}
+                  trailing={<ServiceChip serviceNumber={komendeDagNummers(dag)} tone={i === 0 ? 'oker' : 'slate'} />}
                   onClick={() => onNavigate?.('rooster')}
                 />
               </Fragment>

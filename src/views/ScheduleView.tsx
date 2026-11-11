@@ -266,7 +266,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
             items={[
 
               ...(upcoming.some((g) => g.date === today)
-                ? [{ label: 'Ritblad van vandaag', icon: <FileText size={16} />, onClick: () => void openRitblad(today) }]
+                ? [{ label: 'Ritblad van vandaag', icon: <FileText size={16} />, onClick: () => void openRitblad(today, grouped.filter((g) => g.date === today).map((g) => g.line)) }]
                 : []),
               { label: 'Aan agenda toevoegen', icon: <CalendarPlus size={16} />, onClick: () => setCalendarOpen(true) },
             ]}
@@ -331,9 +331,20 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
         <div className={cn(xl && 'grid grid-cols-2 items-start gap-5')}>
           {toonLijst && (
             <div>
-              {/* Toekomst */}
-              {upcoming.length > 0 && (
+              {/* Toekomst. Alleen diensten in het verleden (11-11): de lijst was
+                  dan leeg op "Toon verleden" na, en dat las als een scherm dat
+                  niet geladen was. Eén stille kaart, zoals "Geen dienst
+                  ingepland" op Mijn dag, met de planningshorizon erbij als de
+                  server die meegaf. */}
+              {upcoming.length > 0 ? (
                 <ShiftList shifts={upcoming} today={today} noteFor={(d) => notes.find((n) => n.date === d)?.note} onRequestSwap={onRequestSwap} compact={xl} planningTel={planningTel} />
+              ) : (
+                <Card tone="muted" padding="sm">
+                  <p className="text-md font-semibold text-slate-800">Geen komende diensten gepland.</p>
+                  {planningTot && (
+                    <p className="mt-0.5 text-body-sm text-slate-500">De planning loopt tot en met {formatDatumDMJ(planningTot)}.</p>
+                  )}
+                </Card>
               )}
 
               {/* Verleden — collapsed by default */}
@@ -652,9 +663,11 @@ function MonthCalendar({
         )}
 
         {/* Sinds 13-10 hoort de bundel bij een dag (de dienstregelingversie
-            die dan geldt), dus ook een dienst van volgende week heeft zijn blad. */}
+            die dan geldt), dus ook een dienst van volgende week heeft zijn blad.
+            Het dienstnummer gaat mee (11-11): de viewer opent op de pagina's
+            van die dienst, de volledige bundel blijft één tik verder. */}
         {selectedGroups.length > 0 && (
-          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void openRitblad(selected)} icon={<FileText size={14} />}>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void openRitblad(selected, selectedGroups.map((g) => g.line))} icon={<FileText size={14} />}>
             {selected === today ? 'Ritblad van vandaag' : 'Ritblad'}
           </Button>
         )}
@@ -840,8 +853,10 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                   </Button>
                 )}
                 {/* Sinds 13-10 hoort de bundel bij een dag (de dienstregelingversie
-                    die dan geldt), dus ook een dienst van volgende week heeft zijn blad. */}
-                <Button variant="secondary" size="sm" onClick={() => void openRitblad(g.date)} icon={<FileText size={14} />}>
+                    die dan geldt), dus ook een dienst van volgende week heeft zijn blad.
+                    Het dienstnummer gaat mee (11-11): de viewer opent op het blad
+                    van deze dienst; zonder bruikbaar nummer de hele bundel. */}
+                <Button variant="secondary" size="sm" onClick={() => void openRitblad(g.date, [g.line])} icon={<FileText size={14} />}>
                   {isToday ? 'Ritblad van vandaag' : 'Ritblad'}
                 </Button>
               </div>
