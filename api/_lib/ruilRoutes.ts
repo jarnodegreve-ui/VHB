@@ -25,6 +25,7 @@ import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapDoorvoerRegels, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getSwapsOpDienstdag, getSwapsVenster, getSwapsArchief, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "./storage.js";
 import { recordUrl } from "./meldingen.js";
+import { meldingenPerTekst, ruilAanvraagMelding, ruilBeslisMelding, ruilValidatieMelding, type RuilPlanningStand } from "./meldingTeksten.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, bordToontRuilAl, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
 import { archiefVolgorde, ruilInVenster, ruilVensterGrens } from "../../shared/ruilVenster.js";
@@ -146,6 +147,37 @@ const bewegingVan = (
   if (!r) return null;
   const benen = { aangeboden: r.offeredMoved > 0, terug: (r.returnMoved ?? 0) > 0 };
   return benen.aangeboden || benen.terug ? { richting, benen } : null;
+};
+
+/**
+ * Voor de TEKST van de melding (api/_lib/meldingTeksten.ts): wat na deze
+ * beslissing aantoonbaar in de planning staat. Vond een goedkeuring de wissel
+ * al in de rijen (halve doorvoer herkend), dan staan beide benen zo; anders
+ * telt wat de beslissing zelf verplaatste. Null = niets aangetoond, en dan
+ * zegt de melding niet wie welke dienst rijdt. Leest alleen, beslist niets.
+ */
+const planningVoorMelding = (stondAlInPlanning: boolean, beweging: PlanningBeweging | null): RuilPlanningStand | null =>
+  stondAlInPlanning ? { richting: "doorgevoerd", benen: { aangeboden: true, terug: true } } : beweging;
+
+type WisselVelden = Partial<Record<"requesterId" | "targetDriverId" | "shiftDate" | "shiftLine" | "returnDate" | "returnCode", unknown>>;
+
+/**
+ * Beschrijven twee versies van één ruil dezelfde wissel in de planning: wie,
+ * welke dienst, welke terugdienst? Alleen voor de TEKST van de melding. De
+ * lijstroute herkent een wissel die al in de rijen staat op het opgeslagen
+ * record, en bouwt de tekst op het record zoals het geschreven is; een admin
+ * kan een open aanvraag in dezelfde save op een andere collega zetten, en dan
+ * tonen de rijen niet wat het geschreven record zegt.
+ */
+const zelfdeWisselInPlanning = (a: WisselVelden, b: WisselVelden): boolean =>
+  (["requesterId", "targetDriverId", "shiftDate", "shiftLine", "returnDate", "returnCode"] as const)
+    .every((veld) => String(a[veld] ?? "") === String(b[veld] ?? ""));
+
+/** Naam bij een gebruikers-id voor de tekst van een melding; onbekend blijft
+ *  leeg, zodat de zin op "je collega" terugvalt en geen id toont. */
+const naamVoorMelding = (users: ReadonlyArray<{ id: unknown; name?: unknown }>, id: unknown): string | undefined => {
+  const naam = users.find((u) => String(u.id) === String(id ?? ""))?.name;
+  return typeof naam === "string" && naam.trim() ? naam : undefined;
 };
 
 /**
@@ -453,6 +485,11 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       cancelled: "Dienstruil geannuleerd",
       completed: "Dienstruil voltooid",
     };
+    // De tekst van de meldingen (api/_lib/meldingTeksten.ts): per ontvanger wat
+    // er voor hem verandert. Wie een melding krijgt, de soort en de url zijn
+    // die van altijd; `action` blijft de logactie en de melding voor Telegram.
+    const meldingNamen = { aanvrager: naamVoorMelding(usersForLog, current.requesterId), collega: naamVoorMelding(usersForLog, current.targetDriverId) };
+    const meldingPlanning = planningVoorMelding(voertDoor && alDoorgevoerd, beweging);
     // Eén stap per overgang; rechtstreeks afhandelen zet er twee (goedkeuring,
     // daarna afhandeling), zie ruilLogStappen. De doorvoer hoort bij de eerste.
     let action = "Dienstruil bijgewerkt";
@@ -465,14 +502,21 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       // dus geen melding: dat zou een tweede "ruil goedgekeurd"-bericht zijn.
       const betrokkenen = stap.naar === "completed" ? [] : [String(current.requesterId), String(current.targetDriverId ?? "")]
         .filter((uid) => uid && uid !== selfId);
-      await sendPushToUsers(betrokkenen, {
-        title: action,
+      // Dezelfde ontvangers, elk met zijn eigen tekst: wie dezelfde tekst
+      // krijgt gaat samen in één verzending. Twee teksten vertrekken samen,
+      // niet na elkaar: zoals vroeger (één verzending voor beide chauffeurs)
+      // staat elke melding er dan op hetzelfde moment, en een verzending die
+      // traag is of omvalt houdt die van de andere chauffeur niet tegen.
+      const perTekst = meldingenPerTekst(betrokkenen, (uid) => ruilBeslisMelding(
+        { ruil: current, namen: meldingNamen, van: stap.van, naar: stap.naar, doorStaf: staf, planning: i === 0 ? meldingPlanning : null },
+        uid,
+      ));
+      await Promise.all(perTekst.map((melding) => sendPushToUsers(melding.userIds, {
+        title: melding.titel,
         soort: "ruil",
-        body: stap.naar === "accepted"
-          ? `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
-          : `Dienstruil van ${userName(String(current.requesterId))}: ${stap.van} → ${stap.naar}.`,
+        body: melding.body,
         url: recordUrl("ruil-verzoeken", current.id),
-      });
+      })));
     }
     // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
     // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
@@ -480,10 +524,11 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       const beslissers = usersForLog
         .filter((u) => isActieveStaf(u) && String(u.id) !== selfId)
         .map((u) => String(u.id));
+      const validatie = ruilValidatieMelding(current, meldingNamen);
       await sendPushToUsers(beslissers, {
-        title: "Dienstruil wacht op validatie",
+        title: validatie.titel,
         soort: "ruil",
-        body: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))}, rij- en rusttijden checken.`,
+        body: validatie.body,
         url: recordUrl("ruil-verzoeken", current.id),
       });
       await meldRuilTerValidatieTelegram({
@@ -1299,9 +1344,15 @@ export function mountRuilRoutes(app: express.Express) {
       };
       /** Log en meldingen van één geschreven statuswissel. Rechtstreeks
        *  afhandelen zet twee stappen (goedkeuring, daarna afhandeling), zie
-       *  ruilLogStappen; de doorvoer hoort bij de eerste. */
-      const logStatusWissel = async (prev: any, next: any, carry?: string) => {
+       *  ruilLogStappen; de doorvoer hoort bij de eerste. `planning`: wat de
+       *  wissel aantoonbaar in de planning zette, alleen voor de tekst van de
+       *  melding (planningVoorMelding). */
+      const logStatusWissel = async (prev: any, next: any, carry?: string, planning: RuilPlanningStand | null = null) => {
         if (next.status === "pending") return;
+        // De tekst beschrijft het record zoals het geschreven en doorgevoerd
+        // is (`next`); de ontvangers komen zoals altijd uit `prev`. Wie in
+        // `next` aanvrager noch collega is, krijgt de neutrale zin.
+        const meldingNamen = { aanvrager: naamVoorMelding(usersForLog, next.requesterId), collega: naamVoorMelding(usersForLog, next.targetDriverId) };
         for (const [i, stap] of ruilLogStappen(String(prev.status), String(next.status)).entries()) {
           // Alleen een gekende status krijgt een logregel (eigen sleutels: de
           // status komt uit de payload).
@@ -1313,14 +1364,18 @@ export function mountRuilRoutes(app: express.Express) {
           // stil, zie de delta-route.
           const betrokkenen = stap.naar === "completed" ? [] : [String(prev.requesterId), String(prev.targetDriverId ?? "")]
             .filter((id) => id && id !== actorId);
-          await sendPushToUsers(betrokkenen, {
-            title: action,
+          // Dezelfde ontvangers, elk met zijn eigen tekst (meldingTeksten.ts);
+          // twee teksten vertrekken samen, niet na elkaar (zie de delta-route).
+          const perTekst = meldingenPerTekst(betrokkenen, (uid) => ruilBeslisMelding(
+            { ruil: next, namen: meldingNamen, van: stap.van, naar: stap.naar, doorStaf: staf, planning: i === 0 ? planning : null },
+            uid,
+          ));
+          await Promise.all(perTekst.map((melding) => sendPushToUsers(melding.userIds, {
+            title: melding.titel,
             soort: "ruil",
-            body: stap.naar === "accepted"
-              ? `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
-              : `Dienstruil van ${userName(next.requesterId)}: ${stap.van} → ${stap.naar}.`,
+            body: melding.body,
             url: recordUrl("ruil-verzoeken", next.id),
-          });
+          })));
           // Geaccepteerd = er wacht een validatie op de planner, die kreeg
           // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
           // actor zelf, als die toevallig planner/admin is).
@@ -1328,10 +1383,11 @@ export function mountRuilRoutes(app: express.Express) {
             const beslissers = usersForLog
               .filter((u) => isActieveStaf(u) && String(u.id) !== actorId)
               .map((u) => String(u.id));
+            const validatie = ruilValidatieMelding(next, meldingNamen);
             await sendPushToUsers(beslissers, {
-              title: "Dienstruil wacht op validatie",
+              title: validatie.titel,
               soort: "ruil",
-              body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}, rij- en rusttijden checken.`,
+              body: validatie.body,
               url: recordUrl("ruil-verzoeken", next.id),
             });
             await meldRuilTerValidatieTelegram({
@@ -1390,7 +1446,9 @@ export function mountRuilRoutes(app: express.Express) {
           afgebroken = await naVerlorenStatuswissel({ swap: next, beweging, logReq: req });
           break;
         }
-        await logStatusWissel(prev, next, carry);
+        // "Stond al in de planning" is vastgesteld op `prev`; de tekst mag dat
+        // alleen overnemen als `next` dezelfde wissel beschrijft.
+        await logStatusWissel(prev, next, carry, planningVoorMelding(alDoorgevoerdIds.has(String(next.id)) && zelfdeWisselInPlanning(prev, next), beweging));
       }
       if (afgebroken) {
         return res.status(afgebroken.status).json({ error: afgebroken.error, ...(afgebroken.currentStatus ? { currentStatus: afgebroken.currentStatus } : {}) });
@@ -1438,14 +1496,14 @@ export function mountRuilRoutes(app: express.Express) {
             : `${userName(next.requesterId)} bood een dienst aan voor ruil.`,
           { type: "swap", id: next.id },
         );
-        // De aangezochte collega krijgt direct een seintje.
+        // De aangezochte collega krijgt direct een seintje, met wat hij krijgt
+        // en wat de aanvrager ervoor neemt (meldingTeksten.ts).
         if (next.targetDriverId) {
+          const aanvraag = ruilAanvraagMelding(next, { aanvrager: naamVoorMelding(usersForLog, next.requesterId), collega: naamVoorMelding(usersForLog, next.targetDriverId) });
           await sendPushToUsers([String(next.targetDriverId)], {
-            title: isTakeover ? "Vraag om een dienst over te nemen" : "Nieuwe dienstruil-aanvraag",
+            title: aanvraag.titel,
             soort: "ruil",
-            body: isTakeover
-              ? `${userName(next.requesterId)} vraagt of je een dienst wil overnemen, zonder tegenprestatie.`
-              : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
+            body: aanvraag.body,
             url: recordUrl("ruil-verzoeken", next.id),
           });
         }
