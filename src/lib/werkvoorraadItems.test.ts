@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { berekenWerkvoorraad, sindsTekst, telPerSoort, werkvoorraadItems } from './werkvoorraad';
+import { berekenWerkvoorraad, herverdeelDoel, sindsTekst, telPerSoort, werkvoorraadItems } from './werkvoorraad';
 import type { LeaveRequest, PlanningMatrixImportHistory, Shift, SwapRequest, User } from '../types';
 
 // Vaste "nu": maandag 31-08-2026, middag (lokale tijd, isoDate is lokaal).
@@ -91,7 +91,7 @@ describe('werkvoorraadItems', () => {
     expect(items[3].wanneerTekst).toBe('over 20 dagen');
   });
 
-  it('open diensten linken naar de maand van de dag; toestellen dragen hun rij mee', () => {
+  it('open diensten linken naar de maand én de dag; toestellen dragen hun rij mee', () => {
     // Relatief aan NOW (lokale tijd), anders hangt de tekst af van de tijdzone van de runner.
     const halfUurGeleden = new Date(NOW.getTime() - 30 * 60000).toISOString();
     const wv = berekenWerkvoorraad({
@@ -104,11 +104,115 @@ describe('werkvoorraadItems', () => {
     const items = werkvoorraadItems(wv, opts);
     const gat = items.find((it) => it.soort === 'dekking');
     expect(gat?.doel).toBe('dekking');
-    expect(gat?.doelParams).toEqual(['2026-10']);
+    // Maand + dag (ronde 6, punt 17): Openstaande diensten brengt de rij van die dag in beeld.
+    expect(gat?.doelParams).toEqual(['2026-10', '2026-10-03']);
     expect(gat?.titel).toBe('2 open diensten, 2026-10-03');
     const toestel = items.find((it) => it.soort === 'toestellen');
     expect(toestel?.toestel).toEqual({ userId: '2', name: 'Pixel', createdAt: halfUurGeleden });
     expect(toestel?.wanneerTekst).toBe('30 min geleden');
+  });
+});
+
+describe('elke rij opent het juiste record (ronde 6, punt 17)', () => {
+  const basis = { swaps: [], matrixHistory: [], coverageDays: [], pendingDevices: [], now: NOW };
+  const afwezig = (id: string, userId: string, type: LeaveRequest['type'], startDate: string, endDate: string, status: LeaveRequest['status'] = 'approved') =>
+    verlof(id, userId, '2026-08-30T08:00:00Z', { type, status, startDate, endDate });
+  const herverdeelItem = (leaveRequests: LeaveRequest[], shifts: Shift[]) => {
+    const wv = berekenWerkvoorraad({ ...basis, users: [gebruiker('3', 'Cas')], shifts, leaveRequests, vervaldata: [] });
+    return { wv, item: werkvoorraadItems(wv, opts).find((it) => it.soort === 'herverdelen') };
+  };
+
+  it('een dienst van een zieke opent het detail van die ziekmelding', () => {
+    const { wv, item } = herverdeelItem(
+      [afwezig('z1', '3', 'ziekte', '2026-08-31', '2026-09-05')],
+      [dienst('3', '2026-09-02'), dienst('3', '2026-09-03', '2607')],
+    );
+    expect(item?.doel).toBe('ziekte');
+    expect(item?.doelParams).toEqual(['z1']);
+    // Het dashboardpaneel leest hetzelfde doel uit de groep per chauffeur.
+    expect(wv.herverdeelPerChauffeur[0]).toMatchObject({ doel: 'ziekte', doelParams: ['z1'] });
+  });
+
+  it.each([
+    ['betaald_verlof' as const],
+    ['klein_verlet' as const],
+  ])('een dienst onder %s opent de Maandplanning op die dag', (type) => {
+    const { wv, item } = herverdeelItem(
+      [afwezig('v1', '3', type, '2026-09-01', '2026-09-04')],
+      [dienst('3', '2026-09-03'), dienst('3', '2026-09-02', '2607')],
+    );
+    // De vroegste dienst van de chauffeur beslist over de dag.
+    expect(item?.doel).toBe('bezetting');
+    expect(item?.doelParams).toEqual(['2026-09', '2026-09-02']);
+    expect(wv.herverdeelPerChauffeur[0]).toMatchObject({ doel: 'bezetting', doelParams: ['2026-09', '2026-09-02'] });
+  });
+
+  it('ziekte wint als ze dezelfde dag dekt als een verlof', () => {
+    const { item } = herverdeelItem(
+      [afwezig('v1', '3', 'betaald_verlof', '2026-09-01', '2026-09-04'), afwezig('z1', '3', 'ziekte', '2026-09-02', '2026-09-03')],
+      [dienst('3', '2026-09-02')],
+    );
+    expect(item?.doel).toBe('ziekte');
+    expect(item?.doelParams).toEqual(['z1']);
+  });
+
+  it('het label volgt het doel: opent de rij een ziekmelding, dan zegt ze Ziekte, ook als het verlof eerst in de lijst staat', () => {
+    const { wv, item } = herverdeelItem(
+      [afwezig('v1', '3', 'betaald_verlof', '2026-09-01', '2026-09-04'), afwezig('z1', '3', 'ziekte', '2026-09-02', '2026-09-03')],
+      [dienst('3', '2026-09-02')],
+    );
+    expect(wv.herverdeelPerChauffeur[0]).toMatchObject({ reden: 'Ziekte', doel: 'ziekte', doelParams: ['z1'] });
+    expect(item?.detail).toBe('Ziekte · 2026-09-02 (2101)');
+    // De dienst zelf houdt de reden van de eerste afwezigheid die hem dekt (de reden bij het overzetten).
+    expect(wv.teHerverdelen[0].reden).toBe('Betaald verlof');
+
+    // Gaat de rij naar de Maandplanning, dan blijft het label van het verlof staan.
+    const naarMaand = herverdeelItem([afwezig('v1', '3', 'klein_verlet', '2026-09-02', '2026-09-02')], [dienst('3', '2026-09-02')]);
+    expect(naarMaand.wv.herverdeelPerChauffeur[0]).toMatchObject({ reden: 'Klein verlet', doel: 'bezetting' });
+    expect(naarMaand.item?.detail).toBe('Klein verlet · 2026-09-02 (2101)');
+  });
+
+  it('de vroegste dienst beslist: eerst verlof, later ziek = de Maandplanning op de eerste dag', () => {
+    const { item } = herverdeelItem(
+      [afwezig('v1', '3', 'betaald_verlof', '2026-09-01', '2026-09-02'), afwezig('z1', '3', 'ziekte', '2026-09-07', '2026-09-09')],
+      [dienst('3', '2026-09-08'), dienst('3', '2026-09-01')],
+    );
+    expect(item?.doel).toBe('bezetting');
+    expect(item?.doelParams).toEqual(['2026-09', '2026-09-01']);
+  });
+
+  it('alleen een goedgekeurde ziekmelding van die chauffeur die de dag dekt telt', () => {
+    const diensten = berekenWerkvoorraad({
+      ...basis, users: [gebruiker('3', 'Cas')], vervaldata: [],
+      shifts: [dienst('3', '2026-09-02')],
+      leaveRequests: [afwezig('v1', '3', 'klein_verlet', '2026-09-02', '2026-09-02')],
+    }).teHerverdelen;
+    const naarMaand = { doel: 'bezetting', doelParams: ['2026-09', '2026-09-02'] };
+    expect(herverdeelDoel(diensten, [afwezig('z-ingetrokken', '3', 'ziekte', '2026-09-01', '2026-09-03', 'cancelled')])).toEqual(naarMaand);
+    expect(herverdeelDoel(diensten, [afwezig('z-ander', '2', 'ziekte', '2026-09-01', '2026-09-03')])).toEqual(naarMaand);
+    expect(herverdeelDoel(diensten, [afwezig('z-eerder', '3', 'ziekte', '2026-08-25', '2026-09-01')])).toEqual(naarMaand);
+    expect(herverdeelDoel(diensten, [afwezig('z1', '3', 'ziekte', '2026-09-02', '2026-09-02')])).toEqual({ doel: 'ziekte', doelParams: ['z1'] });
+  });
+
+  it('een vervaldatum opent de persoon op Vervaldata', () => {
+    const wv = berekenWerkvoorraad({
+      ...basis, users: [gebruiker('1', 'An')], shifts: [], leaveRequests: [],
+      vervaldata: [{ userId: '1', soort: 'code95', validUntil: '2026-09-10' }],
+    });
+    const item = werkvoorraadItems(wv, opts).find((it) => it.soort === 'vervaldata');
+    expect(item?.doel).toBe('vervaldata');
+    expect(item?.doelParams).toEqual(['1']);
+  });
+
+  it('verlof en ruil houden hun recordadres', () => {
+    const wv = berekenWerkvoorraad({
+      ...basis, users: [gebruiker('1', 'An'), gebruiker('2', 'Bert')], shifts: [], vervaldata: [],
+      leaveRequests: [verlof('l1', '1', '2026-08-29T08:00:00Z')],
+      swaps: [ruil('r1', '2026-08-28T10:00:00Z')],
+    });
+    const items = werkvoorraadItems(wv, opts);
+    expect(items.find((it) => it.soort === 'verlof')).toMatchObject({ doel: 'verlof', doelParams: ['l1'] });
+    expect(items.find((it) => it.soort === 'ruil')).toMatchObject({ doel: 'ruil-verzoeken', doelParams: ['r1'] });
   });
 });
 

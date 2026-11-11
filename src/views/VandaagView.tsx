@@ -128,6 +128,9 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
   const dag = dagParam && /^\d{4}-\d{2}-\d{2}$/.test(dagParam) && dagParam >= vandaag && dagParam <= laatsteDag ? dagParam : vandaag;
   const dagWoord = dagWoordVoor(dag, vandaag);
   const kiesDag = (d: string) => zetDagParam(d === vandaag ? null : d);
+  // Openstaande diensten op de gekozen dag (`/openstaande-diensten/<maand>/<dag>`):
+  // dat scherm brengt de rij van die dag in beeld.
+  const naarOpenDiensten = () => onNavigate('dekking', [dag.slice(0, 7), dag]);
 
   const briefing = useMemo(
     () => bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, diversions, coverageDays }),
@@ -190,7 +193,12 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
                     // er moet gebeuren mag daar niet in verdwijnen.
                     primary={a.naam}
                     secondary={`${AFWEZIG_WOORD[a.type]} · ${a.diensten.map((d) => `${d.line} (${d.startTime})`).join(', ')} te herverdelen`}
-                    onClick={() => onNavigate('ziekte')}
+                    // Een zieke: het detail van zijn ziekmelding, daar staan de
+                    // herverdeelknoppen. Verlof of klein verlet heeft geen blad
+                    // op Ziekte: de Maandplanning op deze dag
+                    // (`/maandplanning/<maand>/<dag>`), waar het celdetail het
+                    // overzetten aanbiedt aan wie dat mag.
+                    onClick={() => (a.type === 'ziekte' ? onNavigate('ziekte', [a.leaveId]) : onNavigate('bezetting', [dag.slice(0, 7), dag]))}
                   />
                 ))}
                 {rustigAfwezig.length > 0 && (
@@ -250,10 +258,21 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
               <div className="space-y-3">
                 <ul className="flex flex-wrap gap-1.5" aria-label="Diensten zonder chauffeur">
                   {briefing.openDiensten.map((code) => (
-                    <li key={code}><ServiceChip serviceNumber={code} /></li>
+                    <li key={code}>
+                      {/* De chip is een knop met dezelfde weg als de knop
+                          eronder: Openstaande diensten op deze dag. min-h-9 =
+                          raakbaar op een telefoon, zoals de chips daar. */}
+                      <Pressable
+                        onClick={naarOpenDiensten}
+                        aria-label={`Chauffeur toewijzen voor dienst ${code}`}
+                        className="group inline-flex min-h-9 items-center rounded-lg"
+                      >
+                        <ServiceChip serviceNumber={code} className="ring-1 ring-hairline group-hover:ring-hairline-strong" />
+                      </Pressable>
+                    </li>
                   ))}
                 </ul>
-                <Button variant="secondary" size="sm" full onClick={() => onNavigate('dekking', [dag.slice(0, 7)])}>
+                <Button variant="secondary" size="sm" full onClick={naarOpenDiensten}>
                   Chauffeur toewijzen
                 </Button>
               </div>

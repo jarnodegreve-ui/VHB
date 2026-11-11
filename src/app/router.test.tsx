@@ -389,3 +389,90 @@ describe('recordlink van een koude start (polish P2b)', () => {
   });
 });
 
+
+describe('recordadres van Ziekte: /beheer/ziekte/<leaveId> (ronde 6, punt 17)', () => {
+  const MELDINGEN = [{ id: 'z1' }, { id: 'z2' }];
+  /**
+   * Een link van buiten: lege history-state en een verse router, want de
+   * startnormalisatie (de lijst eronder, het record gemerkt erboven) loopt
+   * één keer per module. Het scherm leest het record met `useRecordLink`,
+   * zoals ZiekteView. Staat 'ziekte' niet in RECORD_VIEWS, dan falen de
+   * tests met een koude start: er ligt dan geen lijst onder het record.
+   */
+  const opAdres = async (pad: string, state: unknown = null) => {
+    window.history.pushState(state, '', pad);
+    vi.resetModules();
+    const { useRecordLink } = await import('./useRecordLink');
+    const { renderHook, act: doe } = await import('@testing-library/react');
+    const hook = renderHook(() => useRecordLink('ziekte', MELDINGEN));
+    return { hook, doe };
+  };
+
+  it('koude start: het record uit het adres, met de lijst als eigen stap eronder', async () => {
+    const { hook } = await opAdres('/beheer/ziekte/z1');
+    try {
+      expect(hook.result.current).toMatchObject({ staat: 'gevonden', id: 'z1', record: { id: 'z1' } });
+      expect(window.location.pathname).toBe('/beheer/ziekte/z1');
+      expect(window.history.state).toMatchObject({ vhbOuderStap: true, vhbOverlayTerug: '/beheer/ziekte' });
+    } finally {
+      hook.unmount();
+    }
+  });
+
+  it('terug vanaf een koude link is de lijst, nog eens terug de vorige pagina', async () => {
+    const { hook, doe } = await opAdres('/beheer/ziekte/z1');
+    try {
+      await doe(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/beheer/ziekte');
+      expect(hook.result.current.staat).toBe('geen');
+      await doe(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+    } finally {
+      hook.unmount();
+    }
+  });
+
+  it('sluiten op een koude link gaat terug naar de lijst, zonder tweede lijst-entry', async () => {
+    const { hook, doe } = await opAdres('/beheer/ziekte/z1');
+    try {
+      await doe(async () => { hook.result.current.sluit(); await tikken(); });
+      expect(window.location.pathname).toBe('/beheer/ziekte');
+      expect(hook.result.current.staat).toBe('geen');
+      await doe(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+    } finally {
+      hook.unmount();
+    }
+  });
+
+  it('een onbekend id is onbekend, niet leeg; sluiten landt op de lijst', async () => {
+    const { hook, doe } = await opAdres('/beheer/ziekte/bestaat-niet');
+    try {
+      expect(hook.result.current).toMatchObject({ staat: 'onbekend', id: 'bestaat-niet' });
+      await doe(async () => { hook.result.current.sluit(); await tikken(); });
+      expect(window.location.pathname).toBe('/beheer/ziekte');
+      expect(hook.result.current.staat).toBe('geen');
+    } finally {
+      hook.unmount();
+    }
+  });
+
+  it('een klik in de lijst zet het record in het adres en wisselt met replace', async () => {
+    // Een entry die de app zelf schreef (navigatie): geen koude start.
+    const { hook, doe } = await opAdres('/beheer/ziekte', { vhbIntern: true });
+    try {
+      const lengte = window.history.length;
+      expect(hook.result.current.staat).toBe('geen');
+      await doe(async () => { hook.result.current.open('z1'); await tikken(); });
+      expect(window.location.pathname).toBe('/beheer/ziekte/z1');
+      expect(hook.result.current).toMatchObject({ staat: 'gevonden', id: 'z1' });
+      await doe(async () => { hook.result.current.open('z2'); await tikken(); });
+      expect(window.location.pathname).toBe('/beheer/ziekte/z2');
+      await doe(async () => { hook.result.current.sluit(); await tikken(); });
+      expect(window.location.pathname).toBe('/beheer/ziekte');
+      expect(window.history.length).toBe(lengte);
+    } finally {
+      hook.unmount();
+    }
+  });
+});

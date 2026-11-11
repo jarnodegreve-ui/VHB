@@ -119,7 +119,7 @@ function normaliseerStartUrl() {
  * pagina in het portaal. Regel Jarno 24-09: sluiten of terug brengt je dan
  * naar de lijst, nooit naar een lege of externe pagina.
  */
-const RECORD_VIEWS = new Set<View>(['verlof', 'ruil-verzoeken', 'dienstoverzicht', 'omleidingen', 'updates', 'beheer-omleidingen', 'beheer-updates', 'vervaldata', 'voertuigen']);
+const RECORD_VIEWS = new Set<View>(['verlof', 'ruil-verzoeken', 'dienstoverzicht', 'omleidingen', 'updates', 'beheer-omleidingen', 'beheer-updates', 'vervaldata', 'voertuigen', 'ziekte']);
 
 /**
  * Koude start op een recordlink: de lijst komt eronder als eigen entry, het
