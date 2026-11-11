@@ -224,7 +224,7 @@ const GOEDGEKEURD = (soort: Soort): Record<string, Tekst> => ({
     titel: 'Dienstruil goedgekeurd',
     body: soort === 'dienst'
       ? 'Goedgekeurd: je rijdt dienst 14 op do 02/07, Chauffeur B rijdt dienst 12 op wo 08/07.'
-      : 'Goedgekeurd: je bent vrij op wo 08/07, Chauffeur B rijdt dienst 12.',
+      : 'Goedgekeurd: Chauffeur B rijdt dienst 12 op wo 08/07.',
   },
   [B]: {
     titel: 'Dienstruil goedgekeurd',
@@ -389,7 +389,7 @@ describe('ruilmeldingen, deel 2: wat er in de melding staat', () => {
       expect(res.status).toBe(200);
       expect(mem.planning.find((p: any) => p.id === 'sh-c')?.driverId).toBe('5');
       expect(perOntvanger()).toEqual({
-        [A]: { titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: je bent vrij op wo 08/07, Chauffeur C rijdt dienst 12.' },
+        [A]: { titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: Chauffeur C rijdt dienst 12 op wo 08/07.' },
         [B]: { titel: 'Dienstruil goedgekeurd', body: 'De planning keurde de overname van wo 08/07 (dienst 12) goed. Bekijk je rooster.' },
       });
       expect(gebreken()).toEqual([]);
@@ -416,7 +416,7 @@ describe('ruilmeldingen, deel 2: wat er in de melding staat', () => {
     mem.swaps = [ruil('vrij', 'accepted')];
     mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: B } : p));
     expect((await wissel('PATCH', PLANNER, 'approved')).status).toBe(200);
-    expect(perOntvanger()[A]).toEqual({ titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: je bent vrij op wo 08/07, je collega rijdt dienst 12.' });
+    expect(perOntvanger()[A]).toEqual({ titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: je collega rijdt dienst 12 op wo 08/07.' });
     expect(gebreken()).toEqual([]);
   });
 });
@@ -654,6 +654,52 @@ describe('ruilmeldingen, deel 3: twee chauffeurs met elk een eigen tekst krijgen
         spion.mockRestore();
         stil.mockRestore();
       }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DEEL 4: wie zijn dienst afgeeft leest wie ze rijdt, nooit dat hij vrij is.
+// Toegevoegd na de tegenlezing. Deel 1 is daarbij niet gewijzigd; in deel 2 is
+// alleen de verwachte zin van de aanvrager bij een overname of een vrije dag
+// aangepast (drie plaatsen: "je bent vrij op …" werd "… rijdt dienst … op …").
+// ---------------------------------------------------------------------------
+
+describe('ruilmeldingen, deel 4: de goedkeuring zegt de aanvrager nooit dat hij vrij is', () => {
+  // De routes tonen aan dat de afgegeven dienst naar de collega ging. Wat de
+  // aanvrager die dag verder op zijn naam heeft lezen ze niet: de regel tegen
+  // dubbele inplanning toetst alleen wie een dienst KRIJGT. Een tweede dienst
+  // van de aanvrager (uit de Excel, of teruggekomen door een teruggedraaide
+  // ruil) blijft dus gewoon staan.
+  const TWEEDE = { id: 'sh-tweede', driverId: A, date: DAG, line: '15' };
+  const opDeDag = () => mem.planning.filter((p: any) => p.date === DAG).map((p: any) => `dienst ${p.line} bij ${p.driverId}`).sort();
+  const VERWACHT: Record<string, Tekst> = {
+    [A]: { titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: Chauffeur B rijdt dienst 12 op wo 08/07.' },
+    [B]: { titel: 'Dienstruil goedgekeurd', body: 'Goedgekeurd: je rijdt dienst 12 op wo 08/07.' },
+  };
+
+  for (const weg of ['PATCH', 'lijst'] as const) {
+    for (const soort of ['overname', 'vrij'] as const) {
+      it(`${weg}, ${soort}: de aanvrager rijdt die dag nog een andere dienst en leest dus niet dat hij vrij is`, async () => {
+        zaai(soort, 'accepted');
+        mem.planning.push({ ...TWEEDE });
+        expect((await wissel(weg, PLANNER, 'approved')).status).toBe(200);
+        expect(opDeDag()).toEqual([`dienst 12 bij ${B}`, `dienst 15 bij ${A}`]);
+        expect(perOntvanger()).toEqual(VERWACHT);
+        expect(gebreken()).toEqual([]);
+      });
+    }
+
+    it(`${weg}: stond de overname al in de planning en gaf de Excel de aanvrager die dag een andere dienst, dan leest hij dat evenmin`, async () => {
+      // Dit pad slaat ook de controles van de goedkeuring over: de rijen tonen
+      // de wissel al, alleen de status wordt nog geschreven.
+      zaai('overname', 'accepted');
+      voerDoorInPlanning('overname');
+      mem.planning.push({ ...TWEEDE });
+      expect((await wissel(weg, PLANNER, 'approved')).status).toBe(200);
+      expect(opDeDag()).toEqual([`dienst 12 bij ${B}`, `dienst 15 bij ${A}`]);
+      expect(perOntvanger()).toEqual(VERWACHT);
+      expect(gebreken()).toEqual([]);
     });
   }
 });

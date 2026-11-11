@@ -21,7 +21,11 @@
  *     beslissing aantoonbaar waar is: de route geeft mee welke benen ze in de
  *     planning verplaatste (of er al zo vond). Niets aangetoond (een oude
  *     ruil zonder dienst-info, een terugdienst die niet verhuisde) = een
- *     kortere zin die naar het rooster verwijst.
+ *     kortere zin die naar het rooster verwijst. Dat iemand vrij is staat er
+ *     nooit: de routes tonen aan welke dienst verhuisde, niet wat iemand die
+ *     dag verder op zijn naam heeft (een tweede dienst uit de Excel, een
+ *     schoolrit op het bord), en de regel tegen dubbele inplanning toetst
+ *     alleen wie een dienst krijgt. Wie zijn dienst afgeeft leest wie ze rijdt.
  *  3. Ontbreekt een dienstnummer, een dag of een naam, dan valt de zin terug
  *     op een kortere, juiste vorm. Deze bouwers lopen ná de geschreven
  *     beslissing en gooien dus nooit: een fout in de tekst geeft de algemene
@@ -354,10 +358,10 @@ export const ruilBeslisMelding = (b: RuilBeslissing, ontvangerId: unknown): Meld
       }
       if (stand?.richting === "doorgevoerd" && rol === "aanvrager" && ander) {
         if (eigen) return { titel, body: `Goedgekeurd: je rijdt dienst ${eigen.dienst}${op(eigen.dag)}${enDeAnder(eigen)}.${rooster}` };
-        // Geen dienst terug (overname of vrije dag): de aanvrager is zijn dienst kwijt.
-        if (!metTerugDienst && ander.dag) return { titel, body: `Goedgekeurd: je bent vrij op ${ander.dag}, ${anderePartij(ander.rijder)} rijdt dienst ${ander.dienst}.` };
-        // De terugdienst staat (nog) niet aantoonbaar bij de aanvrager, of de
-        // dag van de dienst is onleesbaar: alleen wat vaststaat.
+        // Geen dienst terug (overname of vrije dag), of de terugdienst staat
+        // (nog) niet aantoonbaar bij de aanvrager: alleen wie de afgegeven
+        // dienst rijdt. Nooit "je bent vrij": aangetoond is dat die ene dienst
+        // verhuisde, niet wat de aanvrager die dag verder op zijn naam heeft.
         return { titel, body: `Goedgekeurd: ${anderePartij(ander.rijder)} rijdt dienst ${ander.dienst}${op(ander.dag)}.${rooster}` };
       }
       return { titel, body: `De planning keurde ${deRuil} goed. Bekijk je rooster.` };

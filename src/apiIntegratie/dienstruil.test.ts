@@ -187,7 +187,7 @@ describe('dienstruil: rechtstreeks afhandelen kan alleen een admin, en dan als e
         // keer en elk met wat voor hem verandert; geen tweede voor de afhandeling.
         expect(mem.pushesSent.flatMap((p) => p.userIds.map((id) => [id, p.payload.title])).sort()).toEqual([['3', 'Dienstruil goedgekeurd'], ['4', 'Dienstruil goedgekeurd']]);
         expect(mem.pushesSent.find((p) => p.userIds.includes('4'))?.payload.body).toBe('Goedgekeurd: je rijdt dienst 12 op wo 08/07.');
-        expect(mem.pushesSent.find((p) => p.userIds.includes('3'))?.payload.body).toBe('Goedgekeurd: je bent vrij op wo 08/07, Chauffeur B rijdt dienst 12.');
+        expect(mem.pushesSent.find((p) => p.userIds.includes('3'))?.payload.body).toBe('Goedgekeurd: Chauffeur B rijdt dienst 12 op wo 08/07.');
       });
     }
 

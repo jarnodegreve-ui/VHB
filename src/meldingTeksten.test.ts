@@ -158,10 +158,18 @@ describe('de planning keurt goed: elk leest wat voor hem verandert', () => {
     expect(beslis('zelfdeDag', stap, A).body).toBe('Goedgekeurd: je rijdt dienst 4205 op wo 11/11, Piet Janssens rijdt dienst 4101.');
   });
 
-  it('vrije dag of overname: de collega rijdt, de aanvrager is vrij op de dag van zijn dienst', () => {
+  it('vrije dag of overname: de collega rijdt, de aanvrager leest wie zijn dienst rijdt', () => {
     for (const soort of ['vrij', 'overname'] as const) {
       expect(beslis(soort, stap, C).body).toBe('Goedgekeurd: je rijdt dienst 4101 op wo 11/11.');
-      expect(beslis(soort, stap, A).body).toBe('Goedgekeurd: je bent vrij op wo 11/11, Piet Janssens rijdt dienst 4101.');
+      expect(beslis(soort, stap, A).body).toBe('Goedgekeurd: Piet Janssens rijdt dienst 4101 op wo 11/11.');
+    }
+  });
+
+  it('niemand leest dat hij vrij is: aangetoond is welke dienst verhuisde, niet wat iemand die dag verder rijdt', () => {
+    for (const soort of SOORTEN) for (const van of ['pending', 'accepted']) for (const wie of [A, C, 'u-derde']) {
+      for (const planning of [DOORGEVOERD, { richting: 'doorgevoerd', benen: { aangeboden: true, terug: false } } as const, null]) {
+        expect(beslis(soort, { ...stap, van, planning }, wie).body).not.toMatch(/vrij/i);
+      }
     }
   });
 
@@ -387,7 +395,7 @@ describe('ontbrekende gegevens: een kortere, juiste zin', () => {
     expect(beslis('dienst', { van: 'accepted', naar: 'approved', doorStaf: true, planning: DOORGEVOERD }, C, ZONDER_NAMEN as never).body)
       .toBe('Goedgekeurd: je rijdt dienst 4101 op wo 11/11, je collega rijdt dienst 4205 op vr 13/11.');
     expect(beslis('vrij', { van: 'accepted', naar: 'approved', doorStaf: true, planning: DOORGEVOERD }, A, ZONDER_NAMEN as never).body)
-      .toBe('Goedgekeurd: je bent vrij op wo 11/11, je collega rijdt dienst 4101.');
+      .toBe('Goedgekeurd: je collega rijdt dienst 4101 op wo 11/11.');
     expect(beslis('dienst', { van: 'pending', naar: 'rejected', doorStaf: false }, A, ZONDER_NAMEN as never).body)
       .toBe('Je collega weigerde de ruil van wo 11/11 (dienst 4101).');
     expect(beslis('dienst', { van: 'pending', naar: 'cancelled', doorStaf: false }, C, ZONDER_NAMEN as never).body)
@@ -430,7 +438,7 @@ describe('ontbrekende gegevens: een kortere, juiste zin', () => {
     expect(ruilAanvraagMelding(kapot, NAMEN).body).toBe('Jan Peeters vraagt een ruil: jij krijgt dienst 4101, in ruil voor jouw dienst 4205 op vr 13/11.');
     expect(ruilBeslisMelding({ ruil: kapot, namen: NAMEN, van: 'accepted', naar: 'approved', doorStaf: true, planning: DOORGEVOERD }, C).body)
       .toBe('Goedgekeurd: je rijdt dienst 4101, Jan Peeters rijdt dienst 4205 op vr 13/11.');
-    // Zonder de dag van de dienst geen "je bent vrij op …": wel wie de dienst rijdt.
+    // Ook zonder de dag van de dienst leest de aanvrager wie ze rijdt.
     expect(ruilBeslisMelding({ ruil: { ...RUIL.overname, shiftDate: '2026-02-30' }, namen: NAMEN, van: 'accepted', naar: 'approved', doorStaf: true, planning: DOORGEVOERD }, A).body)
       .toBe('Goedgekeurd: Piet Janssens rijdt dienst 4101.');
   });
@@ -538,9 +546,12 @@ describe('geen enkele tekst lekt iets wat een chauffeur niet hoort te lezen', ()
         aantal++;
         if (fouten.length > 20) continue;
         fouten.push(...gebreken(`${van} naar ${naar}`, tekst));
+        // Dat iemand vrij is staat in geen enkele beslissing: geen route leest
+        // wat een chauffeur die dag verder op zijn naam heeft.
+        if (/\bvrij\b/i.test(tekst.body)) fouten.push(`${van} naar ${naar}, ontvanger ${String(ontvanger)}: “${tekst.body}” zegt dat iemand vrij is`);
         // Een zin over de eigen dienst vraagt een beweging in de planning, in
         // de richting van de stap, en een ontvanger die in de ruil zit.
-        if (!/je rijdt|je bent vrij|weer zelf/.test(tekst.body)) continue;
+        if (!/je rijdt|weer zelf/.test(tekst.body)) continue;
         const verwacht = naar === 'approved' ? 'doorgevoerd' : 'teruggedraaid';
         const aangetoond = planning?.richting === verwacht && (planning.benen.aangeboden || planning.benen.terug);
         const inDeRuil = ontvanger !== '' && ontvanger !== undefined
