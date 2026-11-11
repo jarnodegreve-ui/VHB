@@ -120,6 +120,63 @@ describe('VerlofBereikRaster', () => {
     await act(async () => { root.unmount(); });
   });
 
+  // Ronde 6, punt 13: de bezettingsstip van de verlofkalender in het raster.
+  describe('bezetting per dag (dagInfo)', () => {
+    const INFO: Record<string, { staat: string; stip: string; tekst: string }> = {
+      '2026-09-24': { staat: 'vrij', stip: 'bg-emerald-500', tekst: 'vrij' },
+      '2026-09-25': { staat: 'volzet', stip: 'bg-red-500', tekst: 'volzet, 2 van 2 afwezig' },
+      '2026-09-20': { staat: 'volzet', stip: 'bg-red-500', tekst: 'volzet, 2 van 2 afwezig' },
+    };
+    const stip = (iso: string) => cel(iso)!.querySelector('span[aria-hidden="true"]');
+    function Met({ start = '', eind = '', onKies = () => {} }: { start?: string; eind?: string; onKies?: (iso: string) => void }) {
+      return <VerlofBereikRaster maand="2026-09" start={start} eind={eind} min="2026-09-23" vandaag="2026-09-23" onKies={onKies} onNaarMaand={() => {}} dagInfo={(iso) => INFO[iso] ?? null} />;
+    }
+
+    it('toont de stip in de kleur van de dag en zet de tekst in het label, tussen de datum en de rol', async () => {
+      const { root } = await monteer(<Met start="2026-09-25" />);
+      expect(stip('2026-09-25')!.className).toContain('bg-red-500');
+      expect(cel('2026-09-25')!.getAttribute('data-bezetting')).toBe('volzet');
+      expect(cel('2026-09-25')!.getAttribute('aria-label')).toBe('vr 25 sep 2026, volzet, 2 van 2 afwezig, begin van de periode');
+      expect(stip('2026-09-24')!.className).toContain('bg-emerald-500');
+      expect(cel('2026-09-24')!.getAttribute('aria-label')).toBe('do 24 sep 2026, vrij');
+      // De stip is geen tekst: het dagcijfer blijft de enige zichtbare inhoud.
+      expect(cel('2026-09-25')!.textContent).toBe('25');
+      await act(async () => { root.unmount(); });
+    });
+
+    it('een volzette dag blijft kiesbaar: het is informatie, geen blokkade', async () => {
+      const onKies = vi.fn();
+      const { root } = await monteer(<Met onKies={onKies} />);
+      expect(cel('2026-09-25')!.disabled).toBe(false);
+      await act(async () => { cel('2026-09-25')!.click(); });
+      expect(onKies).toHaveBeenCalledWith('2026-09-25');
+      await act(async () => { root.unmount(); });
+    });
+
+    it('zonder info voor een dag (bezetting niet geladen): geen stip en het label van vroeger', async () => {
+      const { root } = await monteer(<Met />);
+      expect(stip('2026-09-26')).toBeNull();
+      expect(cel('2026-09-26')!.hasAttribute('data-bezetting')).toBe(false);
+      expect(cel('2026-09-26')!.getAttribute('aria-label')).toBe('za 26 sep 2026');
+      await act(async () => { root.unmount(); });
+    });
+
+    it('een uitgeschakelde dag krijgt geen stip, ook als er info voor is', async () => {
+      const { root } = await monteer(<Met />);
+      expect(cel('2026-09-20')!.disabled).toBe(true);
+      expect(stip('2026-09-20')).toBeNull();
+      expect(cel('2026-09-20')!.getAttribute('aria-label')).toBe('zo 20 sep 2026');
+      await act(async () => { root.unmount(); });
+    });
+
+    it('zonder dagInfo (staf) staat er nergens een stip', async () => {
+      const { root, container } = await monteer(<Harnas start="2026-09-10" eind="2026-09-12" />);
+      expect(container.querySelectorAll('[role="gridcell"] span').length).toBe(0);
+      expect(container.querySelectorAll('[data-bezetting]').length).toBe(0);
+      await act(async () => { root.unmount(); });
+    });
+  });
+
   it('schrikkeljaar: februari 2028 heeft 29 dagen, 2027 niet', async () => {
     function Feb({ jaar }: { jaar: string }) {
       return <VerlofBereikRaster maand={`${jaar}-02`} start="" eind="" vandaag="2026-09-23" onKies={() => {}} onNaarMaand={() => {}} />;

@@ -37,10 +37,12 @@ import { apiJson } from '../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { metOngedaan } from '../lib/ongedaan';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
-import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
+import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, verlofLimietenSchema, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
 import { uitersteVerlofdag, verlofGrensMelding } from '../../shared/verlofGrens';
 import { vandaagBrussel } from '../lib/brussel';
-import { BEZETTING_LABEL, bezettingVanDag } from '../lib/verlofBezetting';
+import { bezettingVanDag } from '../lib/verlofBezetting';
+import { bezettingCelTekst, verlofDagStand } from '../lib/verlofDagStand';
+import { useMinWidth } from '../lib/useMinWidth';
 import { aanvragerNaam, BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
 import { ookAangevraagd, volgendeWachtende } from '../lib/verlofWachtrij';
 
@@ -76,20 +78,33 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const [showFeestdagenModal, setShowFeestdagenModal] = useState(false);
   const [showSaldoModal, setShowSaldoModal] = useState(false);
   const [limieten, setLimieten] = useState<VerlofLimieten>(STANDAARD_VERLOF_LIMIETEN);
+  // Zijn de limieten echt van de server gekomen? Tot dan (nog onderweg, een
+  // fout, of een antwoord dat het schema niet haalt) staat `limieten` op de
+  // standaard van 2. De kalendercel kleurt daar zoals altijd mee; de stand in
+  // woorden, de stippen in het bereikraster en de knop "vanaf deze dag"
+  // (ronde 6, punt 13) wachten op de echte limiet: een zin als "Nog 1 plaats"
+  // mag niet op een geraden getal steunen.
+  const [limietenGeladen, setLimietenGeladen] = useState(false);
   useEffect(() => {
     let weg = false;
     void (async () => {
       try {
         // parse: rommel of een oud antwoord mag de kalender niet laten crashen.
         const data = await apiJson<unknown>('/api/verlof/limieten');
-        if (!weg) setLimieten(parseVerlofLimieten(data));
+        if (weg) return;
+        setLimieten(parseVerlofLimieten(data));
+        setLimietenGeladen(verlofLimietenSchema.safeParse(data).success);
       } catch {
         // standaard blijft staan; de kalender werkt gewoon
       }
     })();
     return () => { weg = true; };
   }, []);
-  const openAanvraag = () => { setModus('aanvraag'); fouten.wis(); setShowRequestModal(true); };
+  // Opende het venster met een voorgevulde start (knop in het dagdetail)? Die
+  // start telt voor de vuil-vraag als beginstand, dus sluiten vraagt niets;
+  // ze mag dan niet blijven hangen als concept voor "Verlof aanvragen".
+  const startVoorgevuld = useRef(false);
+  const openAanvraag = () => { startVoorgevuld.current = false; setModus('aanvraag'); fouten.wis(); setShowRequestModal(true); };
   const openRegistratie = () => { setModus('registratie'); fouten.wis(); setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' }); setShowRequestModal(true); };
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
@@ -142,6 +157,26 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     const [j, m] = maand.split('-').map(Number);
     setViewMonth((d) => (d.getFullYear() === j && d.getMonth() === m - 1 ? d : new Date(j, m - 1, 1)));
   };
+  /** De aanvraag openen met een startdatum (knop in het dagdetail, ronde 6):
+   *  hetzelfde venster en dezelfde regels als "Verlof aanvragen". Het raster
+   *  toont de maand van die dag; type en opmerking van een concept blijven. */
+  const openAanvraagVanaf = (dag: string) => {
+    setFormData((cur) => ({ ...cur, startDate: dag, endDate: '' }));
+    naarMaand(dag.slice(0, 7));
+    openAanvraag();
+    startVoorgevuld.current = true;
+  };
+  /** Het aanvraagvenster sluiten (Escape, achtergrond, terugknop, kruisje;
+   *  met onbewaarde invoer pas na "Niet bewaren"). Kwam de start uit de knop
+   *  in het dagdetail, dan gaat de periode mee weg: wie daarna "Verlof
+   *  aanvragen" kiest, begint zonder start die hij daar niet koos. */
+  const sluitAanvraag = () => {
+    if (startVoorgevuld.current) {
+      startVoorgevuld.current = false;
+      setFormData((cur) => ({ ...cur, startDate: '', endDate: '' }));
+    }
+    setShowRequestModal(false);
+  };
   const toonMaand = `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, '0')}`;
   // Maand-swipe op touch (verbeterronde 01-09, nr. 3): veeg links/rechts over
   // de kalender i.p.v. de kleine pijltjes te raken. Duidelijk horizontaal
@@ -174,6 +209,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   })();
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
+  // Telefoon (onder lg), wie geen staf is: het saldo en de openstaande
+  // aanvragen staan boven de kalender (ronde 6, punt 13). Via de opbouw en
+  // niet via CSS-`order`, zodat toetsenbord en schermlezer de zichtbare
+  // volgorde volgen; op desktop en voor staf blijft de opbouw zoals ze was.
+  const eigenEerst = !useMinWidth(1024) && !isPlanner;
   // Bezetting per dag van de server (alleen niet-staf): GET /api/leave geeft
   // een chauffeur bewust enkel eigen verlof (privacy), dus lokaal rekenen
   // kleurde bij hem elke dag "Vrij" en kwam de limietwaarschuwing bij het
@@ -192,11 +232,18 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       const dagen = Array.isArray((data as any)?.dagen) ? (data as any).dagen : [];
       setBezettingServer((cur) => {
         const next = { ...cur };
-        for (const d of dagen) next[String(d.datum)] = Number(d.aantal) || 0;
+        // Een dag staat hier alleen in als de server er een aantal voor gaf:
+        // het dagdetail en het bereikraster tonen zonder dat aantal geen
+        // stand (ronde 6). De kalendercel valt zoals vroeger terug op 0.
+        for (const d of dagen) {
+          const n = d?.aantal == null || d.aantal === '' ? Number.NaN : Number(d.aantal);
+          if (Number.isFinite(n)) next[String(d.datum)] = n;
+        }
         return next;
       });
     } catch {
       // Zonder antwoord blijft de kalender op "Vrij" staan; hij blijft werken.
+      // Het dagdetail en het bereikraster tonen dan geen stand.
     }
   }, []);
   // De getoonde maand (en bij een wissel van verlofdata: opnieuw, want een
@@ -378,7 +425,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       conflictingShifts,
       bovenLimiet: dagenBovenLimiet(formData.startDate, formData.endDate, aanvraagVoorId),
     };
-  }, [formData.startDate, formData.endDate, formData.type, leaveRequests, shifts, aanvraagVoorId, users, user, limieten]);
+    // bezettingServer erbij (ronde 6): de aantallen van een periode buiten de
+    // getoonde maand komen pas ná de keuze binnen; zonder deze afhankelijkheid
+    // bleef de limietwaarschuwing dan weg tot er iets anders wijzigde.
+  }, [formData.startDate, formData.endDate, formData.type, leaveRequests, shifts, aanvraagVoorId, users, user, limieten, bezettingServer]);
 
   const handleCalendarDateClick = (dateStr: string) => {
     if (!showRequestModal) {
@@ -631,6 +681,95 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     }).length;
   };
 
+  // === Voor wie verlof aanvraagt (geen staf): de dag zegt of het kan (ronde 6, punt 13) ===
+  // De stand van de gekozen dag in woorden, met dezelfde twee getallen als de
+  // stip in de cel. Gaf de server voor die dag geen aantal (nog niet geladen,
+  // laden mislukt) of zijn de limieten niet van de server gekomen, dan is er
+  // geen stand: geen van de twee getallen wordt geraden.
+  const dagStand = !isPlanner && selectedDate && limietenGeladen
+    ? verlofDagStand(bezettingServer[selectedDate], limietVoorDag(limieten, selectedDate))
+    : null;
+  // Aanvragen vanaf de gekozen dag kan waar het bereikraster de dag ook laat
+  // kiezen: vanaf vandaag, tot en met de uiterste verlofdag. Een volzette dag
+  // hoort daarbij, verlof wordt niet geblokkeerd. Alleen op een dag met limiet
+  // 0 staat de knop er niet: "Geen verlof mogelijk op deze dag" met eronder
+  // "Verlof aanvragen vanaf deze dag" spreekt zichzelf tegen. In het venster
+  // blijft ook die dag kiesbaar (een periode mag over een zondag lopen).
+  // Op de limiet zelf en niet op de stand: die is er pas als de telling binnen
+  // is, en de knop mag niet eerst verschijnen en dan verdwijnen. Om dezelfde
+  // reden wacht hij op de echte limieten: met de standaard van 2 stond hij
+  // even onder een zondag en verdween dan. Komen de limieten niet, dan blijft
+  // "Verlof aanvragen" bovenaan de weg.
+  const magVanafDag = !isPlanner && limietenGeladen && !!selectedDate && selectedDate >= today && selectedDate <= uitersteDag && limietVoorDag(limieten, selectedDate) > 0;
+  /** Stip en tekst van een dag voor het bereikraster van de aanvraag, zoals in de kalendercel; null = geen aantal of geen limieten van de server, geen stip. */
+  const rasterBezetting = (dag: string) => {
+    const afwezig = bezettingServer[dag];
+    if (afwezig === undefined || !limietenGeladen) return null;
+    const limiet = limietVoorDag(limieten, dag);
+    const staat = bezettingVanDag(afwezig, limiet);
+    return { staat, stip: BEZETTING_STIP[staat], tekst: bezettingCelTekst(afwezig, limiet) };
+  };
+  // Blokken die per rol of per breedte op een andere plaats staan: één keer
+  // gemaakt, één keer getoond (nooit dubbel met een verborgen kopie).
+  const onbekendeLink = link.staat === 'onbekend' && <RecordOnbekend soort="verlofaanvraag" onSluit={link.sluit} />;
+  const saldoBlok = (
+    <div className="space-y-2">
+      <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user)} year={new Date().getFullYear()} compact />
+      {/* Nieuw tabblad: de print-modus rendert een kale pagina in plaats
+          van de app (zelfde patroon als het maandrooster). Via
+          openPdfInNewTab, niet via rauwe window.open — die geeft in
+          iOS-standalone geregeld null terug, en dan deed deze knop
+          niets. Dit is chauffeurs-facing, dus dat is een dood pad. */}
+      <Button
+        variant="secondary"
+        size="md"
+        full
+        icon={<Printer size={14} />}
+        onClick={() => openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(user.id)}&print-verlof-jaar=${new Date().getFullYear()}`)}
+      >
+        Jaaroverzicht (PDF)
+      </Button>
+    </div>
+  );
+  const openstaandBlok = (
+    <MyLeaveSection
+      title="Mijn openstaande aanvragen"
+      count={myPending.length}
+      emptyText="Geen openstaande aanvragen."
+      requests={myPending}
+      isNew={isNewlyDecided}
+      onWithdraw={handleWithdraw}
+      doelId={eigenDoelId}
+    />
+  );
+  // Type en opmerking: wie verlof aanvraagt ziet eerst de uitkomst van zijn
+  // periode (dagen, limiet, saldo) en dan deze twee; voor staf staan ze er
+  // zoals altijd vóór.
+  const typeEnOpmerking = (
+    <>
+      <Field label="Type verlof">
+        {({ id }) => (
+          <Select id={id} value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })}>
+            <option value="betaald_verlof">Betaald verlof</option>
+            <option value="klein_verlet">Klein verlet</option>
+          </Select>
+        )}
+      </Field>
+      <Field label="Opmerking">
+        {({ id }) => (
+          <Textarea
+            id={id}
+            value={formData.comment}
+            onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
+            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
+            className="h-24"
+            placeholder="Optionele toelichting…"
+          />
+        )}
+      </Field>
+    </>
+  );
+
   const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
   const monthName = viewMonth.toLocaleString('nl-BE', { month: 'long', year: 'numeric' });
@@ -774,13 +913,26 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           dus een smallere kalender is ook een lagere: de eigen aanvragen
           komen hoger in beeld. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {eigenEerst && (
+          <div className="min-w-0 space-y-8 lg:col-span-12">
+            {/* lg:col-span-12: `eigenEerst` meet in px, `lg` in rem. Staat de
+                browser op kleinere letters, dan zijn de twaalf kolommen er al
+                onder 1024 px en hield dit blok er zonder breedte maar één.
+                De melding van een link naar een aanvraag die er niet (meer) is
+                blijft het eerste wat je ziet, zoals toen de kalenderkolom nog
+                bovenaan stond. */}
+            {onbekendeLink}
+            {saldoBlok}
+            {openstaandBlok}
+          </div>
+        )}
         <div className="min-w-0 lg:col-span-7 space-y-6">
           {/* Beoordeling: op desktop een paneel bovenaan deze kolom (breed
               genoeg voor saldo, dekking en conflicten; scrolt in beeld bij
               openen), op mobiel een SlideOver. Alleen zichtbaar terwijl er
               een aanvraag open staat — een lege-staat-kaart boven de
               kalender zou ruis zijn. */}
-          {link.staat === 'onbekend' && <RecordOnbekend soort="verlofaanvraag" onSluit={link.sluit} />}
+          {!eigenEerst && onbekendeLink}
           {renderBeoordelingPaneel()}
           <Card padding="lg" {...swipeHandlers}>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -814,7 +966,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 const limiet = limietVoorDag(limieten, dateStr);
                 const bezetting = bezettingVanDag(occupancyCount, limiet);
                 const statusColor = BEZETTING_STIP[bezetting];
-                const bezettingTekst = `${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 && bezetting !== 'geen' ? `, ${occupancyCount} van ${limiet} afwezig` : ''}`;
+                const bezettingTekst = bezettingCelTekst(occupancyCount, limiet);
                 const isSelected = selectedDate === dateStr;
                 const isInDraftRange = isDateWithinDraftRange(dateStr);
                 const isDraftEdge = isDraftBoundary(dateStr);
@@ -852,6 +1004,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <IconButton label="Sluiten" variant="ghost" size="sm" onClick={() => setSelectedDate(null)}><X size={18} /></IconButton>
                 </div>
                 <div className="space-y-3">
+                  {/* Wie geen staf is ziet geen namen van collega's, wel de stand
+                      van de dag: dezelfde bron als de stip in de cel, in woorden.
+                      Zonder aantal van de server geen stand, nooit "vrij" raden. */}
+                  {dagStand && (
+                    <p data-dagstand={dagStand.bezetting} className="flex items-center gap-2 text-md font-semibold text-slate-800">
+                      <span className={cn('h-2 w-2 shrink-0 rounded-full', BEZETTING_STIP[dagStand.bezetting])} aria-hidden="true" />
+                      {dagStand.tekst}
+                    </p>
+                  )}
+                  {!isPlanner && !dagStand && <p className="text-body-sm text-slate-500">De bezetting van deze dag is niet geladen.</p>}
                   {getRequestsForDate(selectedDate).length > 0 ? getRequestsForDate(selectedDate).map((req) => {
                     const requester = users.find((u) => u.id === req.userId);
                     return (
@@ -876,7 +1038,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         )}
                       </Card>
                     );
-                  }) : <p className="text-center py-4 text-body-sm text-slate-500">Geen afwezigen op deze dag.</p>}
+                  }) : isPlanner && <p className="text-center py-4 text-body-sm text-slate-500">Geen afwezigen op deze dag.</p>}
+                  {magVanafDag && (
+                    <Button variant="secondary" full icon={<Plus size={16} />} onClick={() => openAanvraagVanaf(selectedDate)}>
+                      Verlof aanvragen vanaf deze dag
+                    </Button>
+                  )}
                 </div>
               </Card>
             </motion.div>
@@ -884,23 +1051,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         </div>
 
         <div className="min-w-0 lg:col-span-5 space-y-8">
-          <div className="space-y-2">
-            <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user)} year={new Date().getFullYear()} compact />
-            {/* Nieuw tabblad: de print-modus rendert een kale pagina in plaats
-                van de app (zelfde patroon als het maandrooster). Via
-                openPdfInNewTab, niet via rauwe window.open — die geeft in
-                iOS-standalone geregeld null terug, en dan deed deze knop
-                niets. Dit is chauffeurs-facing, dus dat is een dood pad. */}
-            <Button
-              variant="secondary"
-              size="md"
-              full
-              icon={<Printer size={14} />}
-              onClick={() => openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(user.id)}&print-verlof-jaar=${new Date().getFullYear()}`)}
-            >
-              Jaaroverzicht (PDF)
-            </Button>
-          </div>
+          {!eigenEerst && saldoBlok}
 
           {isPlanner && (() => {
             const allSelected = plannerPending.length > 0 && plannerPending.every((r) => selectedPendingIds.has(r.id));
@@ -985,15 +1136,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
           {isPlanner && <TeamHistoriek aanvragen={verlofRequests} users={users} today={today} onOpen={setReviewLeave} />}
 
-          <MyLeaveSection
-            title="Mijn openstaande aanvragen"
-            count={myPending.length}
-            emptyText="Geen openstaande aanvragen."
-            requests={myPending}
-            isNew={isNewlyDecided}
-            onWithdraw={handleWithdraw}
-            doelId={eigenDoelId}
-          />
+          {!eigenEerst && openstaandBlok}
 
           <MyLeaveSection
             title="Mijn geplande verloven"
@@ -1019,11 +1162,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
-      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} vuil={aanvraagVuil} onNietBewaren={verwerpConcept} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={showRequestModal} onClose={sluitAanvraag} vuil={aanvraagVuil} onNietBewaren={verwerpConcept} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               <ModalHeader
                 title={registratie ? 'Verlof registreren' : 'Verlof aanvragen'}
                 description={registratie ? 'Voor verlof dat al goedgekeurd is, bijvoorbeeld op papier. Wordt meteen als goedgekeurd vastgelegd, zonder mail naar de chauffeur.' : undefined}
-                onClose={() => setShowRequestModal(false)}
+                onClose={sluitAanvraag}
               />
               <Formulier onVerstuur={handleRequestLeave} noValidate className="p-8 space-y-5 overflow-y-auto flex-1">
                 {/* Alleen planner/admin: verlof registreren dat een chauffeur
@@ -1092,6 +1235,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     onNaarMaand={naarMaand}
                     verledenTitel={VERLEDEN_MELDING}
                     laterTitel={grensMelding}
+                    dagInfo={isPlanner ? undefined : rasterBezetting}
                   />
                 </Card>
                 {/* Gekozen periode als selectieweergave, geen (nep-)invoervelden:
@@ -1162,28 +1306,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     <p className="text-xs text-slate-500">Typ dd/mm/jjjj of kies in de kalender, dezelfde dag twee keer voor één dag verlof.</p>
                   )}
                 </div>
-                <Field label="Type verlof">
-                  {({ id }) => (
-                    <Select id={id} value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })}>
-                      <option value="betaald_verlof">Betaald verlof</option>
-                      <option value="klein_verlet">Klein verlet</option>
-                    </Select>
-                  )}
-                </Field>
-                <Field label="Opmerking">
-                  {({ id }) => (
-                    <Textarea
-                      id={id}
-                      value={formData.comment}
-                      onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
-                      onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
-                      className="h-24"
-                      placeholder="Optionele toelichting…"
-                    />
-                  )}
-                </Field>
+                {isPlanner && typeEnOpmerking}
 
-                {/* Live impact-preview: budget + shift-conflicten */}
+                {/* Live impact-preview: budget + shift-conflicten. Wie verlof
+                    aanvraagt ziet ze direct onder de gekozen periode, vóór
+                    type en opmerking (ronde 6); voor staf staan ze erna. */}
                 {requestPreview && (
                   <div className="space-y-2">
                     {/* Budget-saldo */}
@@ -1242,6 +1369,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     )}
                   </div>
                 )}
+                {!isPlanner && typeEnOpmerking}
 
                 {/* Registratie: wat staat er al voor deze chauffeur in het jaar
                     van de getoonde maand? Zo vergelijk je meteen met het papier. */}
