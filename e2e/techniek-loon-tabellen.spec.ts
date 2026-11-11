@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { ADMIN, AXE_TAGS, AXE_TIJDELIJK_UIT, seed, wachtOpAnimaties } from './helpers';
-import { dayOffset } from '../scripts/audit-fixtures.mjs';
+import { TECHNIEKER, dayOffset } from '../scripts/audit-fixtures.mjs';
 
 /**
  * Tranche 3B.2 (23-09): de techniek- en loonschermen op het gedeelde
@@ -357,3 +357,96 @@ for (const breedte of [null, 1024] as const) {
     expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
   });
 }
+
+/**
+ * Werkprestaties, het dagboek van de technieker (ronde 6, 11-11): bij "Taak
+ * toevoegen" op een dag die al taken heeft staat Begin op het einde van de
+ * laatste taak; Einde blijft leeg en Begin blijft te overschrijven. Een
+ * bestaande taak aanpassen toont wat ze had.
+ */
+test('Werkprestaties: de tweede taak begint waar de eerste eindigde', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  const bewaard: Array<Record<string, unknown>> = [];
+  await seed(page, {
+    user: TECHNIEKER,
+    view: 'werkprestaties',
+    extra: (pad, request) => {
+      if (!pad.endsWith('/api/werkprestaties')) return undefined;
+      // Een lege dag om mee te beginnen; wat de technieker bewaart komt terug.
+      if (request.method() === 'GET') return [];
+      const body = JSON.parse(request.postData() ?? '{}');
+      bewaard.push(body);
+      return { id: `w-nieuw-${bewaard.length}`, mecanicienId: TECHNIEKER.id, mecanicienNaam: TECHNIEKER.name, busnr: null, kortNr: null, createdAt: new Date().toISOString(), ...body };
+    },
+  });
+  await page.goto('/techniek/prestaties');
+  await expect(page.getByRole('heading', { name: 'Werkprestaties', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Nog niets geregistreerd vandaag')).toBeVisible();
+
+  // Eerste taak van de dag: Begin staat leeg, zoals vroeger.
+  await page.getByRole('button', { name: 'Taak toevoegen' }).click();
+  const nieuw = page.getByRole('dialog', { name: 'Taak toevoegen' });
+  await expect(nieuw.getByLabel('Begin')).toHaveValue('');
+  await expect(nieuw.getByLabel('Einde')).toHaveValue('');
+  await nieuw.getByLabel('Wat is er gedaan?').fill('Olie ververst');
+  await nieuw.getByLabel('Begin').fill('08:00');
+  await nieuw.getByLabel('Einde').fill('09:30');
+  await expect(nieuw.getByLabel('Uren')).toHaveValue('1,5');
+  await nieuw.getByRole('button', { name: 'Opslaan' }).click();
+  await expect(page.getByText('Olie ververst')).toBeVisible();
+  await expect(nieuw).toHaveCount(0);
+  expect(bewaard).toHaveLength(1);
+  expect(bewaard[0]).toMatchObject({ beginTijd: '08:00', eindeTijd: '09:30', werkuren: 1.5, datum: dayOffset(0) });
+
+  // Tweede taak: Begin = het einde van de eerste, Einde leeg.
+  await page.getByRole('button', { name: 'Taak toevoegen' }).click();
+  await expect(nieuw.getByLabel('Begin')).toHaveValue('09:30');
+  await expect(nieuw.getByLabel('Einde')).toHaveValue('');
+  await expect(nieuw.getByLabel('Uren')).toHaveValue('');
+  // Het voorstel telt niet als eigen invoer: Escape sluit zonder vraag.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Een bestaande taak aanpassen: niets verandert aan haar tijden.
+  await page.getByRole('button', { name: 'Aanpassen' }).click();
+  const bestaand = page.getByRole('dialog', { name: 'Taak aanpassen' });
+  await expect(bestaand.getByLabel('Begin')).toHaveValue('08:00');
+  await expect(bestaand.getByLabel('Einde')).toHaveValue('09:30');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Begin blijft gewoon te overschrijven, en dat is wat bewaard wordt.
+  await page.getByRole('button', { name: 'Taak toevoegen' }).click();
+  await nieuw.getByLabel('Wat is er gedaan?').fill('Remmen nagekeken');
+  await nieuw.getByLabel('Begin').fill('10:15');
+  await nieuw.getByLabel('Einde').fill('11:00');
+  await nieuw.getByRole('button', { name: 'Opslaan' }).click();
+  await expect(page.getByText('Remmen nagekeken')).toBeVisible();
+  expect(bewaard[1]).toMatchObject({ beginTijd: '10:15', eindeTijd: '11:00', werkuren: 0.75 });
+
+  // De derde taak begint na de laatste van de dag.
+  await page.getByRole('button', { name: 'Taak toevoegen' }).click();
+  await expect(nieuw.getByLabel('Begin')).toHaveValue('11:00');
+
+  // Alleen Uren invullen, zoals vroeger: het voorstel in Begin is dan niet
+  // bevestigd en wordt niet bewaard (anders stond er in het rapport een begin
+  // dat de technieker nooit koos, zonder einde).
+  await nieuw.getByLabel('Wat is er gedaan?').fill('Garage opgeruimd');
+  await nieuw.getByLabel('Uren').fill('0,5');
+  await nieuw.getByRole('button', { name: 'Opslaan' }).click();
+  await expect(page.getByText('Garage opgeruimd')).toBeVisible();
+  await expect(nieuw).toHaveCount(0);
+  expect(bewaard[2]).toMatchObject({ beginTijd: null, eindeTijd: null, werkuren: 0.5 });
+
+  // De taak zonder tijden verschuift het voorstel niet.
+  await page.getByRole('button', { name: 'Taak toevoegen' }).click();
+  await expect(nieuw.getByLabel('Begin')).toHaveValue('11:00');
+
+  // Een andere datum in het venster: het voorstel hoorde bij vandaag en gaat weg.
+  const gisteren = dayOffset(-1);
+  await nieuw.getByLabel('Datum').fill(`${gisteren.slice(8, 10)}/${gisteren.slice(5, 7)}/${gisteren.slice(0, 4)}`);
+  await nieuw.getByLabel('Wat is er gedaan?').focus();
+  await expect(nieuw.getByLabel('Begin')).toHaveValue('');
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});

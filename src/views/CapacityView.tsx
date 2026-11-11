@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Download, Table2 } from 'lucide-react';
 import { downloadBlob, notify } from '../lib/ui';
 import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
 import { ActieMenu } from '../components/ActieMenu';
+import { AanwezigOpScherm } from '../components/AanwezigOpScherm';
 import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
 import { Button, IconButton } from '../components/primitives';
@@ -295,6 +296,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         description="Wie rijdt welke dienst, zoals in het chauffeurslokaal."
         actions={(
           <div className="flex flex-wrap items-center gap-2">
+            {/* "Kijkt ook mee", alleen voor staf: dit is ook een scherm van
+                chauffeurs, en die zien en volgen niemand (src/lib/presence.ts
+                houdt hun lijst al leeg; de rol hier maakt het zichtbaar). Op
+                de telefoon een eigen regel, anders duwt het label Vandaag en
+                het actiemenu van de regel van het zoekveld; kijkt er niemand
+                mee, dan is het vak leeg en neemt het geen plaats. */}
+            {canEditNotes && <div className="empty:hidden max-sm:w-full"><AanwezigOpScherm /></div>}
             {/* Gedeeld zoekveld (loep + wisknop); op de telefoon vult het de
                 regel naast Vandaag en het actiemenu. */}
             <SearchField

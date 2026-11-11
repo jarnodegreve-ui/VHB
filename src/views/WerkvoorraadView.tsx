@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarClock, CalendarDays, IdCard, ShieldCheck, Smartp
 import { RuilIcoon } from '../components/RuilIcoon';
 import type { User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
+import { useQueryParam } from '../app/router';
 import {
   WERK_SOORTEN, WERK_SOORT_LABELS, berekenWerkvoorraad, telPerSoort, werkvoorraadItems,
   type WerkItem, type WerkSoort,
@@ -14,7 +15,7 @@ import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../compone
 import { AllesGedaan } from '../components/illustraties';
 import { OpsRow, OpsStat } from '../components/ops';
 import { Badge, Button, FilterChip, type BadgeTone } from '../components/primitives';
-import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../components/Table';
+import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../components/Table';
 import { Td, Th } from '../components/TabelBasis';
 import { meldSchrijffout } from '../lib/fouten';
 
@@ -99,11 +100,17 @@ export function WerkvoorraadView({
   // altijd 0 en dus misleidend, daarom niet tonen.
   const soorten = WERK_SOORTEN.filter((s) => s !== 'toestellen' || isAdmin);
 
-  const [filter, setFilter] = useState<Filter>('all');
-  const [zoek, setZoek] = useState('');
+  // Filter en zoekterm staan in de URL (?soort=verlof&zoek=jan), zoals de
+  // zoekterm van Gebruikers: wie een rij opent en terugkeert, vindt zijn
+  // selectie terug. De standaard (alles, geen zoekterm) laat de URL schoon.
+  // Een soort die deze rol niet heeft (of een verzonnen waarde) telt als alles.
+  const [soortParam, zetSoortParam] = useQueryParam('soort');
+  const [zoek, setZoek] = useQueryParam('zoek');
+  const filter: Filter = soorten.find((s) => s === soortParam) ?? 'all';
+  const setFilter = (f: Filter) => zetSoortParam(f === 'all' ? '' : f);
   const sort = useSort<SortKolom>('wanneer');
   const voorkeur = useTabelVoorkeur('werkvoorraad');
-  const kiesFilter = (f: WerkSoort) => setFilter((cur) => (cur === f ? 'all' : f));
+  const kiesFilter = (f: WerkSoort) => setFilter(filter === f ? 'all' : f);
   const zoekTerm = zoek.trim().toLowerCase();
   const gefilterd = items
     .filter((it) => filter === 'all' || it.soort === filter)
@@ -257,17 +264,22 @@ export function WerkvoorraadView({
                   </StickyThead>
                   <tbody>
                     {gesorteerd.map((it) => (
+                      // De omschrijving is de knop (Tab + Enter opent het
+                      // scherm waar je beslist); een klik ergens in de rij
+                      // doet hetzelfde voor de muis, behalve op een knop.
                       <tr
                         key={it.key}
-                        onClick={() => open(it)}
+                        onClick={rijKlik(() => open(it))}
                         className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover"
                       >
                         <Td>
                           <Badge tone={BADGE_TONE[it.tone]} dot className="whitespace-nowrap">{WERK_SOORT_LABELS[it.soort]}</Badge>
                         </Td>
                         <Td>
-                          <p className="font-semibold text-slate-800">{it.titel}</p>
-                          {it.detail && <p className="text-xs font-medium text-slate-500">{it.detail}</p>}
+                          <CelKnop onClick={() => open(it)}>
+                            <span className="block font-semibold text-slate-800">{it.titel}</span>
+                            {it.detail && <span className="block text-xs font-medium text-slate-500">{it.detail}</span>}
+                          </CelKnop>
                         </Td>
                         <Td num className={cn('text-xs font-medium', it.tone === 'red' ? 'text-red-700' : 'text-slate-600')}>{it.wanneerTekst}</Td>
                         {toonActieKolom && (

@@ -17,11 +17,12 @@ import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { meldSchrijffout } from '../../lib/fouten';
-import { useAutosaveCel } from '../../lib/autosave';
+import { autosaveOnrustig, useAutosaveCel } from '../../lib/autosave';
 import { AutosaveFout, AutosaveTeken } from '../../components/AutosaveStatus';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
@@ -50,6 +51,18 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   const gevraagd = datumParam && /^\d{4}-\d{2}-\d{2}$/.test(datumParam) ? datumParam : schuifDag(vandaag, -1);
   const datum = gevraagd > vandaag ? vandaag : gevraagd;
   const zetDatum = (d: string) => zetDatumParam(d > vandaag ? vandaag : d);
+  // Een volgende dag bestaat tot en met vandaag, dezelfde grens als de pijl.
+  const kanVolgende = datum < vandaag;
+  // Voor "Afsluiten en volgende dag": het antwoord van de server kan komen
+  // nadat de bevestiging gesloten is (Escape, terugknop) en de planner al
+  // elders staat. Dan wisselt het scherm niet meer achter zijn rug.
+  const datumNu = useRef(datum);
+  datumNu.current = datum;
+  const gemonteerd = useRef(false);
+  useEffect(() => {
+    gemonteerd.current = true;
+    return () => { gemonteerd.current = false; };
+  }, []);
   // Een link naar een dag in de toekomst: melden en naar vandaag.
   useEffect(() => {
     if (gevraagd <= vandaag) return;
@@ -62,6 +75,8 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   const [codes, setCodes] = useState<LoonCode[]>([]);
   const [bezig, setBezig] = useState(false);
   const [bevestigSluiten, setBevestigSluiten] = useState(false);
+  // Welke van de twee afsluitknoppen loopt: die toont de bezig-stand.
+  const [sluitDoor, setSluitDoor] = useState(false);
   const [heropenOpen, setHeropenOpen] = useState(false);
   const [rijToevoegen, setRijToevoegen] = useState(false);
   const [alleenAfwijkend, setAlleenAfwijkend] = useState(false);
@@ -71,6 +86,10 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   const zl = useZelfLadend(async () => {
     const [r, c] = await Promise.all([laadDag(datum), codes.length ? Promise.resolve(codes) : laadLoonCodes()]);
     setCodes(c);
+    // Een antwoord dat pas aankomt nadat de planner al naar een andere dag
+    // ging, hoort niet onder die andere datum te staan (rijen en status van
+    // de verkeerde dag); de laadbeurt van de dag in beeld vult het scherm.
+    if (datumNu.current !== datum) return;
     if ('detail' in r) { setDetail(r.detail); setVoorstel(null); } else { setDetail(null); setVoorstel(r.voorstel); }
   }, { deps: [datum], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de dag niet laden.') });
   // Stil herladen na een schrijfactie die de hele dag raakt (overnemen,
@@ -107,9 +126,30 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
     catch (err) { meldSchrijffout('Dag openen', err); }
     finally { setBezig(false); }
   };
-  const doeSluiten = async () => {
+  // `door` = "Afsluiten en volgende dag": pas na een geslaagde afsluiting naar
+  // de volgende dag, langs dezelfde weg als de dagnavigatie (zetDatum, dus
+  // nooit voorbij vandaag). Loopt er op dat moment nog een autosave of is er
+  // een cel mislukt (autosaveOnrustig), dan wisselt het scherm niet: komt die
+  // save na de afsluiting aan, dan weigert de server hem, en die weigering
+  // hoort bij de cel op deze dag te staan, niet tien seconden in een toast op
+  // de volgende. De planner gaat dan zelf verder met "Volgende dag" in de kop.
+  // Mislukt het afsluiten, dan blijft de bevestiging open met de melding en
+  // wisselt er niets.
+  const doeSluiten = async (door = false) => {
     setBezig(true);
-    try { const dag = await sluitDag(datum); setDetail((d) => (d ? { ...d, dag } : d)); setBevestigSluiten(false); notify(`${formatDayLong(datum)} afgesloten.`, 'success'); }
+    setSluitDoor(door);
+    try {
+      const dag = await sluitDag(datum);
+      // Alleen op het detail van de dag die afgesloten is, nooit op dat van
+      // een andere dag die intussen in beeld staat.
+      setDetail((d) => (d && d.dag.datum === datum ? { ...d, dag } : d));
+      setBevestigSluiten(false);
+      notify(`${formatDayLong(datum)} afgesloten.`, 'success');
+      if (door && gemonteerd.current && datumNu.current === datum) {
+        if (autosaveOnrustig()) notify('Een cel was nog niet bewaard. Je blijft op deze dag, kijk de rijen na.', 'info');
+        else zetDatum(schuifDag(datum, 1));
+      }
+    }
     catch (err) { meldSchrijffout('Afsluiten', err); }
     finally { setBezig(false); }
   };
@@ -145,8 +185,16 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
         title="Dagadministratie"
         actions={(
           <>
+            <AanwezigOpScherm />
             <VersheidRegel {...zl.versheid} />
             {detail && !afgesloten && <Button variant="primary" icon={<Lock size={16} />} onClick={() => setBevestigSluiten(true)} disabled={bezig}>Dag afsluiten</Button>}
+            {/* Afgesloten: door naar de volgende dag zonder de pijl te zoeken.
+                Alleen als het detail van déze dag is: na een dagwissel staat
+                de vorige dag nog even in beeld tot de nieuwe geladen is, en
+                dan zou een tweede klik een dag overslaan. */}
+            {detail && afgesloten && kanVolgende && detail.dag.datum === datum && (
+              <Button variant="secondary" iconRechts={<ChevronRight size={16} />} onClick={() => zetDatum(schuifDag(datum, 1))}>Volgende dag</Button>
+            )}
             {detail && afgesloten && (
               <ActieMenu size="sm" items={[{ label: 'Dag heropenen', icon: <Unlock size={16} />, onClick: () => setHeropenOpen(true) }]} />
             )}
@@ -266,7 +314,9 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
         </>
       ) : null}
 
-      <Modal open={bevestigSluiten} onClose={() => setBevestigSluiten(false)} maxWidth="sm" ariaLabel="Dag afsluiten">
+      {/* vast: zolang de afsluiting op de server wacht, sluiten Escape, de
+          terugknop, de achtergrond en Annuleren het venster niet. */}
+      <Modal open={bevestigSluiten} onClose={() => setBevestigSluiten(false)} vast={bezig} maxWidth="sm" ariaLabel="Dag afsluiten">
         <div className="p-6">
           <CardHeader title={`${formatDayLong(datum)} afsluiten?`} description="Daarna kan de dag alleen nog via heropenen (met reden) veranderen." />
           <ul className="mt-3 space-y-1 text-sm text-slate-700">
@@ -275,9 +325,15 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
             {tellers.zonderCode > 0 && <li className="font-semibold text-amber-700">{tellers.zonderCode} zonder code (die vallen uit de export)</li>}
             {tellers.onbekend > 0 && <li className="font-semibold text-red-700">{tellers.onbekend} met een onbekende looncode</li>}
           </ul>
-          <div className="mt-5 flex gap-3">
-            <Button variant="ghost" className="flex-1" onClick={() => setBevestigSluiten(false)}>Annuleren</Button>
-            <Button variant="primary" className="flex-1" icon={<CheckCircle2 size={16} />} onClick={() => void doeSluiten()} disabled={bezig}>{bezig ? 'Bezig…' : 'Afsluiten'}</Button>
+          {/* Eén gouden knop (Afsluiten, zoals het was); de tweede staat op een
+              eigen regel, want drie naast elkaar passen niet in dit venster.
+              Op vandaag bestaat ze niet: er is geen volgende dag. */}
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Button variant="ghost" className="flex-1" onClick={() => setBevestigSluiten(false)} disabled={bezig}>Annuleren</Button>
+            <Button variant="primary" className="flex-1" icon={<CheckCircle2 size={16} />} onClick={() => void doeSluiten()} disabled={bezig}>{bezig && !sluitDoor ? 'Bezig…' : 'Afsluiten'}</Button>
+            {kanVolgende && (
+              <Button variant="secondary" full iconRechts={<ChevronRight size={16} />} onClick={() => void doeSluiten(true)} bezig={bezig && sluitDoor} disabled={bezig}>Afsluiten en volgende dag</Button>
+            )}
           </div>
         </div>
       </Modal>

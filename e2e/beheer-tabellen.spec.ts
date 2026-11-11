@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ADMIN, AXE_TAGS, AXE_TIJDELIJK_UIT, seed, wachtOpAnimaties } from './helpers';
+import { ADMIN, AXE_TAGS, AXE_TIJDELIJK_UIT, CHAUFFEUR, seed, wachtOpAnimaties } from './helpers';
 import { dayOffset } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -198,4 +198,170 @@ test('Verlofkalender op de telefoon: volledige periode en status, maandnavigatie
   // Pijlen aan de randen van de inhoudskolom (16 px marge), niet links gegroepeerd.
   expect(vorige!.x).toBeLessThanOrEqual(24);
   expect(volgende!.x + volgende!.width).toBeGreaterThanOrEqual(breedte - 24);
+});
+
+/**
+ * Overzicht (werkvoorraad), ronde 6 (11-11). Het filter en de zoekterm staan
+ * in de URL en overleven dus een rij openen en terugkeren; de rijen van de
+ * tabel volgen het tabelrecept (de omschrijving is een knop, Tab + Enter
+ * opent), en de actie in een rij (een toestel goedkeuren) opent de rij niet.
+ * De gedeelde fixtures geven de admin één toestel dat op goedkeuring wacht.
+ */
+async function openOverzicht(page: Page, pad = '/overzicht') {
+  const goedgekeurd: unknown[] = [];
+  await seed(page, {
+    user: ADMIN,
+    view: 'werkvoorraad',
+    extra: (p, request) => {
+      if (p.endsWith('/api/devices/approve') && request.method() === 'POST') { goedgekeurd.push(JSON.parse(request.postData() ?? '{}')); return { success: true }; }
+      return extra(p);
+    },
+  });
+  await page.goto(pad);
+  await expect(page.getByRole('heading', { name: 'Overzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
+  // De toestellen laden na de poort; pas dan staat de rij er.
+  await expect(page.getByText('Toestel wacht op goedkeuring · Alex Du Priez').filter({ visible: true })).toBeVisible();
+  return goedgekeurd;
+}
+const toestelRij = (page: Page) => page.getByRole('button', { name: /^Toestel wacht op goedkeuring · Alex Du Priez/ });
+const verlofTekst = (page: Page) => page.getByText('Verlofaanvraag · Alex Du Priez').filter({ visible: true });
+
+test('Overzicht: filter en zoekterm staan in de URL en zijn terug na een rij openen en terugkeren', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await openOverzicht(page);
+  // De standaard (alles, geen zoekterm) laat de URL schoon.
+  await expect(page).toHaveURL(/\/overzicht$/);
+  await expect(verlofTekst(page)).toBeVisible();
+
+  const chip = page.getByRole('button', { name: /^Toestellen \(\d+\)$/ });
+  await chip.click();
+  await expect(page).toHaveURL(/\/overzicht\?soort=toestellen$/);
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await expect(verlofTekst(page)).toHaveCount(0);
+  await page.getByRole('searchbox').fill('alex');
+  await expect(page).toHaveURL(/\/overzicht\?soort=toestellen&zoek=alex$/);
+
+  // De rij opent het scherm waar je beslist; terug brengt filter én zoekterm mee.
+  await toestelRij(page).click();
+  await expect(page.getByRole('heading', { name: 'Toestellen', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/beheer\/toestellen$/);
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Overzicht', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/overzicht\?soort=toestellen&zoek=alex$/);
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('searchbox')).toHaveValue('alex');
+  await expect(toestelRij(page)).toBeVisible();
+  await expect(verlofTekst(page)).toHaveCount(0);
+
+  // Vooruit en weer terug werken ook.
+  await page.goForward();
+  await expect(page.getByRole('heading', { name: 'Toestellen', level: 1 })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/overzicht\?soort=toestellen&zoek=alex$/);
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+
+  // Terug naar de standaard: de URL is weer schoon.
+  await page.getByRole('searchbox').fill('');
+  await expect(page).toHaveURL(/\/overzicht\?soort=toestellen$/);
+  await page.getByRole('button', { name: 'Alles', exact: true }).click();
+  await expect(page).toHaveURL(/\/overzicht$/);
+  await expect(chip).toHaveAttribute('aria-pressed', 'false');
+  await expect(verlofTekst(page)).toBeVisible();
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
+
+test('Overzicht: een onbekende soort in de URL telt als alles', async ({ page }) => {
+  await openOverzicht(page, '/overzicht?soort=bestaat-niet');
+  await expect(page.getByRole('button', { name: 'Alles', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(verlofTekst(page)).toBeVisible();
+});
+
+test('Overzicht: de omschrijving is een knop, Tab en Enter openen de rij; een klik in de rij ook', async ({ page }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'de tabel staat alleen op desktop; mobiel is de hele rij een knop');
+  // Een link met het filter erin opent gefilterd: één rij.
+  await openOverzicht(page, '/overzicht?soort=toestellen');
+  const tabel = page.getByRole('table', { name: 'Werkvoorraad' });
+  await expect(tabel.getByRole('row')).toHaveCount(2);
+
+  // Van de laatste kolomkop gaat Tab naar de knop van de eerste rij.
+  await tabel.getByRole('button', { name: 'Wanneer' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(toestelRij(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Toestellen', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/beheer\/toestellen$/);
+
+  // Muisgemak: een klik ergens in de rij (hier de cel "Wanneer") opent ook.
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Overzicht', level: 1 })).toBeVisible();
+  await tabel.getByRole('row').nth(1).getByRole('cell').nth(2).click();
+  await expect(page.getByRole('heading', { name: 'Toestellen', level: 1 })).toBeVisible();
+});
+
+test('Overzicht: "Goedkeuren" in een rij keurt het toestel goed en opent de rij niet', async ({ page }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'de knop staat alleen in de tabel op desktop');
+  const goedgekeurd = await openOverzicht(page, '/overzicht?soort=toestellen');
+  const tabel = page.getByRole('table', { name: 'Werkvoorraad' });
+  await tabel.getByRole('button', { name: 'Goedkeuren' }).click();
+
+  await expect(page.getByText('Toestel goedgekeurd.')).toBeVisible();
+  expect(goedgekeurd).toEqual([{ userId: '43', deviceToken: 'tok-2' }]);
+  // Nog altijd het Overzicht, met het filter; de rij is afgehandeld en weg.
+  await expect(page.getByRole('heading', { name: 'Overzicht', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/overzicht\?soort=toestellen$/);
+  await expect(page.getByRole('heading', { name: 'Toestellen', level: 1 })).toHaveCount(0);
+  await expect(toestelRij(page)).toHaveCount(0);
+  // De lege staat van het filter wist filter en zoekterm, ook in de URL.
+  await page.getByRole('button', { name: 'Zoekterm en filter wissen' }).click();
+  await expect(page).toHaveURL(/\/overzicht$/);
+  await expect(verlofTekst(page)).toBeVisible();
+});
+
+test('Overzicht: a11y, met de rijknoppen erbij', async ({ page }) => {
+  await openOverzicht(page);
+  await page.evaluate(() => document.fonts.ready);
+  await wachtOpAnimaties(page);
+  // Alle regels, ook label-content-name-mismatch: de rijknop heeft geen eigen
+  // label, zijn naam is de zichtbare tekst.
+  const resultaat = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+  const blokkerend = resultaat.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+  expect(blokkerend.map((v) => `${v.id}: ${v.help} (${JSON.stringify(v.nodes[0]?.target)})`)).toEqual([]);
+});
+
+/**
+ * "Kijkt ook mee" (ronde 6, 11-11) staat nu ook op Dagadministratie en
+ * Maandplanning: de collega van de staf die hetzelfde scherm open heeft. De
+ * Maandplanning is ook een scherm van chauffeurs; die zien en volgen niemand.
+ * De collega's komen uit de mock van de aanwezigheid (src/lib/presence.ts).
+ */
+const MEEKIJKERS = [
+  { userId: '77', naam: 'Pieter Peeters', rol: 'planner', view: 'dagafsluiting', sinds: '2026-11-11T08:00:00.000Z' },
+  { userId: '78', naam: 'Nele Claes', rol: 'planner', view: 'bezetting', sinds: '2026-11-11T08:00:00.000Z' },
+];
+const metMeekijkers = (page: Page) => page.addInitScript((lijst) => window.localStorage.setItem('vhb-aanwezigheid-mock', JSON.stringify(lijst)), MEEKIJKERS);
+
+test('Kijkt ook mee: Dagadministratie en Maandplanning tonen de collega op hetzelfde scherm', async ({ page }) => {
+  await metMeekijkers(page);
+  await seed(page, { user: ADMIN, view: 'dagafsluiting' });
+  await page.goto('/beheer/dagadministratie');
+  await expect(page.getByRole('heading', { name: 'Dagadministratie', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Pieter bekijkt dit ook')).toBeVisible();
+  await expect(page.getByText('Nele bekijkt dit ook')).toHaveCount(0);
+
+  await page.goto('/maandplanning');
+  await expect(page.getByRole('heading', { name: 'Maandplanning', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Nele bekijkt dit ook')).toBeVisible();
+  await expect(page.getByText('Pieter bekijkt dit ook')).toHaveCount(0);
+});
+
+test('Kijkt ook mee: een chauffeur ziet op de Maandplanning niemand', async ({ page }) => {
+  await metMeekijkers(page);
+  await seed(page, { user: CHAUFFEUR, view: 'bezetting' });
+  await page.goto('/maandplanning');
+  await expect(page.getByRole('heading', { name: 'Maandplanning', level: 1 })).toBeVisible({ timeout: 15_000 });
+  // Het zoekveld staat in dezelfde kopacties: de kop is dus helemaal getekend.
+  await expect(page.getByRole('searchbox', { name: 'Zoek chauffeur of dienst' })).toBeVisible();
+  await page.waitForTimeout(400);
+  await expect(page.getByText(/bekijk(t|en) dit ook/)).toHaveCount(0);
 });
