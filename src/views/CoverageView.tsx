@@ -42,7 +42,7 @@ import {
 import { isUitDienstReden, normalizeCode, type DayTypeBron, type VerwachtingAfwijking, type VerwachtingVoorstel } from '../../shared/coverageGaps';
 import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
 import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
-import { useRouteParam } from '../app/router';
+import { useRecordParam, useRouteParam } from '../app/router';
 
 /** Lokale rijsleutel voor de bewerkbare lijsten (nooit opgeslagen). */
 let sleutelTeller = 0;
@@ -54,6 +54,8 @@ const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
 const maandUitParam = (p: string | null): Date | null =>
   p && MAAND_PARAM.test(p) ? new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1) : null;
 const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+/** Optionele dag na de maand (`/openstaande-diensten/2026-10/2026-10-14`). */
+const DAG_PARAM = /^\d{4}-\d{2}-\d{2}$/;
 
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
@@ -75,6 +77,10 @@ const WEEKDAY_ORDER: { dow: number; label: string }[] = [
  */
 export function CoverageView() {
   const [maandParam, zetMaandParam] = useRouteParam(0);
+  // De dag na de maand (ronde 6, punt 17): wie van het Overzicht, het
+  // dashboard of Vandaag komt, landt op de rij van die dag. Zelfde plek in
+  // het adres als bij de Maandplanning (segment 1, altijd replace).
+  const [dagRuw, zetDagParam] = useRecordParam(1, { view: 'dekking' });
   const [viewMonth, setViewMonth] = useState(() => {
     const n = new Date();
     return maandUitParam(maandParam) ?? new Date(n.getFullYear(), n.getMonth(), 1);
@@ -215,12 +221,21 @@ export function CoverageView() {
   const lastDay = new Date(year, monthIndex + 1, 0).getDate();
   const to = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   // Maand → URL (replace, geen extra history-entry); de state blijft de bron.
-  // De huidige maand geeft een schone URL zonder parameter.
+  // De huidige maand geeft een schone URL zonder parameter, behalve als er
+  // een dag in het adres staat: die kan niet zonder maand ervoor (zelfde
+  // regel als de Maandplanning).
   const monthParam = maandNaarParam(viewMonth);
+  // De dag telt alleen als hij een bestaande dag van de getoonde maand is.
+  const dagParam = dagRuw && DAG_PARAM.test(dagRuw) && dagRuw.slice(0, 7) === monthParam
+    && Number(dagRuw.slice(8)) >= 1 && Number(dagRuw.slice(8)) <= lastDay ? dagRuw : null;
   useEffect(() => {
-    const gewenst = monthParam === maandNaarParam(new Date()) ? null : monthParam;
+    // Een ongeldige dag of een dag buiten de maand (ook na bladeren) gaat
+    // stil uit het adres; de maand volgt in de volgende ronde. Eén schrijver
+    // per ronde: de maandzetter vervangt het hele pad vanaf zijn segment.
+    if (dagRuw && !dagParam) { zetDagParam(null); return; }
+    const gewenst = monthParam === maandNaarParam(new Date()) && !dagParam ? null : monthParam;
     if ((maandParam ?? null) !== gewenst) zetMaandParam(gewenst);
-  }, [monthParam, maandParam, zetMaandParam]);
+  }, [monthParam, maandParam, zetMaandParam, dagRuw, dagParam, zetDagParam]);
 
   // Instellingen één keer (de bewerkbare kopie leeft in state); pas als dat
   // lukte hoeft het niet meer, anders probeert de volgende laad het opnieuw.
@@ -626,6 +641,28 @@ export function CoverageView() {
   }, [gaps, totalMissing]);
   const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);
   const visibleDays = onlyGaps ? gaps.filter((d) => d.missing.length > 0) : gaps;
+  // De dag uit het adres in beeld brengen met de focus erop, één keer per
+  // dag en pas als zijn rij er staat (zelfde afspraak als `brengRecordInBeeld`,
+  // src/lib/recordLink.ts). Tabel (breed) en lijst (smal) staan allebei in de
+  // DOM en een container query toont er één: de zichtbare rij is het doel.
+  // Een dag zonder gat staat met "Alleen dagen met gaten" niet in de lijst;
+  // dan blijft het scherm gewoon op de maand staan.
+  const dagInLijst = !!dagParam && !zl.laden && visibleDays.some((d) => d.date === dagParam);
+  const gebrachtRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!dagParam) { gebrachtRef.current = null; return; }
+    if (!dagInLijst || gebrachtRef.current === dagParam) return;
+    gebrachtRef.current = dagParam;
+    requestAnimationFrame(() => {
+      const rij = Array.from(document.querySelectorAll<HTMLElement>(`[data-record="${dagParam}"]`)).find((el) => el.getClientRects().length > 0);
+      rij?.scrollIntoView({ block: 'center' });
+      rij?.focus({ preventScroll: true });
+    });
+  }, [dagParam, dagInLijst]);
+  /** De rij van de dag uit het adres: neutrale selectie (geen goud) en het doel voor de focus. */
+  const dagRij = (datum: string) => (datum === dagParam
+    ? { 'data-record': datum, tabIndex: -1, 'aria-current': 'true' as const }
+    : { 'data-record': datum });
   const dagenMetGaten = useMemo(() => gaps.filter((d) => d.missing.length > 0).length, [gaps]);
 
   // Zijvak "Deze maand": de cijfers die je anders uit de lijst moet tellen,
@@ -1239,7 +1276,7 @@ export function CoverageView() {
               </StickyThead>
               <tbody>
                 {visibleDays.map((d) => (
-                  <tr key={d.date} className="border-b border-hairline-subtle align-top last:border-b-0">
+                  <tr key={d.date} {...dagRij(d.date)} className={cn('focus-stil border-b border-hairline-subtle align-top last:border-b-0', d.date === dagParam && 'bg-slate-100/60')}>
                     <Th scope="row" className="whitespace-normal py-3 text-sm font-semibold text-slate-800">
                       <span className="block whitespace-nowrap">{hoofdletter(dayLabel(d.date))}</span>
                       <span className="mt-1 block font-normal">{dagTypeVan(d)}</span>
@@ -1253,7 +1290,7 @@ export function CoverageView() {
           </div>
           <ul className="divide-y divide-hairline-subtle @[36rem]:hidden" aria-label={`Openstaande diensten ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}`}>
             {visibleDays.map((d) => (
-              <li key={d.date} className="space-y-2 px-4 py-3">
+              <li key={d.date} {...dagRij(d.date)} className={cn('focus-stil space-y-2 px-4 py-3', d.date === dagParam && 'bg-slate-100/60')}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-md font-semibold text-slate-800">{hoofdletter(dayLabel(d.date))}</p>

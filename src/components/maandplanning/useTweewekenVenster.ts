@@ -48,7 +48,17 @@ export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaa
     // van/vóór die maand.
     const maand = maandNaarParam(uitUrl);
     const dezeWeekInMaand = Array.from({ length: 7 }, (_, i) => addDaysIso(dezeMaandag, i)).some((d) => monthOf(d) === maand);
-    return dezeWeekInMaand ? dezeMaandag : mondayOf(`${maand}-01`);
+    const standaard = dezeWeekInMaand ? dezeMaandag : mondayOf(`${maand}-01`);
+    // Dag uit de URL (ronde 6, punt 17): een rij "te herverdelen", de knop
+    // Maandplanning in het ziektedetail en de mail naar de admins openen
+    // /maandplanning/<maand>/<dag>. Ligt die dag buiten de twee weken
+    // hierboven, dan stond hij op desktop niet in beeld; het venster begint
+    // dan op de maandag van (of vóór) die dag. Alleen een echte kalenderdag
+    // in de maand van het adres telt (30/02 of een dag uit een andere maand
+    // niet), en alleen hier, bij het openen: daarna is het venster gewone
+    // state, dus bladeren en "Vandaag" springen nooit terug naar deze dag.
+    const dagInMaand = !!dagParam && /^\d{4}-\d{2}-\d{2}$/.test(dagParam) && monthOf(dagParam) === maand && addDaysIso(dagParam, 0) === dagParam;
+    return dagInMaand && (dagParam < standaard || dagParam > addDaysIso(standaard, 13)) ? mondayOf(dagParam) : standaard;
   });
 
   // Hoofdmaand → URL (replace, geen extra history-entry); de state blijft de

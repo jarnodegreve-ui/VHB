@@ -53,6 +53,7 @@ import { cn, telHref } from '../lib/ui';
 import { navigeer } from '../app/router';
 import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../lib/uitweg';
 import { meldSchrijffout } from '../lib/fouten';
+import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../lib/herverdeel';
 import { formatTelefoon } from '../../shared/tekst';
 
 /**
@@ -190,13 +191,19 @@ export function PlannerDashboardWidgets({
   const [vervangerPerDienst, setVervangerPerDienst] = useState<Record<string, string>>({});
   const [wisselBezig, setWisselBezig] = useState<string | null>(null);
   const [afgehandeld, setAfgehandeld] = useState<Record<string, string>>({});
+  // "Stel kandidaten voor" in stap 2 (ronde 6, punt 17): het bestaande
+  // batch-advies (src/lib/herverdeel.ts, zoals in het Ziekte-detail) vult de
+  // keuzelijsten in. Alleen op die klik: er staat vooraf niets ingevuld en
+  // er wordt niets overgezet; elke keuze blijft te wijzigen.
+  const [ziekAdvies, setZiekAdvies] = useState<Record<string, BatchAdvies>>({});
+  const [adviesLaden, setAdviesLaden] = useState(false);
   // Het bord van de dagen in stap 2: de vervangerlijst leest dezelfde cellen
   // als de Maandplanning (een schoolrit via een wissel telt als dienst).
   const bordVan = useBordCellen(ziekVervolg ? ziekVervolg.diensten.map((d) => d.date) : []);
   // Geen kandidaten tot de matrix én het bord van die dag er zijn (of het
   // bord mislukte): anders stond iemand met een schoolrit even als vrij.
   const lijstKlaar = (datum: string) => planningMatrixGeladen && bordVan(datum) !== undefined;
-  const closeSickModal = () => { setShowSickModal(false); setZiekVervolg(null); setVervangerPerDienst({}); setAfgehandeld({}); };
+  const closeSickModal = () => { setShowSickModal(false); setZiekVervolg(null); setVervangerPerDienst({}); setAfgehandeld({}); setZiekAdvies({}); };
   // Onbewaarde invoer (tranche 3A): alleen in stap 1 (het formulier); in stap
   // 2 is de melding al geregistreerd en valt er niets te verliezen.
   const { vuil: sickVuil } = useVuil(sickForm, showSickModal && !ziekVervolg);
@@ -360,6 +367,30 @@ export function PlannerDashboardWidgets({
       meldSchrijffout('Overzetten', err);
     } finally {
       setWisselBezig(null);
+    }
+  };
+
+  /** Stap 2: het advies ophalen voor wat nog open staat en de lege keuzelijsten invullen. */
+  const adviesVan = (d: OpenstaandeDienst) => ziekAdvies[adviesSleutel(d.date, serviceNumberOf(d))];
+  const stelKandidatenVoor = async () => {
+    const open = (ziekVervolg?.diensten ?? []).filter((d) => !afgehandeld[d.id]);
+    if (open.length === 0 || adviesLaden) return;
+    setAdviesLaden(true);
+    try {
+      const per = await haalBatchAdvies(open.map((d) => ({ date: d.date, code: serviceNumberOf(d) })));
+      setZiekAdvies(per);
+      // Alleen waar nog geen keuze staat, en dag-bewust: twee diensten op
+      // dezelfde dag krijgen nooit dezelfde chauffeur.
+      setVervangerPerDienst((cur) => vulVervangersVoor(open, {
+        sleutelVan: (d) => d.id,
+        dagVan: (d) => d.date,
+        adviesVan: (d) => per[adviesSleutel(d.date, serviceNumberOf(d))],
+        huidig: cur,
+      }));
+    } catch (e) {
+      meldSchrijffout('Kandidaten voorstellen', e, () => void stelKandidatenVoor());
+    } finally {
+      setAdviesLaden(false);
     }
   };
 
@@ -714,7 +745,8 @@ export function PlannerDashboardWidgets({
               : e.dagen === 0
                 ? `Verloopt vandaag (${formatDatumDMJ(e.validUntil)})`
                 : `Verloopt over ${e.dagen} ${e.dagen === 1 ? 'dag' : 'dagen'} (${formatDatumDMJ(e.validUntil)})`}
-            onClick={() => onNavigate('vervaldata')}
+            // Met de persoon in het adres: zijn datums staan meteen open.
+            onClick={() => onNavigate('vervaldata', [String(e.userId)])}
           />
           </Fragment>
         ))}
@@ -725,9 +757,10 @@ export function PlannerDashboardWidgets({
             icon={<UserX size={16} />}
             primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld, ${userNameById(g.driverId)}`}
             secondary={`${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDay(s.date)} (${serviceNumberOf(s)})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`}
-            // Ziekte-blad, niet de maandplanning: dáár staan de
-            // herverdeel-knoppen (kortste route naar de actie).
-            onClick={() => onNavigate('ziekte')}
+            // Een zieke: het detail van zijn ziekmelding, dáár staan de
+            // herverdeelknoppen. Verlof of klein verlet: de Maandplanning op
+            // die dag (`herverdeelDoel` in src/lib/werkvoorraad.ts).
+            onClick={() => onNavigate(g.doel, g.doelParams)}
           />
           </Fragment>
         ))}
@@ -738,7 +771,8 @@ export function PlannerDashboardWidgets({
             icon={<AlertTriangle size={16} />}
             primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'}, ${formatDay(d.date)}`}
             secondary={`Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`}
-            onClick={() => onNavigate('dekking')}
+            // Maand én dag: Openstaande diensten brengt die dag in beeld.
+            onClick={() => onNavigate('dekking', [d.date.slice(0, 7), d.date])}
           />
           </Fragment>
         ))}
@@ -1168,12 +1202,28 @@ export function PlannerDashboardWidgets({
                 scrol je makkelijk over de laatste heen — dan lijkt het klaar
                 terwijl er nog diensten open staan (melding Jarno 14-08). */}
             {isAdmin && (
-              <p className={cn(microLabelClass, 'tabular-nums')}>
-                {Object.keys(afgehandeld).length} van {ziekVervolg.diensten.length} overgezet
-                {Object.keys(afgehandeld).length < ziekVervolg.diensten.length
-                  ? ` · nog ${ziekVervolg.diensten.length - Object.keys(afgehandeld).length} te doen`
-                  : ' · alles rond'}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className={cn(microLabelClass, 'tabular-nums')}>
+                  {Object.keys(afgehandeld).length} van {ziekVervolg.diensten.length} overgezet
+                  {Object.keys(afgehandeld).length < ziekVervolg.diensten.length
+                    ? ` · nog ${ziekVervolg.diensten.length - Object.keys(afgehandeld).length} te doen`
+                    : ' · alles rond'}
+                </p>
+                {/* Het voorstel vult de keuzelijsten in, overzetten blijft een
+                    klik per dienst. Uit tot elke lijst haar kandidaten heeft:
+                    een voorstel in een lijst die het nog niet kan tonen zou
+                    "Zet over" aanzetten zonder zichtbare naam. */}
+                {Object.keys(afgehandeld).length < ziekVervolg.diensten.length && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={adviesLaden || !!wisselBezig || !ziekVervolg.diensten.every((d) => afgehandeld[d.id] || lijstKlaar(d.date))}
+                    onClick={() => void stelKandidatenVoor()}
+                  >
+                    {adviesLaden ? 'Advies berekenen…' : 'Stel kandidaten voor'}
+                  </Button>
+                )}
+              </div>
             )}
             <div className="space-y-3">
               {ziekVervolg.diensten.map((d) => {
@@ -1196,6 +1246,11 @@ export function PlannerDashboardWidgets({
                         )}
                       </span>
                     </div>
+                    {/* De collega-zin van het advies ("Pascal past, 9u rust …"),
+                        zodat een leeg gebleven lijst niet zonder uitleg blijft. */}
+                    {isAdmin && !klaar && adviesVan(d)?.samenvatting && (
+                      <p className="text-xs font-medium text-slate-500">{adviesVan(d)?.samenvatting}</p>
+                    )}
                     {klaar ? (
                       <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
                         <CheckCircle2 size={14} /> Overgezet naar {klaar}

@@ -72,6 +72,108 @@ describe('useTweewekenVenster', () => {
     expect(opzet({ dagParam: '2026-10-15' }).zetMaandParam).toHaveBeenCalledWith('2026-10');
     expect(opzet({ dagParam: '2026-10-15', maandParam: '2026-10' }).zetMaandParam).not.toHaveBeenCalled();
   });
+
+  // Ronde 6, punt 17: /maandplanning/<maand>/<dag> (een rij "te herverdelen",
+  // de knop Maandplanning in het ziektedetail, de mail naar de admins). Het
+  // standaardvenster is hier 12/10 t/m 25/10 (deze maand) en 30/11 t/m 13/12
+  // (december: de maandag van of vóór de eerste).
+  describe('een dag in het adres', () => {
+    const oktober = { startMaand: new Date(2026, 9, 1), maandParam: '2026-10' };
+    const december = { startMaand: new Date(2026, 11, 1), monthParam: '2026-12', maandParam: '2026-12' };
+
+    it('zonder dag, of met een dag die al in het standaardvenster valt, begint het venster waar het altijd begon', () => {
+      expect(opzet({ ...oktober }).nu().windowStart).toBe('2026-10-12');
+      for (const dag of ['2026-10-12', '2026-10-14', '2026-10-25']) {
+        expect(opzet({ ...oktober, dagParam: dag }).nu().windowStart, dag).toBe('2026-10-12');
+      }
+      expect(opzet({ ...december }).nu().windowStart).toBe('2026-11-30');
+      for (const dag of ['2026-12-01', '2026-12-13']) {
+        expect(opzet({ ...december, dagParam: dag }).nu().windowStart, dag).toBe('2026-11-30');
+      }
+    });
+
+    it('een dag buiten het standaardvenster: het venster begint op de maandag van (of vóór) die dag, zodat hij in beeld staat', () => {
+      // De dag na de laatste van het venster is zelf een maandag.
+      const net = opzet({ ...oktober, dagParam: '2026-10-26' });
+      expect(net.nu().windowStart).toBe('2026-10-26');
+      expect(net.nu().windowDates).toEqual(dagen('2026-10-26'));
+      // Verderop in de week: de maandag ervoor.
+      expect(opzet({ ...oktober, dagParam: '2026-10-29' }).nu().windowStart).toBe('2026-10-26');
+      // Vóór het venster (staf kijkt terug): de dag vóór de eerste is een
+      // zondag, en de eerste van de maand valt in een week die in september begint.
+      expect(opzet({ ...oktober, dagParam: '2026-10-11' }).nu().windowStart).toBe('2026-10-05');
+      expect(opzet({ ...oktober, dagParam: '2026-10-01' }).nu().windowStart).toBe('2026-09-28');
+      // Een andere maand dan de lopende.
+      const later = opzet({ ...december, dagParam: '2026-12-18' });
+      expect(later.nu().windowStart).toBe('2026-12-14');
+      expect(later.nu().windowDates).toContain('2026-12-18');
+      expect(opzet({ ...december, dagParam: '2026-12-14' }).nu().windowStart).toBe('2026-12-14');
+      expect(opzet({ ...december, dagParam: '2026-12-31' }).nu().windowStart).toBe('2026-12-28');
+      // De hoofdmaand blijft die van het adres: de hook zet ze bij het openen niet.
+      expect(later.setViewMonth).not.toHaveBeenCalled();
+      expect(later.zetMaandParam).not.toHaveBeenCalled();
+    });
+
+    it('een ongeldige dag, een dag uit een andere maand dan het adres, of een adres zonder geldige maand: het gedrag van vroeger', () => {
+      for (const dag of ['2026-10-99', '2026-10-32', '2026-10-5', 'geen-dag', '', '26/10/2026', '2026-10-26T00:00']) {
+        expect(opzet({ ...oktober, dagParam: dag }).nu().windowStart, dag).toBe('2026-10-12');
+      }
+      // 30 februari en 31 november bestaan niet (een Date zou ze doorrollen naar de maand erna).
+      expect(opzet({ startMaand: new Date(2027, 1, 1), monthParam: '2027-02', maandParam: '2027-02', dagParam: '2027-02-30' }).nu().windowStart).toBe('2027-02-01');
+      expect(opzet({ startMaand: new Date(2026, 10, 1), monthParam: '2026-11', maandParam: '2026-11', dagParam: '2026-11-31' }).nu().windowStart).toBe('2026-10-26');
+      // De dag ligt niet in de maand van het adres.
+      expect(opzet({ ...oktober, dagParam: '2026-11-26' }).nu().windowStart).toBe('2026-10-12');
+      expect(opzet({ ...december, dagParam: '2026-10-29' }).nu().windowStart).toBe('2026-11-30');
+      expect(opzet({ ...december, dagParam: '2027-12-18' }).nu().windowStart).toBe('2026-11-30');
+      // Geen (geldige) maand in het adres, of een maand die de view wegliet
+      // (wie geen staf is en een dag van vóór deze week opent): deze week.
+      expect(opzet({ startMaand: null, dagParam: '2026-10-29' }).nu().windowStart).toBe('2026-10-12');
+      expect(opzet({ startMaand: null, maandParam: '2026-09', dagParam: '2026-09-03' }).nu().windowStart).toBe('2026-10-12');
+    });
+
+    it('bladeren na een landing op zo\'n dag: het venster verschuift vanaf waar het staat en springt nooit terug naar de dag uit het adres', () => {
+      const { nu, rerender, setViewMonth, zetMaandParam } = opzet({ ...december, dagParam: '2026-12-18' });
+      const props = (extra: Partial<Parameters<typeof useTweewekenVenster>[0]> = {}) => ({ ...basis, ...december, dagParam: '2026-12-18', zetMaandParam, setViewMonth, ...extra });
+      expect(nu().windowStart).toBe('2026-12-14');
+
+      // Vorige twee weken: zelfde hoofdmaand, het adres houdt de dag (dat is
+      // de gekozen dag van de dagweergave), het venster blijft waar de
+      // planner het zette, ook na een nieuwe render.
+      act(() => { nu().goPrevWindow(); });
+      expect(nu().windowStart).toBe('2026-11-30');
+      expect(setViewMonth).toHaveBeenLastCalledWith(new Date(2026, 11, 1));
+      rerender(props());
+      expect(nu().windowStart).toBe('2026-11-30');
+      expect(zetMaandParam).not.toHaveBeenCalled();
+
+      // Volgende twee weken, twee keer: de hoofdmaand wordt januari. De hook
+      // zet alleen de maand in het adres; de dag die daar niet meer bij hoort
+      // haalt de view er zelf uit (het bestaande effect in CapacityView).
+      act(() => { nu().goNextWindow(); });
+      act(() => { nu().goNextWindow(); });
+      expect(nu().windowStart).toBe('2026-12-28');
+      expect(setViewMonth).toHaveBeenLastCalledWith(new Date(2027, 0, 1));
+      rerender(props({ monthParam: '2027-01' }));
+      expect(zetMaandParam).toHaveBeenLastCalledWith('2027-01');
+      expect(nu().windowStart).toBe('2026-12-28');
+      rerender(props({ monthParam: '2027-01', maandParam: '2027-01', dagParam: null }));
+      expect(nu().windowStart).toBe('2026-12-28');
+
+      // Deze week: naar vandaag, niet naar de dag van de landing.
+      act(() => { nu().naarVandaag(); });
+      expect(nu().windowStart).toBe('2026-10-12');
+      rerender(props({ monthParam: '2026-10', maandParam: '2027-01', dagParam: null }));
+      expect(nu().windowStart).toBe('2026-10-12');
+    });
+
+    it('de dag telt alleen bij het openen: een dag die later in het adres komt (tik in de dagweergave) verschuift het venster niet', () => {
+      const { nu, rerender, setViewMonth, zetMaandParam } = opzet({ ...oktober });
+      expect(nu().windowStart).toBe('2026-10-12');
+      rerender({ ...basis, ...oktober, dagParam: '2026-10-29', zetMaandParam, setViewMonth });
+      expect(nu().windowStart).toBe('2026-10-12');
+      expect(setViewMonth).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('useMaandLaden', () => {
