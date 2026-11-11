@@ -610,9 +610,33 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     const klaar = window.setTimeout(() => setVoetOpSlot(0), 700);
     return () => window.clearTimeout(klaar);
   }, [voetOpSlot]);
+  // De grendel dekt alleen de eerste 0,7 s. Daarna ligt Afwijzen van de voet
+  // nog altijd onder de rijknop (1920 px; op 1280 en 1440 px zodra er een
+  // goedgekeurde rij in de tabel staat), en een tweede klik op dezelfde plek
+  // wees af zonder bevestiging: het omgekeerde van wat de planner koos, en een
+  // eindstatus. Zolang het paneel open staat dat langs de rijknop openging,
+  // vraagt Afwijzen in de voet daarom dezelfde bevestiging als in de rij. Via
+  // de naam of een link blijft het paneel zoals het was: één klik. Het id van
+  // de ruil, geen losse vlag: het paneel volgt de URL en sluit ook met de
+  // terugknop of een andere link, dus de opruiming hangt aan de ruil die open
+  // staat (en ze wist meteen ook de grendel).
+  const [rijknopId, setRijknopId] = useState<string | null>(null);
+  const paneelId = reviewSwap?.id ?? null;
+  useEffect(() => {
+    if (!paneelId) return;
+    return () => { setRijknopId(null); setVoetOpSlot(0); };
+  }, [paneelId]);
+  const viaRijknop = !!reviewSwap && rijknopId === reviewSwap.id;
   const bekijkEerstRust = (swap: SwapRequest) => {
     setVoetOpSlot((n) => n + 1);
+    setRijknopId(swap.id);
     setReviewSwap(swap);
+  };
+  /** Afwijzen in de voet van het beoordelingspaneel. */
+  const wijsAfInPaneel = (swap: SwapRequest) => {
+    if (viaRijknop) vraagAfwijzen(swap);
+    else handleStatusUpdate(swap.id, 'rejected', swap.status);
+    setReviewSwap(null);
   };
 
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
@@ -1660,7 +1684,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="danger"
                   size="lg"
                   className="flex-1"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
+                  onClick={() => wijsAfInPaneel(reviewSwap)}
                 >
                   Afwijzen
                 </Button>
@@ -1681,7 +1705,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="danger"
                   size="lg"
                   className="flex-1"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
+                  onClick={() => wijsAfInPaneel(reviewSwap)}
                 >
                   Afwijzen
                 </Button>
@@ -1701,7 +1725,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 <Button
                   variant="danger"
                   size="lg"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
+                  onClick={() => wijsAfInPaneel(reviewSwap)}
                 >
                   Afwijzen
                 </Button>

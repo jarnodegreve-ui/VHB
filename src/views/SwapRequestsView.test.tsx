@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Shift, SwapRequest, User } from '../types';
 
 const { apiJsonMock, appData } = vi.hoisted(() => ({
@@ -228,5 +228,53 @@ describe('Dienstruil: beheertabel op desktop', () => {
     await klik(tabel().getByRole('button', { name: 'Afwijzen' }));
     const vraag = await screen.findByRole('dialog', { name: 'Dienstruil afwijzen?' });
     expect(vraag.textContent).toContain('De aanvraag van Chauffeur A voor de dienst wordt afgewezen.');
+  });
+
+  // De rijknop ligt onder de voet van het paneel dat ze opent, en de grendel
+  // dekt alleen de eerste 0,7 s: een tweede klik op dezelfde plek daarna viel op
+  // Afwijzen van de voet en wees af zonder bevestiging (gemeten op 1920 px, en
+  // op 1280 en 1440 px met een goedgekeurde rij in de tabel). Opende het paneel
+  // langs de rijknop, dan vraagt Afwijzen in de voet daarom dezelfde bevestiging
+  // als in de rij. Via de naam blijft het paneel zoals het was: één klik.
+  it('paneel geopend langs de rijknop: Afwijzen in de voet vraagt eerst de bevestiging en geeft de status mee die de planner zag', async () => {
+    const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+    await klik(tabel().getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd' }));
+    await klik(within(await paneel()).getByRole('button', { name: 'Afwijzen' }));
+    const vraag = await screen.findByRole('dialog', { name: 'Dienstruil afwijzen?' });
+    expect(vraag.textContent).toContain('De aanvraag van Chauffeur A met Alex Collega voor dienst 2505 op ');
+    expect(onDecide).not.toHaveBeenCalled();
+    await klik(within(vraag).getByRole('button', { name: 'Afwijzen' }));
+    expect(onDecide).toHaveBeenCalledTimes(1);
+    expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'accepted');
+  });
+
+  it('admin, paneel geopend langs Direct goedkeuren: ook daar vraagt Afwijzen in de voet de bevestiging, met de status pending', async () => {
+    const { onDecide } = toonBeheer(ADMIN, [ruil({ status: 'pending', rust: TE_KORT })]);
+    await klik(tabel().getByRole('button', { name: 'Direct goedkeuren, bekijk eerst de rusttijd' }));
+    await klik(within(await paneel()).getByRole('button', { name: 'Afwijzen' }));
+    const vraag = await screen.findByRole('dialog', { name: 'Dienstruil afwijzen?' });
+    expect(onDecide).not.toHaveBeenCalled();
+    await klik(within(vraag).getByRole('button', { name: 'Afwijzen' }));
+    expect(onDecide).toHaveBeenCalledTimes(1);
+    expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'pending');
+  });
+
+  it('via de naam blijft het paneel zoals het was: Afwijzen beslist in één klik, ook nadat het eerst langs de rijknop open stond', async () => {
+    const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+    await klik(tabel().getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd' }));
+    await klik(within(await paneel()).getByRole('button', { name: 'Sluiten' }));
+    // Het paneel schuift eerst uit (±0,3 s) en verdwijnt dan uit de boom.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 });
+    expect(onDecide).not.toHaveBeenCalled();
+
+    await klik(tabel().getByTitle('Details bekijken'));
+    const open = await paneel();
+    // Ook de grendel van de voet is met het paneel mee gesloten: wie het binnen
+    // 0,7 s via de naam heropent, krijgt geen dode knoppen.
+    expect(within(open).getByRole('button', { name: 'Afwijzen' }).parentElement?.className).not.toContain('pointer-events-none');
+    await klik(within(open).getByRole('button', { name: 'Afwijzen' }));
+    expect(onDecide).toHaveBeenCalledTimes(1);
+    expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'accepted');
+    expect(screen.queryByRole('dialog', { name: 'Dienstruil afwijzen?' })).toBeNull();
   });
 });
