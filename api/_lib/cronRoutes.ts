@@ -22,7 +22,7 @@ import { symbolicateTopFrame } from "./symbolicate.js";
 import { getOcpiRegistration } from "./ocpi.js";
 import { getVehicleExpiries, getVehicles } from "./techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../../shared/schemas/techniek.js";
-import { isTechnieker } from "../../shared/toegang.js";
+import { heeftRol, isTechnieker } from "../../shared/toegang.js";
 import { verstuurRoosterMeldingen } from "./planningHeropbouw.js";
 import { stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT } from "./telegram.js";
 import { berekenDekkingsGaten, berekenCoverageAdvies } from "./coverageRoutes.js";
@@ -549,11 +549,17 @@ export function mountCronRoutes(app: express.Express) {
           .sort((a, b) => a.dagen - b.dagen);
         for (const e of rijen) {
           if (e.dagen === 90 || e.dagen === 30 || e.dagen === 7 || e.dagen === 0) {
+            // De tik opent Documenten, waar de eigen vervaldata staan (11-11;
+            // vroeger het dashboard, waar er niets over te zien is). Alleen voor
+            // wie dat scherm mag openen: de rollen van `documenten` in
+            // src/app/routes.tsx (chauffeur en technieker, ook "Ook technieker").
+            // Een planner of admin met een attest blijft op het dashboard landen.
+            const ontvanger = actief.get(e.userId) as { role: string; ookTechnieker?: boolean };
             await sendPushToUsers([e.userId], {
               title: e.dagen === 0 ? `${e.label} verloopt vandaag` : `${e.label} verloopt over ${e.dagen} dagen`,
               soort: "systeem",
               body: `Je ${e.label.toLowerCase()} is geldig tot ${DAG_DMJ(e.validUntil)}. Regel tijdig de vernieuwing en geef het door aan de planning.`,
-              url: "/",
+              url: heeftRol(ontvanger, ["chauffeur", "technieker"]) ? viewUrl("documenten") : "/",
             });
             // Óók per e-mail naar de chauffeur zelf (idee 46): push bereikt maar
             // een handvol chauffeurs, mail wél. Best-effort, mag de cron niet

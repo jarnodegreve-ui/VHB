@@ -55,6 +55,50 @@ test('een chauffeur vindt het nummer van zijn bestemming: zoeken, één lijn, al
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
 
+test('de laatst gekozen lijn staat er na herladen weer; een lijn die niet meer bestaat valt terug op Alle', async ({ page }) => {
+  let lijst: typeof FILMNUMMERS = FILMNUMMERS;
+  await seed(page, {
+    user: CHAUFFEUR,
+    view: 'filmnummers',
+    extra: (pad) => (pad.endsWith('/api/filmnummers') ? lijst : undefined),
+  });
+  await page.goto('/filmnummers');
+  const bestemmingen = page.getByRole('list', { name: 'Bestemmingen' }).getByRole('listitem');
+  const algemeen = page.getByRole('list', { name: 'Algemeen' });
+  await expect(bestemmingen).toHaveCount(13, { timeout: 15_000 });
+  const lijn871 = page.getByRole('button', { name: 'Lijn 871', exact: true });
+  await lijn871.click();
+  await expect(bestemmingen).toHaveCount(3);
+
+  // Herladen: de lijn staat aan zonder tik, en haar chip is in beeld.
+  await page.reload();
+  await expect(bestemmingen).toHaveCount(3, { timeout: 15_000 });
+  await expect(lijn871).toHaveAttribute('aria-pressed', 'true');
+  await expect(lijn871).toBeInViewport();
+  await expect(algemeen).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Alle', exact: true })).toHaveAttribute('aria-pressed', 'false');
+
+  // De lijst verandert op de server: lijn 871 bestaat niet meer. Geen lege lijst, maar Alle.
+  lijst = { ...FILMNUMMERS, items: FILMNUMMERS.items.filter((f) => f.lijn !== '871') };
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Alle', exact: true })).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
+  await expect(lijn871).toHaveCount(0);
+  await expect(bestemmingen).toHaveCount(10);
+  await expect(algemeen.getByRole('listitem')).toHaveCount(4);
+  await expect(page.getByText('Geen filmnummer gevonden')).toHaveCount(0);
+
+  // Ook Algemeen wordt onthouden, en Alle kiezen wist de keuze weer.
+  await page.getByRole('button', { name: 'Algemeen', exact: true }).click();
+  await page.reload();
+  await expect(algemeen.getByRole('listitem')).toHaveCount(4, { timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Algemeen', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('list', { name: 'Bestemmingen' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Alle', exact: true }).click();
+  await page.reload();
+  await expect(bestemmingen).toHaveCount(10, { timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Alle', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('valt de server uit terwijl er bereik is, dan blijft de kopie staan en zegt een kleine kaart dat bijwerken niet lukte', async ({ page }) => {
   let serverOk = true;
   await seed(page, { user: CHAUFFEUR, view: 'filmnummers' });

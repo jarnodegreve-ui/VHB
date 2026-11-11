@@ -36,7 +36,7 @@ export const CHAUFFEUR_TEGELS: readonly TegelDef[] = [
   { id: 'verlofsaldo', label: 'Verlofsaldo', omschrijving: 'Dagen vrij aan te vragen dit jaar.', groep: 'tegels' },
   { id: 'deze-maand', label: 'Deze maand', omschrijving: 'Aantal ingeplande diensten.', groep: 'tegels' },
   { id: 'omleidingen', label: 'Omleidingen', omschrijving: 'Aantal actieve omleidingen.', groep: 'tegels' },
-  { id: 'komende-diensten', label: 'Komende diensten', omschrijving: 'De eerstvolgende drie diensten.', groep: 'panelen' },
+  { id: 'komende-diensten', label: 'Komende diensten', omschrijving: 'De eerstvolgende drie dagen met een dienst.', groep: 'panelen' },
   { id: 'omleidingen-paneel', label: 'Omleidingen (lijst)', omschrijving: 'De nieuwste actieve omleidingen.', groep: 'panelen' },
   { id: 'snelle-acties', label: 'Snelle acties', omschrijving: 'Snelkoppelingen onderaan (alleen op de telefoon).', groep: 'panelen' },
 ];

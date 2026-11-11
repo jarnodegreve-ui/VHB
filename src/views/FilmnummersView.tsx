@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Suspense, useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Upload } from 'lucide-react';
 import { verdeelFilmnummers, zoekFilmnummers, type Filmnummer, type FilmnummerLijst } from '../../shared/filmnummers';
 import { haalFilmnummers, leesFilmnummersLokaal, noteerFilmnummerImport } from '../lib/filmnummers';
@@ -26,6 +26,31 @@ const BESTANDEN = '.csv,.txt,.xlsx,.xls,text/csv,application/vnd.ms-excel,applic
 const VERVERS_NA_MS = 10 * 60_000;
 
 /**
+ * De laatst gekozen lijn blijft op het toestel staan (ronde 6, 11-11): wie
+ * altijd lijn 50 rijdt, kiest die niet bij elke eindhalte opnieuw. Geen
+ * waarde = Alle, '' = Algemeen, anders de lijn. Een voorkeur van dit toestel,
+ * geen gegevens: ze blijft dus staan bij uitloggen, zoals de roosterweergave.
+ * Hier en niet in src/lib/filmnummers.ts: dat bestand laadt mee met de stille
+ * warmup van elke start.
+ */
+const LIJN_SLEUTEL = 'vhb-filmnummers-lijn';
+const leesLijnKeuze = (): string | null => {
+  try {
+    return window.localStorage.getItem(LIJN_SLEUTEL);
+  } catch {
+    return null;
+  }
+};
+const bewaarLijnKeuze = (keuze: string | null): void => {
+  try {
+    if (keuze === null) window.localStorage.removeItem(LIJN_SLEUTEL);
+    else window.localStorage.setItem(LIJN_SLEUTEL, keuze);
+  } catch {
+    /* privémodus of opslag geblokkeerd: de keuze geldt dan tot het scherm sluit */
+  }
+};
+
+/**
  * Filmnummers (01-10): het nummer dat een chauffeur op het bedieningstoestel
  * intoetst om de juiste bestemming op de bus te tonen. Een naslaglijst: zoeken
  * op lijn, bestemming of nummer, of één lijn kiezen. De bestemmingen staan per
@@ -40,8 +65,14 @@ const VERVERS_NA_MS = 10 * 60_000;
 export function FilmnummersView({ magBeheren }: { magBeheren: boolean }) {
   const [lijst, setLijst] = useState<FilmnummerLijst | null>(leesFilmnummersLokaal);
   const [zoek, setZoek] = useState('');
-  // null = alles, '' = de algemene boodschappen, anders één lijn.
-  const [keuze, setKeuze] = useState<string | null>(null);
+  // null = alles, '' = de algemene boodschappen, anders één lijn. Begint op
+  // de keuze van de vorige keer; alleen een tik bewaart (nooit een effect:
+  // zolang de lijst laadt zijn er nog geen lijnen om de keuze aan te toetsen).
+  const [keuze, setKeuzeState] = useState<string | null>(leesLijnKeuze);
+  const setKeuze = (volgende: string | null) => {
+    setKeuzeState(volgende);
+    bewaarLijnKeuze(volgende);
+  };
   const [importBestand, setImportBestand] = useState<File | null>(null);
   const bestandRef = useRef<HTMLInputElement>(null);
 
@@ -52,15 +83,26 @@ export function FilmnummersView({ magBeheren }: { magBeheren: boolean }) {
 
   const items = lijst?.items ?? [];
   const { lijnen } = useMemo(() => verdeelFilmnummers(items), [items]);
-  // Een gekozen lijn die uit de lijst verdween (nieuwe import) is geen filter meer.
-  const filter = keuze && !lijnen.includes(keuze) ? null : keuze;
   const heeftAlgemeen = items.some((f) => f.lijn === '');
+  // Een gekozen lijn die uit de lijst verdween (nieuwe import, of een keuze
+  // van een vorige keer) is geen filter meer: Alle. Idem voor Algemeen zonder
+  // algemene boodschappen, anders stond er een lege lijst zonder actieve chip.
+  const filter = keuze === null || (keuze === '' ? heeftAlgemeen : lijnen.includes(keuze)) ? keuze : null;
   const zichtbaar = useMemo(
     () => verdeelFilmnummers(zoekFilmnummers(items, zoek).filter((f) => filter === null || f.lijn === filter)),
     [items, zoek, filter],
   );
   const gefilterd = zoek.trim() !== '' || filter !== null;
   const wisFilters = () => { setZoek(''); setKeuze(null); };
+
+  // Een onthouden lijn kan buiten beeld staan in de schuivende filterrij: bij
+  // het verschijnen van de rij schuift de gekozen chip naar het midden. Alleen
+  // de rij zelf (scrollLeft), nooit de pagina; bij "Alle" verandert er niets.
+  const toonGekozenChip = useCallback((rij: HTMLDivElement | null) => {
+    const chip = rij?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!rij || !chip) return;
+    rij.scrollLeft += chip.getBoundingClientRect().left - rij.getBoundingClientRect().left - (rij.clientWidth - chip.offsetWidth) / 2;
+  }, []);
 
   const kiesBestand = () => bestandRef.current?.click();
   const bijBestand = (e: ChangeEvent<HTMLInputElement>) => {
@@ -135,6 +177,7 @@ export function FilmnummersView({ magBeheren }: { magBeheren: boolean }) {
                   {/* Eén schuivende regel, zoals de filterrij van een tabel; -m/p
                       van 1 houdt de focusrand binnen de overflow. */}
                   <div
+                    ref={toonGekozenChip}
                     role="group"
                     aria-label="Toon"
                     className="filter-rij filter-rij-rand -m-1 flex items-center gap-1.5 overflow-x-auto p-1 [--filter-rand:var(--gutter)] max-md:mx-gutter-neg max-md:px-gutter [&>*]:shrink-0"
