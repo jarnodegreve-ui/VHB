@@ -277,4 +277,190 @@ describe('Dienstruil: beheertabel op desktop', () => {
     expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'accepted');
     expect(screen.queryByRole('dialog', { name: 'Dienstruil afwijzen?' })).toBeNull();
   });
+
+  // Herstelronde 2: de plaatsgrendel. Ook na de 0,7 s ligt Goedkeuren van de
+  // voet onder de rijknop: wie opnieuw op dezelfde plek klikte ("de eerste klik
+  // pakte niet") keurde goed zonder de rustregels te lezen. De rijknop onthoudt
+  // daarom het punt van de klik; zolang de aanwijzer daar niet weg is geweest,
+  // doet een klik in de voet op dat punt niets. jsdom kent `pointer-events`
+  // niet: de tijdgrendel houdt hier niets tegen, deze tests meten alleen de
+  // plaats. De echte geometrie en de wachttijden staan in de e2e-spec.
+  describe('plaatsgrendel van de voet', () => {
+    const P = { x: 900, y: 560 };
+    type Punt = { x: number; y: number };
+    /** Een klik met een aanwijzer of een vinger: detail 1 en een plaats. De
+     *  `klik` van hierboven is voor de code een toetsenbordklik (detail 0). */
+    const wijs = async (knop: HTMLElement, punt: Punt = P) => {
+      await act(async () => { fireEvent.click(knop, { detail: 1, clientX: punt.x, clientY: punt.y }); });
+    };
+    /** De aanwijzer beweegt, of een vinger raakt het scherm. */
+    const aanwijzer = async (soort: 'pointermove' | 'pointerdown', punt: Punt) => {
+      await act(async () => { window.dispatchEvent(new MouseEvent(soort, { clientX: punt.x, clientY: punt.y, bubbles: true })); });
+    };
+    const openLangsRijknop = async (naam = 'Goedkeuren, bekijk eerst de rusttijd') => {
+      await wijs(tabel().getByRole('button', { name: naam }));
+      return paneel();
+    };
+    const inVoet = (open: HTMLElement, naam: string) => within(open).getByRole('button', { name: naam });
+
+    it('een klik in de voet op (bijna) het punt van de openingsklik doet niets: geen beslissing, geen bevestiging, wel de rustregels in beeld', async () => {
+      const inBeeld = vi.spyOn(Element.prototype, 'scrollIntoView');
+      const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      const open = await openLangsRijknop();
+      expect(inBeeld).not.toHaveBeenCalled();
+      await wijs(inVoet(open, 'Goedkeuren'));
+      await wijs(inVoet(open, 'Goedkeuren'), { x: P.x + 11, y: P.y });
+      await wijs(inVoet(open, 'Afwijzen'), { x: P.x - 8, y: P.y + 8 });
+      await wijs(inVoet(open, 'Wijzigingsgeschiedenis'));
+      expect(onDecide).not.toHaveBeenCalled();
+      // Alleen het paneel: geen bevestiging, geen geschiedenis.
+      expect(screen.getAllByRole('dialog')).toEqual([open]);
+      expect(inBeeld).toHaveBeenCalledTimes(4);
+      expect(inBeeld.mock.contexts.at(-1)).toBe(within(open).getByRole('region', { name: 'Rusttijd' }));
+      expect(inBeeld).toHaveBeenLastCalledWith({ block: 'nearest', behavior: 'smooth' });
+      inBeeld.mockRestore();
+    });
+
+    it('admin, geopend langs Direct goedkeuren: Goedkeuren in de voet op hetzelfde punt opent de bevestiging niet', async () => {
+      const { onDecide } = toonBeheer(ADMIN, [ruil({ status: 'pending', rust: TE_KORT })]);
+      const open = await openLangsRijknop('Direct goedkeuren, bekijk eerst de rusttijd');
+      await wijs(inVoet(open, 'Goedkeuren'));
+      expect(screen.queryByRole('dialog', { name: 'Direct goedkeuren' })).toBeNull();
+      expect(screen.getAllByRole('dialog')).toEqual([open]);
+      expect(onDecide).not.toHaveBeenCalled();
+    });
+
+    it('minder beweging: de rustregels komen zonder schuifanimatie in beeld', async () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('prefers-reduced-motion'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(),
+      }));
+      const inBeeld = vi.spyOn(Element.prototype, 'scrollIntoView');
+      toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      await wijs(inVoet(await openLangsRijknop(), 'Goedkeuren'));
+      expect(inBeeld).toHaveBeenLastCalledWith({ block: 'nearest', behavior: 'auto' });
+      inBeeld.mockRestore();
+    });
+
+    it('een klik op een ander punt gaat gewoon door, vanaf de straal zelf (12 px)', async () => {
+      const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      const open = await openLangsRijknop();
+      await wijs(inVoet(open, 'Goedkeuren'), { x: P.x + 12, y: P.y });
+      expect(onDecide).toHaveBeenCalledTimes(1);
+      expect(onDecide).toHaveBeenCalledWith('r1', 'approved', 'accepted');
+    });
+
+    it('op een ander punt vraagt Afwijzen de bevestiging van de rijknop, zoals voorheen', async () => {
+      const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      await wijs(inVoet(await openLangsRijknop(), 'Afwijzen'), { x: P.x - 60, y: P.y });
+      expect(await screen.findByRole('dialog', { name: 'Dienstruil afwijzen?' })).toBeTruthy();
+      expect(onDecide).not.toHaveBeenCalled();
+    });
+
+    it('na wegbewegen werkt het punt zelf weer; een beweging binnen de straal lost de grendel niet', async () => {
+      const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      const open = await openLangsRijknop();
+      await aanwijzer('pointermove', { x: P.x + 8, y: P.y + 8 });
+      await wijs(inVoet(open, 'Goedkeuren'));
+      expect(onDecide).not.toHaveBeenCalled();
+      // De planner leest de rustregels (de aanwijzer gaat erheen) en komt terug.
+      await aanwijzer('pointermove', { x: P.x - 150, y: P.y - 300 });
+      await aanwijzer('pointermove', P);
+      await wijs(inVoet(open, 'Goedkeuren'));
+      expect(onDecide).toHaveBeenCalledTimes(1);
+      expect(onDecide).toHaveBeenCalledWith('r1', 'approved', 'accepted');
+    });
+
+    it('een aanraking elders lost de grendel ook; een aanraking op het punt zelf niet', async () => {
+      const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      const open = await openLangsRijknop();
+      await aanwijzer('pointerdown', P);
+      await wijs(inVoet(open, 'Goedkeuren'));
+      expect(onDecide).not.toHaveBeenCalled();
+      await aanwijzer('pointerdown', { x: P.x, y: P.y - 200 });
+      await wijs(inVoet(open, 'Goedkeuren'));
+      expect(onDecide).toHaveBeenCalledTimes(1);
+    });
+
+    it('toetsenbord in de voet (detail 0) valt niet onder de plaatsgrendel, ook niet met de plaats van de openingsklik', async () => {
+      const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      const open = await openLangsRijknop();
+      await act(async () => { fireEvent.click(inVoet(open, 'Goedkeuren'), { clientX: P.x, clientY: P.y }); });
+      expect(onDecide).toHaveBeenCalledTimes(1);
+      expect(onDecide).toHaveBeenCalledWith('r1', 'approved', 'accepted');
+    });
+
+    it('geopend met Enter of spatie: de focus staat op het paneel, niet op een knop die beslist, en er is geen plaatsgrendel', async () => {
+      const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+      // Enter of spatie op de rijknop geeft een klik met detail 0 op (0, 0).
+      await klik(tabel().getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd' }));
+      const open = await paneel();
+      expect(document.activeElement).toBe(open);
+      expect(onDecide).not.toHaveBeenCalled();
+      await wijs(inVoet(open, 'Goedkeuren'), { x: 0, y: 0 });
+      expect(onDecide).toHaveBeenCalledTimes(1);
+    });
+
+    describe('opruiming', () => {
+      /** Luisteraars op window voor de aanwijzer die er nog hangen. */
+      const bespied = () => {
+        const erbij = vi.spyOn(window, 'addEventListener');
+        const eraf = vi.spyOn(window, 'removeEventListener');
+        const hangend = () => erbij.mock.calls
+          .filter(([soort, fn]) => /^pointer(move|down)$/.test(soort) && !eraf.mock.calls.some(([s, f]) => s === soort && f === fn))
+          .map(([soort]) => soort).sort();
+        return { hangend, klaar: () => { erbij.mockRestore(); eraf.mockRestore(); } };
+      };
+
+      it('het paneel sluiten wist de grendel en haalt de luisteraars van window; via de naam werkt het oude punt meteen', async () => {
+        const { hangend, klaar } = bespied();
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const open = await openLangsRijknop();
+        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        await klik(within(open).getByRole('button', { name: 'Sluiten' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 });
+        expect(hangend()).toEqual([]);
+
+        await klik(tabel().getByTitle('Details bekijken'));
+        await wijs(inVoet(await paneel(), 'Goedkeuren'));
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(hangend()).toEqual([]);
+        klaar();
+      });
+
+      it('wegbewegen haalt de luisteraars weg; het scherm verlaten met de grendel aan ook', async () => {
+        const { hangend, klaar } = bespied();
+        const { unmount } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const open = await openLangsRijknop();
+        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        await aanwijzer('pointermove', { x: P.x + 40, y: P.y });
+        expect(hangend()).toEqual([]);
+
+        // Dicht en opnieuw langs de rijknop: de grendel staat er weer, het scherm verdwijnt.
+        await klik(within(open).getByRole('button', { name: 'Sluiten' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 });
+        await openLangsRijknop();
+        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        unmount();
+        expect(hangend()).toEqual([]);
+        klaar();
+      });
+
+      it('toont het paneel een andere ruil, dan geldt de grendel van de vorige niet meer', async () => {
+        const { hangend, klaar } = bespied();
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT }), ruil({ id: 'r2', shiftLine: '2606', rust: TE_KORT })]);
+        const rij = (dienst: string) => within(screen.getAllByRole('row').find((r) => r.textContent?.includes(`Dienst ${dienst}`))!);
+        await wijs(rij('2505').getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd' }));
+        await paneel();
+        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        // In het echt een link of de terugknop; jsdom kent de achtergrond van
+        // het paneel niet, dus de naam van de andere rij is hier aanklikbaar.
+        await klik(rij('2606').getByTitle('Details bekijken'));
+        expect(hangend()).toEqual([]);
+        await wijs(inVoet(await paneel(), 'Goedkeuren'));
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(onDecide).toHaveBeenCalledWith('r2', 'approved', 'accepted');
+        klaar();
+      });
+    });
+  });
 });
