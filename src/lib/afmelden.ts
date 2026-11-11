@@ -28,8 +28,10 @@
  *
  * Buiten Cache Storage staat er verder niets persoonlijks op het toestel dat
  * een volgende gebruiker te zien krijgt: localStorage bevat voorkeuren en
- * tijdstempels per gebruikers-id en bedrijfsbrede lijsten (filmnummers,
- * ritblad-metadata); IndexedDB gebruikt het portaal niet.
+ * tijdstempels per gebruikers-id, bedrijfsbrede lijsten (filmnummers,
+ * ritblad-metadata) en voorkeuren van het toestel zelf (de laatst gekozen
+ * filmlijn, `vhb-filmnummers-lijn`: geen gegevens, blijft dus staan bij
+ * uitloggen); IndexedDB gebruikt het portaal niet.
  */
 
 /** Voorvoegsel van de build-gestempelde schil-cache (`CACHE_NAME` in public/sw.js). */
