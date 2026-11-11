@@ -20,13 +20,22 @@ export const ritbladMetaPad = (datum?: string | null): string => (datum ? `/api/
  * Sinds 13-10 hoort een bundel bij een dag: de dienstregelingversie die op
  * die dag geldt (`datum`, ISO; zonder = vandaag). De gebeurtenis draagt de
  * dag mee, zodat het rooster ook het blad van volgende week kan openen.
+ *
+ * Sinds ronde 6 (11-11) draagt ze ook de dienstnummers mee waarvoor het blad
+ * gevraagd is: de viewer start dan op de pagina's van die dienst, zoals op
+ * Mijn dag. Zonder nummers = de hele bundel, zoals voorheen.
  */
 export const RITBLAD_BUNDEL_EVENT = 'vhb-ritblad-bundel';
-export type RitbladBundelDetail = { datum?: string };
+export type RitbladBundelDetail = { datum?: string; dienstnummer?: string[] };
 
-const toonBundelInApp = (datum?: string): boolean => {
+/** Een dienstnummer waarop de viewer een blad kan zoeken: drie of vier cijfers
+ *  (zelfde vorm als de dienstcodes in shared/coverageGaps.ts). Een code-dienst
+ *  of "--" zou alleen "geen apart blad gevonden" en een foutrapport geven. */
+const RITBLAD_NUMMER = /^\d{3,4}$/;
+
+const toonBundelInApp = (datum?: string, dienstnummer?: string[]): boolean => {
   if (typeof window === 'undefined') return false;
-  const gebeurtenis = new CustomEvent<RitbladBundelDetail>(RITBLAD_BUNDEL_EVENT, { cancelable: true, detail: { datum } });
+  const gebeurtenis = new CustomEvent<RitbladBundelDetail>(RITBLAD_BUNDEL_EVENT, { cancelable: true, detail: { datum, dienstnummer } });
   // De luisteraar bevestigt met preventDefault dat hij de viewer opent.
   return !window.dispatchEvent(gebeurtenis);
 };
@@ -37,9 +46,14 @@ const toonBundelInApp = (datum?: string): boolean => {
  * De metadata wordt pas bij het klikken opgehaald: het rooster hoeft er niet
  * op te wachten, en offline serveert de service worker de PDF vanuit zijn
  * cache onder dezelfde query-loze URL.
+ *
+ * `dienstnummers`: de diensten van die dag (het rooster geeft ze mee). Alleen
+ * bruikbare nummers gaan naar de viewer; blijft er geen over, dan opent de
+ * hele bundel.
  */
-export async function openRitblad(datum?: string): Promise<void> {
-  if (toonBundelInApp(datum)) return;
+export async function openRitblad(datum?: string, dienstnummers?: readonly string[]): Promise<void> {
+  const bruikbaar = [...new Set((dienstnummers ?? []).map((n) => n.trim()).filter((n) => RITBLAD_NUMMER.test(n)))];
+  if (toonBundelInApp(datum, bruikbaar.length > 0 ? bruikbaar : undefined)) return;
   return openRitbladExtern(datum);
 }
 

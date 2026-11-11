@@ -155,6 +155,77 @@ test.describe('smoke: ingelogde chauffeur', () => {
 });
 
 /**
+ * Komende diensten per dag (ronde 6, 11-11). Het paneel nam de eerste drie
+ * planningsrijen, en een gesplitste dienst vult er twee. Nu één rij per dag
+ * met de uren van alle delen. Alleen dagen ná vandaag in de fixture, zodat het
+ * uur van de dag niet meespeelt.
+ */
+test.describe('chauffeursdashboard: komende diensten per dag', () => {
+  const deel = (id: string, dag: number, startTime: string, endTime: string, line: string, loopnr: string) =>
+    ({ id, date: dayOffset(dag), startTime, endTime, line, busNumber: '', loopnr, driverId: CHAUFFEUR.id });
+  // Morgen twee delen, overmorgen drie, dan twee gewone dagen: vijf rijen vóór de derde dag.
+  const PLANNING = [
+    deel('a1', 1, '06:58', '09:48', '2609', '4588'), deel('a2', 1, '14:58', '18:48', '2609', '4688'),
+    deel('b1', 2, '05:10', '07:40', '2304', '4500'), deel('b2', 2, '09:15', '12:05', '2304', '4611'), deel('b3', 2, '15:45', '19:35', '2304', '4702'),
+    deel('c1', 3, '08:48', '16:58', '4609', '4688'),
+    deel('d1', 4, '06:12', '14:30', '4101', '4500'),
+  ];
+  async function open(page: Page) {
+    await seedSessionAndApi(page);
+    // Na de seed gezet, dus eerst aan de beurt: alleen de planning is anders.
+    await page.route((url) => url.pathname.endsWith('/api/planning'), (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PLANNING) }));
+    await page.goto('/');
+    const paneel = page.locator('div.surface-card').filter({ has: page.getByRole('heading', { name: 'Komende diensten' }) });
+    await expect(paneel).toBeVisible({ timeout: 15_000 });
+    return paneel.getByRole('button').filter({ hasNotText: 'Mijn rooster' });
+  }
+
+  test('drie dagen, één rij per dag, met de uren van alle delen en het dienstnummer', async ({ page }) => {
+    const rijen = await open(page);
+    await expect(rijen).toHaveCount(3);
+    await expect(rijen.nth(0)).toContainText('06:58–09:48 · 14:58–18:48');
+    await expect(rijen.nth(0)).toContainText('2609');
+    await expect(rijen.nth(1)).toContainText('05:10–07:40 · 09:15–12:05 · 15:45–19:35');
+    await expect(rijen.nth(1)).toContainText('2304');
+    // Eén deel houdt zijn loopnummer; bij een gesplitste dienst vallen ze weg.
+    await expect(rijen.nth(2)).toContainText('08:48–16:58 · loop 4688');
+    await expect(rijen.nth(0)).not.toContainText('loop');
+    await expect(rijen.nth(1)).not.toContainText('loop');
+    // De vierde dag valt buiten de drie.
+    await expect(rijen.filter({ hasText: '4101' })).toHaveCount(0);
+    // Een rij brengt je naar het rooster, zoals voorheen.
+    await rijen.nth(0).click();
+    await expect(page).toHaveURL(/\/rooster$/);
+  });
+
+  for (const breedte of [375, 360]) {
+    test(`op ${breedte} px wordt geen uur afgekapt: de regel loopt om tussen de tijdvakken, nooit erin`, async ({ page }) => {
+      await page.setViewportSize({ width: breedte, height: 800 });
+      const rijen = await open(page);
+      await expect(rijen).toHaveCount(3);
+      const meting = await rijen.evaluateAll((els) => els.map((rij) => {
+        const spans = [...rij.querySelectorAll('span')];
+        const vakken = spans.filter((s) => s.children.length === 0 && /^\d\d:\d\d–\d\d:\d\d$/.test(s.textContent ?? ''));
+        return {
+          vakken: vakken.length,
+          // Elk tijdvak staat op één lijn (één rechthoek) en binnen de rij.
+          heel: vakken.every((s) => s.getClientRects().length === 1 && s.getBoundingClientRect().right <= rij.getBoundingClientRect().right),
+          // Geen enkel vak in de rij knipt zijn inhoud af.
+          afgekapt: spans.some((s) => s.scrollWidth > s.clientWidth + 1 && getComputedStyle(s).overflowX !== 'visible'),
+        };
+      }));
+      expect(meting).toEqual([
+        { vakken: 2, heel: true, afgekapt: false },
+        { vakken: 3, heel: true, afgekapt: false },
+        { vakken: 1, heel: true, afgekapt: false },
+      ]);
+      const breder = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+      expect(breder, 'het dashboard scrollt horizontaal').toBe(false);
+    });
+  }
+});
+
+/**
  * Zelfde rooktest voor het ADMIN-dashboard (ops-cockpit). Bestond niet — en
  * precies daardoor glipte een React-#310 (hooks na de skeleton-return) naar
  * productie: de chauffeurstest bleef groen terwijl de admin-variant crashte.

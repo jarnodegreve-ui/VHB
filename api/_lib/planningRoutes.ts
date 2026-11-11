@@ -16,6 +16,7 @@ import { isMissingTableError } from "./deviceGate.js";
 import { berekenCelWaarheid } from "./celWaarheid.js";
 import { heropbouwPlanning, reapplyApprovedSwaps, replayTekst } from "./planningHeropbouw.js";
 import { gewijzigdeDagenPerChauffeur, importPushTekst, roosterDagAfdrukken, verstuurRoosterPushes } from "./roosterMelding.js";
+import { dienstToegewezenTekst } from "./meldingTeksten.js";
 import { berekenVerwachtingsCheck } from "./coverageRoutes.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
@@ -236,7 +237,9 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
     await sendPushToUsers([driverId], {
       title: "Dienst toegewezen",
       soort: "planning",
-      body: `Je rijdt dienst ${service.serviceNumber} op ${DAG_DMJ(date)}. Bekijk je rooster.`,
+      // Weekdag, datum en de uren van elk deel: de rijen die hierboven op naam
+      // van de chauffeur in de planning gezet zijn (meldingTeksten.ts).
+      body: dienstToegewezenTekst({ dienst: service.serviceNumber, datum: date, delen: nieuweRijen }),
       url: viewUrl("rooster"),
     });
     return { rows: nieuweRijen.length, serviceNumber: String(service.serviceNumber), driverName: driver.name, date };

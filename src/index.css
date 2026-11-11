@@ -47,6 +47,25 @@
 @media (prefers-reduced-motion: reduce) {
   .vhb-streep-veeg { animation: none; stroke-dashoffset: 0; }
 }
+/* Op een bezige gouden knop (Button primary, IconButton primary; ronde 6)
+   heeft de gouden veeg de kleur van het vlak zelf. Zolang de hoofdknop
+   tijdens het wachten grijs werd, viel dat niet op. Nu hij goud blijft, zou
+   de band het spoor alleen wegvegen en bleef er met "minder beweging" (veeg
+   vol) niets te zien. Daar tekent de streep daarom in de tekstkleur van de
+   knop, inkt op goud zoals de huisstijl voorschrijft (zelfde ingreep als de
+   focusring op goud): de veeg vol, het spoor op een vijfde zoals het witte
+   spoor op donker. Alleen met aria-busy, dus geen andere spinner verandert.
+   Twee regels: wie :has() niet kent, houdt minstens de veeg in inkt.
+   Hetzelfde op de amber knop (Button warning, de bevestigknop van
+   ConfirmationModal): goud op amber is 1,3:1, met "minder beweging" stond
+   daar tijdens het wachten een knop zonder zichtbare spinner. */
+:is(.btn-primary, .bg-oker-500, .bg-amber-500)[aria-busy="true"] .vhb-streep-veeg {
+  stroke: currentColor;
+}
+:is(.btn-primary, .bg-oker-500, .bg-amber-500)[aria-busy="true"] path:has(+ .vhb-streep-veeg) {
+  fill: currentColor;
+  fill-opacity: 0.2;
+}
 
 /* Class-based dark mode: laat Tailwind `dark:`-utilities de app-toggle
    (.dark op <html>) volgen i.p.v. de OS-voorkeur (prefers-color-scheme).
@@ -381,6 +400,31 @@
      lichter dan --elev-1 (kaart). */
   --elev-pil: 0 1px 2px rgba(13, 13, 15, 0.08);
 
+  /* === Browserdetails (ronde 6) ===
+     Duim van de schuifbalk: één token per thema, gelezen door scrollbar-color
+     én door ::-webkit-scrollbar-thumb (@layer base). Tot ronde 6 had alleen
+     de webkit-duim een donkere waarde, en die regel negeren Chrome en Edge
+     (121+) en Firefox zodra scrollbar-color gezet is: in donker stond er een
+     lichtgrijze duim op zwart. */
+  --schuifbalk-duim: rgba(205, 209, 213, 0.6);
+  /* Selectie: een zachte goudtint met een vaste tekstkleur erop, zodat
+     geselecteerde tekst op elk vlak leesbaar is (ook witte tekst op een
+     donkere knop of op het altijd-donkere inlogscherm). Licht: de 200-trede
+     van goud met inkt erop, 13,3:1. De tekstkleur is slate-900 en flipt dus
+     vanzelf naar licht in donker (daar 8,8:1 op het donkere goud).
+     99 % dekking, niet 100: Safari maakt een volledig dekkende
+     ::selection-kleur zelf doorschijnend (gemeten in WebKit: de 200-trede
+     werd op het donkere inlogscherm 145,123,77, inkt haalde daar nog
+     4,4:1); een kleur die al een alfa draagt blijft zoals ze hier staat. */
+  --selectie-vlak: color-mix(in srgb, var(--color-oker-200) 99%, transparent);
+  --selectie-tekst: var(--color-slate-900);
+  /* Over een beeld (afbeelding, ingebedde PDF, QR-code, ritblad) tekent de
+     browser de selectiekleur óver het beeld zelf: het bijna dekkende vlak
+     hierboven maakte er een effen goud blok van. Daar dus de doorschijnende
+     tint, zodat het beeld leesbaar blijft. Eén waarde voor beide thema's
+     (goud wordt in donker niet gespiegeld). */
+  --selectie-beeld: color-mix(in srgb, var(--color-oker-500) 30%, transparent);
+
   /* === Elevation-ladder (golf 2, punt 2: één oppervlaksysteem) ===
      Vijf treden, per trede één schaduw en één randkleur (--elev-N-rim):
        0  vlak: geen schaduw, alleen de hairline (rij, ingezonken vlak)
@@ -473,10 +517,28 @@ html.dark {
   --laag-segmented: rgba(17, 18, 20, 0.7);
   --rand-segmented: rgba(255, 255, 255, 0.07);
   --schaduw-segmented: inset 0 1px 2px rgba(0, 0, 0, 0.3);
-  --laag-gedempt: rgba(23, 24, 26, 0.6);
+  /* Gedempt vlak in donker (ronde 6): een fractie wit over wat eronder ligt.
+     De vroegere waarde, rgba(23, 24, 26, 0.6), had het RGB van de kaart:
+     boven op een kaart bleef van `.surface-muted` (Card tone="muted", Stat,
+     EmptyState) alleen het randje over. Wit-alfa werkt relatief aan de
+     ouder: op een kaart, in een venster en rechtstreeks op het canvas is het
+     telkens één trede lichter dan wat eronder ligt. Zie de berekening bij
+     de test (src/components/primitives.test.tsx). */
+  --laag-gedempt: rgba(255, 255, 255, 0.04);
   --rand-gedempt: rgba(255, 255, 255, 0.06);
   --rand-fijn: rgba(154, 161, 169, 0.12);
   --elev-pil: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --schuifbalk-duim: rgba(110, 118, 127, 0.55);
+  /* Selectie in donker: dezelfde 200-trede (30 % goud) op de kaartlaag, met
+     de lichte tekst die slate-900 hier is. Dekkend gemengd en niet de
+     doorschijnende tint zelf, anders staat de lichte tekst op een gouden of
+     lichte knop op licht. Daarbuiten dezelfde 99 % dekking als in :root.
+     Als vaste kleur geschreven: 70 % --laag-kaart (23, 24, 26) + 30 %
+     oker-500 (226, 163, 35) = (84, 66, 29). Als geneste color-mix gaf de
+     bouwstap er voor een browser zonder color-mix de kaartlaag zelf als
+     terugval bij, en daarmee een selectie die op een kaart niet te zien was.
+     De knoptest rekent de waarde na uit de twee tokens. */
+  --selectie-vlak: rgba(84, 66, 29, 0.99);
 
   /* --tile-bg/--tile-border/--tile-shadow volgen de ladder (zie :root);
      alleen de zachte skeleton-variant heeft hier nog een eigen alpha. */
@@ -692,7 +754,8 @@ html.dark {
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(205, 209, 213, 0.6) transparent;
+    /* Duim per thema via het token (:root / html.dark). */
+    scrollbar-color: var(--schuifbalk-duim) transparent;
     /* Standaard randkleur (was shadcn's `border-border`, nu expliciet):
        kale `border`-utilities zonder kleurklasse krijgen de haarlijn-kleur
        i.p.v. currentColor. (De outline-color die hier stond was dood: de
@@ -709,8 +772,38 @@ html.dark {
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: rgba(205, 209, 213, 0.6);
+    background-color: var(--schuifbalk-duim);
     border-radius: 999px;
+  }
+
+  /* Selectie: goudtint en tekstkleur per thema (tokens in :root / html.dark). */
+  ::selection {
+    background-color: var(--selectie-vlak);
+    color: var(--selectie-tekst);
+  }
+  /* Een beeld in de selectie (Ctrl+A, of slepen door een update met een
+     ingebedde PDF) blijft zichtbaar onder een doorschijnende tint. */
+  :is(img, canvas, iframe, video, embed, object)::selection {
+    background-color: var(--selectie-beeld);
+  }
+
+  /* Aanwijzer (ronde 6): wat je kunt aanklikken toont het handje. Tailwind v4
+     geeft een knop de pijl; 22 plekken zetten daarom zelf `cursor-pointer` en
+     de andere knoppen deden het zonder. Bewust in de base-laag: een utility
+     (cursor-not-allowed, cursor-wait, cursor-default, cursor-progress) wint
+     daardoor altijd. Wat uitgeschakeld is valt buiten de lijst en houdt de
+     aanwijzer die het had. Dat geldt ook voor een label: met `for` hoort het
+     bij het veld dat erop volgt (Field) en krijgt het geen handje zodra daar
+     iets uitgeschakeld staat; de laatste regel is een label rond zijn invoer
+     (vinkje, bestandskiezer). */
+  button:not(:disabled, [aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  a[href],
+  select:not(:disabled),
+  label[for]:not(:has(~ :disabled, ~ * :disabled)),
+  label:has(:is(input, select, textarea):not(:disabled)) {
+    cursor: pointer;
   }
 }
 
@@ -1100,9 +1193,9 @@ html.dark {
 
   /* Achter de pointer-fine-guard: zonder guard bleef de hover-staat op iOS
      plakken ná een tik op elke secondary-knop (zelfde les als .ios-pressable
-     hieronder; controle-ronde 20-08). */
+     hieronder; controle-ronde 20-08). Niet tijdens bezig, zie .ios-pressable. */
   @media (hover: hover) and (pointer: fine) {
-    .control-button-soft:hover {
+    .control-button-soft:hover:where(:not([aria-busy="true"])) {
       background: var(--laag-knop-zacht-hover);
       border-color: var(--rand-knop-zacht-hover);
       box-shadow: var(--schaduw-knop-zacht-hover);
@@ -1159,15 +1252,22 @@ html.dark {
      tikte — en scale() op tekst geeft in WebKit een korte onscherpe
      herrastering. Tailwind wrapt zijn eigen hover:-varianten al zo; deze
      handgeschreven regels stonden er nog buiten. */
+  /* Niet tijdens bezig (ronde 6): een knop die op de server wacht
+     (`aria-busy="true"`: Button en IconButton met `bezig`) blijft liggen,
+     zonder optillen en zonder pressed-schaal. Dat regelt `disabled` niet
+     vanzelf: Chromium en WebKit matchen :hover en :active ook op een
+     uitgeschakelde knop (gemeten). De uitsluiting staat in :where(), dat
+     niets aan de specificiteit toevoegt: voor alles wat niet bezig is blijft
+     elke regel hier precies even zwaar en in dezelfde volgorde als vroeger. */
   @media (hover: hover) and (pointer: fine) {
-    .ios-pressable:hover {
+    .ios-pressable:hover:where(:not([aria-busy="true"])) {
       /* Alleen nog 1 px optillen: de schaalsprong van 1 % op elke knop en rij
          las als speels (ronde 3, 19-09). */
       transform: translateY(-1px);
     }
   }
 
-  .ios-pressable:active {
+  .ios-pressable:active:where(:not([aria-busy="true"])) {
     transform: scale(0.985);
     transition-duration: var(--duration-fast);
   }
@@ -1272,7 +1372,14 @@ html.dark {
       background var(--duration-base) var(--ease-standard);
   }
 
-  .btn-primary:hover {
+  /* Hover, pressed en uitgeschakeld gelden niet tijdens bezig (ronde 6,
+     `aria-busy="true"`): de hoofdknop blijft goud terwijl hij op de server
+     wacht. Tot dan werd hij een grijs, half doorzichtig blok en las hij als
+     uitgeschakeld of mislukt (inlogscherm). Zelfde :where()-uitsluiting als
+     bij .ios-pressable: de specificiteit blijft (0,2,0), dus voor een knop
+     die echt uitgeschakeld is wint :disabled nog altijd van :hover en
+     :active (later in de bron) en ziet hij eruit zoals vroeger. */
+  .btn-primary:hover:where(:not([aria-busy="true"])) {
     background: var(--color-oker-400);
     box-shadow:
       inset 0 0 0 1px rgba(122, 78, 12, 0.34),
@@ -1280,11 +1387,11 @@ html.dark {
       0 2px 6px rgba(13, 13, 15, 0.14);
   }
 
-  .btn-primary:active {
+  .btn-primary:active:where(:not([aria-busy="true"])) {
     transform: scale(0.98);
   }
 
-  .btn-primary:disabled {
+  .btn-primary:disabled:where(:not([aria-busy="true"])) {
     /* Via tokens, zodat de uitgeschakelde hoofdknop mee flipt naar dark mode;
        hardgecodeerd grijs werd daar een lichtgrijs blok op carbon. */
     background: var(--color-surface-muted);
@@ -1423,9 +1530,9 @@ html.dark {
   color: #E4E6E8;
 }
 
-:where(.dark) *::-webkit-scrollbar-thumb {
-  background-color: rgba(110, 118, 127, 0.55);
-}
+/* (De donkere duim van de schuifbalk stond hier als override op
+   ::-webkit-scrollbar-thumb; sinds ronde 6 is het het token --schuifbalk-duim
+   in html.dark, dat ook scrollbar-color leest.) */
 
 /* --- Oppervlakklassen (dark) --- */
 
@@ -1556,7 +1663,8 @@ html.login-donker {
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     0 1px 2px rgba(0, 0, 0, 0.35);
 }
-.panel-login-dark .btn-primary:hover {
+/* Niet tijdens bezig (aria-busy), zoals .btn-primary:hover zelf. */
+.panel-login-dark .btn-primary:hover:where(:not([aria-busy="true"])) {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 2px 6px rgba(0, 0, 0, 0.4);

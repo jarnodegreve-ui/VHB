@@ -119,6 +119,103 @@ describe('Filmnummers: de lijst', () => {
   });
 });
 
+describe('Filmnummers: de laatst gekozen lijn blijft op het toestel (11-11)', () => {
+  const LIJN_SLEUTEL = 'vhb-filmnummers-lijn';
+  const gekozen = () => screen.getAllByRole('button', { pressed: true }).map((k) => k.textContent);
+
+  it('een gekozen lijn staat er de volgende keer weer; Alle wist de keuze', async () => {
+    apiJsonMock.mockResolvedValue(LIJST);
+    const eerste = render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Brugge Station');
+    expect(localStorage.getItem(LIJN_SLEUTEL)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Lijn 871' }));
+    expect(localStorage.getItem(LIJN_SLEUTEL)).toBe('871');
+    eerste.unmount();
+
+    // Het scherm opnieuw openen: de lijn staat aan, zonder tik.
+    const tweede = render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Aalter Europalaan');
+    expect(gekozen()).toEqual(['871']);
+    expect(codesIn('Bestemmingen')).toEqual(['8714']);
+    expect(screen.queryByRole('list', { name: 'Algemeen' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alle' }));
+    expect(localStorage.getItem(LIJN_SLEUTEL)).toBeNull();
+    tweede.unmount();
+    render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Brugge Station');
+    expect(gekozen()).toEqual(['Alle']);
+    expect(codesIn('Bestemmingen')).toHaveLength(4);
+  });
+
+  it('ook Algemeen wordt onthouden, en "Wis filters" wist de keuze', async () => {
+    apiJsonMock.mockResolvedValue(LIJST);
+    const eerste = render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Brugge Station');
+    fireEvent.click(screen.getByRole('button', { name: 'Algemeen' }));
+    expect(localStorage.getItem(LIJN_SLEUTEL)).toBe('');
+    eerste.unmount();
+
+    render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Stelplaats');
+    expect(gekozen()).toEqual(['Algemeen']);
+    expect(screen.queryByRole('list', { name: 'Bestemmingen' })).toBeNull();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Zoek in de filmnummers' }), { target: { value: 'bestaat niet' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Wis filters' }));
+    expect(localStorage.getItem(LIJN_SLEUTEL)).toBeNull();
+    expect(gekozen()).toEqual(['Alle']);
+  });
+
+  it('een bewaarde lijn die niet meer bestaat valt terug op Alle, zonder lege lijst', async () => {
+    localStorage.setItem(LIJN_SLEUTEL, '999');
+    apiJsonMock.mockResolvedValue(LIJST);
+    render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Brugge Station');
+    expect(gekozen()).toEqual(['Alle']);
+    expect(codesIn('Bestemmingen')).toHaveLength(4);
+    expect(codesIn('Algemeen')).toEqual(['1', '94']);
+    expect(screen.queryByText('Geen filmnummer gevonden')).toBeNull();
+  });
+
+  it('bewaard Algemeen zonder algemene boodschappen in de lijst: ook Alle', async () => {
+    localStorage.setItem(LIJN_SLEUTEL, '');
+    apiJsonMock.mockResolvedValue({ ...LIJST, items: LIJST.items.filter((f) => f.lijn !== '') });
+    render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Brugge Station');
+    expect(gekozen()).toEqual(['Alle']);
+    expect(codesIn('Bestemmingen')).toHaveLength(4);
+  });
+
+  it('de keuze overleeft het laden: tijdens het skelet wordt ze niet gewist', async () => {
+    // Geen kopie op het toestel: de lijnen zijn er pas na het antwoord van de server.
+    localStorage.setItem(LIJN_SLEUTEL, '50');
+    let antwoord!: (waarde: unknown) => void;
+    apiJsonMock.mockReturnValue(new Promise((resolve) => { antwoord = resolve; }));
+    render(<FilmnummersView magBeheren={false} />);
+    expect(localStorage.getItem(LIJN_SLEUTEL)).toBe('50');
+    antwoord(LIJST);
+    await screen.findByText('Brugge Station');
+    expect(localStorage.getItem(LIJN_SLEUTEL)).toBe('50');
+    expect(gekozen()).toEqual(['50']);
+    expect(codesIn('Bestemmingen')).toEqual(['5000', '5004']);
+  });
+
+  it('geblokkeerde opslag (privémodus): het scherm werkt, de keuze geldt tot het sluit', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => { throw new Error('SecurityError'); },
+      setItem: () => { throw new Error('SecurityError'); },
+      removeItem: () => { throw new Error('SecurityError'); },
+    });
+    apiJsonMock.mockResolvedValue(LIJST);
+    render(<FilmnummersView magBeheren={false} />);
+    await screen.findByText('Brugge Station');
+    fireEvent.click(screen.getByRole('button', { name: 'Lijn 871' }));
+    expect(gekozen()).toEqual(['871']);
+    expect(codesIn('Bestemmingen')).toEqual(['8714']);
+  });
+});
+
 describe('Filmnummers: de kopie op het toestel', () => {
   it('staat er meteen, vóór de server antwoordt, en wordt daarna ververst', async () => {
     localStorage.setItem(SLEUTEL, JSON.stringify({ ...LIJST, items: LIJST.items.slice(0, 3) }));

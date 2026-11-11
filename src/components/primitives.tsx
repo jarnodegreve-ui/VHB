@@ -54,8 +54,9 @@ const BUTTON_SIZES: Record<ButtonSize, string> = {
 };
 
 /** Spinner-spoor per variant: donkere solide knoppen het lichte spoor, de
- *  rest het slate-spoor (op goud leest het lichte spoor met de gouden veeg
- *  als een wisser, dat volstaat). */
+ *  rest het slate-spoor. Op een bezige gouden of amber knop tekent de streep
+ *  in de tekstkleur van de knop (index.css, bij .vhb-streep-veeg): goud op
+ *  goud of op amber was niet te zien. */
 const SPINNER_TONE: Record<ButtonVariant, 'licht' | 'donker'> = {
   primary: 'licht',
   secondary: 'licht',
@@ -76,7 +77,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
   iconRechts?: ReactNode;
   /** Bezig (aanmelden, opslaan): uitgeschakeld + aria-busy; het label blijft
    *  staan (geen breedtesprong) en het icoonslot cross-fadet naar een
-   *  BrandSpinner. Zonder icoon krijgt de spinner een eigen slot links. */
+   *  BrandSpinner. Zonder icoon krijgt de spinner een eigen slot links. De
+   *  knop houdt de kleuren van zijn variant: bezig is geen "uitgeschakeld". */
   bezig?: boolean;
   /** Volle breedte (formulieren, kaart-acties). */
   full?: boolean;
@@ -114,7 +116,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
       aria-busy={bezig || undefined}
       className={cn(
         'ios-pressable inline-flex items-center justify-center font-semibold',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        // Bezig draagt de uitgeschakelde look niet (ronde 6): een grijs, half
+        // doorzichtig vlak las als "uitgeschakeld" of "mislukt". `disabled`
+        // blijft staan (geen dubbele tik); alleen de aanwijzer zegt "even
+        // wachten". Het grijs van .btn-primary:disabled, de hover-lift en de
+        // pressed-schaal sluit index.css uit op aria-busy.
+        bezig ? 'cursor-progress' : 'disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_VARIANTS[variant],
         BUTTON_SIZES[size],
         full && 'w-full',
@@ -470,7 +477,8 @@ export const IconButton = forwardRef<HTMLButtonElement, Omit<ButtonHTMLAttribute
   label: string;
   variant?: IconButtonVariant;
   size?: IconButtonSize;
-  /** Bezig: uitgeschakeld + aria-busy, het icoon maakt plaats voor de spinner (zoals Button). */
+  /** Bezig: uitgeschakeld + aria-busy, het icoon maakt plaats voor de spinner
+   *  en de knop houdt de kleuren van zijn variant (zoals Button). */
   bezig?: boolean;
   children: ReactNode;
 }>(function IconButton({ label, variant = 'ghost', size = 'md', bezig = false, className, children, type = 'button', disabled, ...rest }, ref) {
@@ -484,7 +492,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Omit<ButtonHTMLAttribute
       title={rest.title ?? label}
       className={cn(
         'ios-pressable inline-flex shrink-0 items-center justify-center transition-colors',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        bezig ? 'cursor-progress' : 'disabled:cursor-not-allowed disabled:opacity-50',
         ICON_BUTTON_VARIANTS[variant],
         ICON_BUTTON_SIZES[size],
         className,
