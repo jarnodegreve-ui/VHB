@@ -237,7 +237,9 @@ export function AppSchil({
       )}
       {bundel && (
         <Suspense fallback={null}>
-          <LazyRitbladViewer dienstnummer="" alles datum={bundel.datum} open onClose={() => setBundel(null)} />
+          {/* Met dienstnummers (het rooster) start de viewer op het blad van die
+              dienst; zonder = de hele bundel (Ritbladen), zoals voorheen. */}
+          <LazyRitbladViewer dienstnummer={bundel.dienstnummer ?? ''} alles={!bundel.dienstnummer} datum={bundel.datum} open onClose={() => setBundel(null)} />
         </Suspense>
       )}
       {/* De schermvullende dimmer "Gegevens verwerken…" is in fase 2 (22-09)

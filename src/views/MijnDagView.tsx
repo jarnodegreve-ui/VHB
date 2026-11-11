@@ -20,6 +20,7 @@ import { Badge, Button, Chip, Segmented } from '../components/primitives';
 import { Verwissel } from '../components/Verwissel';
 import { RichtingWissel } from '../components/RichtingWissel';
 import { overgangActief } from '../lib/overgang';
+import { navigeer } from '../app/router';
 import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
@@ -199,8 +200,12 @@ export function MijnDagView({
   );
   const laatsteWeekdag = isOffset(now, MIJN_WEEK_DAGEN - 1);
 
-  // Mijn dag gaat over vandaag: alleen omleidingen die nu echt lopen.
-  const liveOmleidingen = lopendeDiversions(diversions);
+  // Alleen omleidingen die op de gekozen dag lopen (11-11): op Morgen stonden
+  // die van vandaag, ook wat vandaag eindigt, en niet wat morgen start. Op
+  // Vandaag blijft het de kalenderdag van nu, ook tijdens een nachtdienst van
+  // gisteren (de peildag is dan gisteren, maar wat nu geldt telt); Morgen
+  // rekent met de dag die het scherm toont.
+  const liveOmleidingen = lopendeDiversions(diversions, isVandaag ? vandaag : peildag);
 
   // Ritblad alvast in de offline-cache zetten zodra er vandaag of morgen een
   // dienst is (de bundel is gedeeld; de SW sleutelt op het pad). Eén keer
@@ -439,7 +444,7 @@ export function MijnDagView({
         <section aria-label="Omleidingen" className="space-y-2">
           <div className="flex items-baseline justify-between px-1">
             <h2 className="text-card-title">Omleidingen</h2>
-            <span className="text-xs font-medium text-slate-500">{liveOmleidingen.length} actief</span>
+            <span className="text-xs font-medium text-slate-500">{liveOmleidingen.length} {isVandaag ? 'actief' : 'morgen'}</span>
           </div>
           <div className="space-y-1.5">
             {liveOmleidingen.map((d) => (
@@ -449,7 +454,9 @@ export function MijnDagView({
                 badges={<LijnTegel line={d.line} size="sm" layout="rij" />}
                 primary={d.title}
                 secondary={d.description}
-                onClick={() => onNavigate?.('omleidingen')}
+                // De omleiding zelf (/omleidingen/<id>), niet de lijst: het
+                // record opent daar meteen, zoals een ruil op het dashboard.
+                onClick={() => navigeer('omleidingen', { params: [d.id] })}
               />
             ))}
           </div>

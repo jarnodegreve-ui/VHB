@@ -4,6 +4,8 @@ import {
   mem,
 } from './harnas';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { magView } from '../app/routes';
+import { routeUitUrl } from '../app/router';
 
 describe('onbemande dienst toewijzen (Dekking)', () => {
   // Een gat = een verwachte dienst die op níémand staat; de dienstwissel kan
@@ -180,6 +182,68 @@ describe('vervaldata (Code 95 / medische schifting)', () => {
     await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });
     const alle = await api('GET', '/api/user-expiries', { token: 'tok-planner' });
     expect(alle.json).toEqual([{ userId: '3', soort: 'code95', validUntil: '2027-03-01' }]);
+  });
+});
+
+describe('de melding dat een attest vervalt opent een scherm dat de ontvanger mag zien (11-11)', () => {
+  // Vroeger altijd het dashboard ("/"), waar niets over het attest staat. De
+  // eigen vervaldata staan op Documenten, maar dat scherm bestaat alleen voor
+  // chauffeur en technieker (routes.tsx): een planner of admin met een attest
+  // zou er "niet beschikbaar voor jouw rol" krijgen en blijft dus op "/".
+  const ONTVANGERS = [
+    { id: 'v-chauffeur', name: 'Carl Chauffeur', role: 'chauffeur', isActive: true, url: '/?view=documenten' },
+    { id: 'v-technieker', name: 'Tom Technieker', role: 'technieker', isActive: true, url: '/?view=documenten' },
+    { id: 'v-beide', name: 'Bea Beide', role: 'chauffeur', ookTechnieker: true, isActive: true, url: '/?view=documenten' },
+    { id: 'v-planner', name: 'Pia Planner', role: 'planner', isActive: true, url: '/' },
+    { id: 'v-admin', name: 'Ad Admin', role: 'admin', isActive: true, url: '/' },
+  ];
+
+  beforeEach(() => {
+    // Zonder mailadres: deze test gaat over de push, er vertrekt geen herinneringsmail.
+    mem.users = ONTVANGERS.map(({ url: _url, ...u }) => u);
+    mem.pushesSent = [];
+    // Woensdag 11/11/2026 in Brussel; 30 dagen later is 11/12, een mijlpaal van de cron.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T10:00:00Z'));
+    mem.userExpiries = ONTVANGERS.map((u) => ({ userId: u.id, soort: 'code95', validUntil: '2026-12-11', updatedAt: null, updatedBy: null }));
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  for (const geval of ONTVANGERS) {
+    it(`${geval.role}${geval.ookTechnieker ? ' met Ook technieker' : ''}: ${geval.url}`, async () => {
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      const pushes = mem.pushesSent.filter((p) => p.userIds.includes(geval.id));
+      // Alleen de url wijzigde: tekst, soort en ontvanger zijn wat ze waren.
+      expect(pushes.map((p) => ({ ...p.payload, userIds: p.userIds }))).toEqual([{
+        userIds: [geval.id],
+        title: 'Code 95 verloopt over 30 dagen',
+        soort: 'systeem',
+        body: 'Je code 95 is geldig tot 11/12/2026. Regel tijdig de vernieuwing en geef het door aan de planning.',
+        url: geval.url,
+      }]);
+      // De bestemming is een scherm dat deze ontvanger mag openen (de rollenlijst
+      // van de server kan zo niet uit de pas lopen met routes.tsx).
+      const route = routeUitUrl(geval.url);
+      expect(route).not.toBeNull();
+      expect(magView(geval, route!.view)).toBe(true);
+      // En wie Documenten mag openen, landt daar ook echt: geen "/" uit voorzichtigheid.
+      expect(geval.url === '/?view=documenten').toBe(magView(geval, 'documenten'));
+    });
+  }
+
+  it('buiten de mijlpalen (90, 30, 7, 0 dagen) vertrekt er geen push, zoals voorheen', async () => {
+    mem.userExpiries = [{ userId: 'v-chauffeur', soort: 'code95', validUntil: '2026-12-10', updatedAt: null, updatedBy: null }];
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(mem.pushesSent.filter((p) => p.userIds.includes('v-chauffeur'))).toEqual([]);
+  });
+
+  it('op de dag zelf: zelfde bestemming, de titel zegt vandaag', async () => {
+    mem.userExpiries = [{ userId: 'v-technieker', soort: 'medische_schifting', validUntil: '2026-11-11', updatedAt: null, updatedBy: null }];
+    await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    const push = mem.pushesSent.find((p) => p.userIds.includes('v-technieker'));
+    expect(push?.payload).toMatchObject({ title: 'Medische schifting verloopt vandaag', soort: 'systeem', url: '/?view=documenten' });
   });
 });
 
