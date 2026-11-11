@@ -55,6 +55,17 @@ const opTijd = (a: Werkprestatie, b: Werkprestatie) =>
   (a.beginTijd ?? '99:99').localeCompare(b.beginTijd ?? '99:99') || (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
 
 /**
+ * Waar een nieuwe taak begint: het einde van de laatste taak van die dag van
+ * dezelfde technieker, in de volgorde van de lijst (opTijd). Taken zonder
+ * eindtijd tellen niet mee; is er geen enkele met een eindtijd, dan blijft
+ * Begin leeg zoals vroeger.
+ */
+export const beginNaLaatsteTaak = (rijen: Werkprestatie[], datum: string, mecanicienId: string): string => {
+  const metEinde = rijen.filter((w) => w.datum === datum && String(w.mecanicienId) === mecanicienId && w.eindeTijd).sort(opTijd);
+  return metEinde[metEinde.length - 1]?.eindeTijd ?? '';
+};
+
+/**
  * Dagadministratie (fase A Access-migratie, 13-09): wat de garage per dag aan
  * welke bus deed, met werkcode en bestede uren (tblUtgevoerdeWerken). De
  * route en de API heten nog werkprestaties, dat is de naam van het record.
@@ -175,6 +186,7 @@ function Dagboek({ currentUser }: { currentUser: User }) {
         <PrestatieModal
           prestatie={bewerk.prestatie}
           standaardDatum={datum}
+          standaardBegin={beginNaLaatsteTaak(rijen, datum, String(currentUser.id))}
           voertuigen={voertuigen}
           currentUser={currentUser}
           staf={false}
@@ -481,14 +493,19 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
   );
 }
 
-function PrestatieModal({ prestatie, standaardDatum, voertuigen, techniekers = [], currentUser, staf, onClose, onKlaar }: {
-  prestatie: Werkprestatie | null; standaardDatum: string; voertuigen: Vehicle[]; techniekers?: User[]; currentUser: User; staf: boolean; onClose: () => void; onKlaar: (w: Werkprestatie) => void;
+function PrestatieModal({ prestatie, standaardDatum, standaardBegin = '', voertuigen, techniekers = [], currentUser, staf, onClose, onKlaar }: {
+  prestatie: Werkprestatie | null; standaardDatum: string;
+  /** Alleen voor een nieuwe taak: waar Begin op staat bij het openen (het dagboek geeft het einde van de vorige taak). */
+  standaardBegin?: string;
+  voertuigen: Vehicle[]; techniekers?: User[]; currentUser: User; staf: boolean; onClose: () => void; onKlaar: (w: Werkprestatie) => void;
 }) {
   const [datum, setDatum] = useState(prestatie?.datum ?? standaardDatum);
   const [vehicleId, setVehicleId] = useState(prestatie?.vehicleId ?? '');
   const [werkcode, setWerkcode] = useState<Werkcode>(prestatie?.werkcode ?? 'H');
   const [omschrijving, setOmschrijving] = useState(prestatie?.omschrijving ?? '');
-  const [beginTijd, setBeginTijd] = useState(prestatie?.beginTijd ?? '');
+  // Een bestaande taak houdt wat ze had, ook een leeg Begin: het voorstel is
+  // alleen de beginwaarde van een nieuwe taak en blijft gewoon te overschrijven.
+  const [beginTijd, setBeginTijd] = useState(prestatie ? (prestatie.beginTijd ?? '') : standaardBegin);
   const [eindeTijd, setEindeTijd] = useState(prestatie?.eindeTijd ?? '');
   const [werkuren, setWerkuren] = useState(prestatie ? urenTekst(prestatie.werkuren) : '');
   const [mecanicienId, setMecanicienId] = useState(prestatie?.mecanicienId ?? String(currentUser.id));
@@ -510,9 +527,14 @@ function PrestatieModal({ prestatie, standaardDatum, voertuigen, techniekers = [
     const uren = Number(werkuren.replace(',', '.'));
     if (!Number.isFinite(uren)) { fouten.zet({ werkuren: 'Vul een getal in.' }); return; }
     setBezig(true);
+    // Het voorstel in Begin telt pas als de technieker er iets mee deed (een
+    // einde erbij, of een ander uur). Vult hij bij een nieuwe taak alleen Uren
+    // in, zoals vroeger, dan blijft Begin leeg in plaats van een uur dat hij
+    // nooit koos, zonder einde.
+    const alleenVoorstel = !prestatie && !eindeTijd && beginTijd === standaardBegin;
     const body: WerkprestatieBody = {
       datum, vehicleId: vehicleId || null, werkcode, omschrijving: omschrijving.trim(),
-      beginTijd: beginTijd || null, eindeTijd: eindeTijd || null, werkuren: uren,
+      beginTijd: alleenVoorstel ? null : beginTijd || null, eindeTijd: eindeTijd || null, werkuren: uren,
       // Kilometerstand staat niet meer in het formulier (Jarno 18-09, overbodig);
       // wat er bij een oude prestatie in staat, blijft staan.
       kmstand: prestatie?.kmstand ?? null, defectId: prestatie?.defectId ?? null,
@@ -539,7 +561,20 @@ function PrestatieModal({ prestatie, standaardDatum, voertuigen, techniekers = [
       <Formulier onVerstuur={opslaan} noValidate className="p-6">
         <CardHeader title={titel} description="Wat heb je aan welke bus gedaan en hoelang duurde het?" />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Datum" required error={fouten.fouten.datum}><DateInput value={datum} max={staf ? undefined : vandaagIso()} onChange={(v) => { setDatum(v); fouten.wisVeld('datum'); }} /></Field>
+          <Field label="Datum" required error={fouten.fouten.datum}>
+            <DateInput
+              value={datum}
+              max={staf ? undefined : vandaagIso()}
+              onChange={(v) => {
+                setDatum(v);
+                fouten.wisVeld('datum');
+                // Het voorstel in Begin hoort bij de dag waarop het venster
+                // openging: bij een andere datum gaat het weg, zolang de
+                // technieker er nog niets mee deed.
+                if (!prestatie && v !== datum && standaardBegin && beginTijd === standaardBegin && !eindeTijd) setBeginTijd('');
+              }}
+            />
+          </Field>
           {staf && (
             <Field label="Technieker" error={fouten.fouten.mecanicienId}><Select value={mecanicienId} onChange={(e) => { setMecanicienId(e.target.value); fouten.wisVeld('mecanicienId'); }}>{techniekers.map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}{!techniekers.some((u) => String(u.id) === mecanicienId) && <option value={mecanicienId}>{currentUser.name}</option>}</Select></Field>
           )}
