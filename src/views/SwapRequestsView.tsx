@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Phone, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
@@ -31,6 +31,7 @@ import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWiza
 import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
+import { verminderdeBeweging } from '../lib/motion';
 import { AllesGedaan, LegeLijst } from '../components/illustraties';
 import { TableShell, Td, Th } from '../components/TabelBasis';
 import { RecordOnbekend } from '../components/RecordOnbekend';
@@ -42,6 +43,31 @@ import { planningTelefoon } from '../lib/planningTelefoon';
 import { navigeer } from '../app/router';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
+
+/** Plaatsgrendel van het beoordelingspaneel: binnen deze afstand (px) van het
+ *  punt van de openingsklik is een klik "dezelfde plek", en pas een beweging of
+ *  aanraking daarbuiten telt als "weg geweest". 12 px is ruim boven het trillen
+ *  van een stilliggende muis of vinger en kleiner dan de rijknop zelf, zodat
+ *  elke echte handbeweging de voet vrijgeeft. */
+const PLAATSSLOT_STRAAL = 12;
+/** Voor de planner is "dezelfde plek" het icoon waarop ze klikte, niet één
+ *  punt, en een vinger raakt nooit twee keer hetzelfde punt: ook het vak van de
+ *  rijknop telt, met deze marge (px) eromheen voor een tik die net naast de
+ *  rand neerkomt. Het icoon is 40 px breed, dus met de marge blijft de plek
+ *  smaller dan een derde van een knop in de voet. */
+const PLAATSSLOT_MARGE = 8;
+type Plek = { x: number; y: number; vak: DOMRect };
+/** Eén regel voor de klik die geslikt wordt én voor de beweging die de grendel
+ *  lost: ligt dit buiten het vak van de rijknop én buiten de straal rond het
+ *  punt van de klik (of is er geen plek)? Een vak zonder maat telt niet. */
+const isWeg = (e: { clientX: number; clientY: number }, plek: Plek | null) => {
+  if (!plek) return true;
+  const { vak } = plek;
+  const inVak = vak.width > 0
+    && e.clientX >= vak.left - PLAATSSLOT_MARGE && e.clientX <= vak.right + PLAATSSLOT_MARGE
+    && e.clientY >= vak.top - PLAATSSLOT_MARGE && e.clientY <= vak.bottom + PLAATSSLOT_MARGE;
+  return !inVak && Math.hypot(e.clientX - plek.x, e.clientY - plek.y) >= PLAATSSLOT_STRAAL;
+};
 
 /** Vaste visuele identiteit van de overname (ruil zonder tegenprestatie) —
  *  overal dezelfde badge i.p.v. losse blauwe tekstregels per lijst. Stil:
@@ -581,6 +607,142 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     });
   };
 
+  // Beheertabel op desktop (ronde 6, punt 16): Afwijzen is daar één klik op een
+  // icoon, dus eerst een bevestiging die zegt over welke ruil het gaat. De
+  // status die de planner zag toen ze opende gaat mee als seenStatus, zoals bij
+  // handleAdminForceApprove: besliste iemand anders intussen, dan weigert de
+  // server.
+  const vraagAfwijzen = (swap: SwapRequest) => {
+    const info = shiftInfoFor(swap);
+    const collega = swap.targetDriverId ? ` met ${naamVan(swap.targetDriverId) ?? 'een onbekende collega'}` : '';
+    setConfirmAction({
+      title: 'Dienstruil afwijzen?',
+      message: `De aanvraag van ${naamVan(swap.requesterId) ?? 'een onbekende chauffeur'}${collega} voor ${info.line !== '--' ? `dienst ${info.line}` : 'de dienst'}${info.date ? ` op ${formatDateHuman(info.date)}` : ''} wordt afgewezen.`,
+      confirmText: 'Afwijzen',
+      variant: 'danger',
+      run: () => handleStatusUpdate(swap.id, 'rejected', swap.status),
+    });
+  };
+
+  // Te weinig rust: Goedkeuren in de desktoprij opent eerst het paneel met de
+  // rustregels. De rijknop ligt onder de voet van dat paneel, dus de tweede
+  // klik van een dubbelklik viel op Afwijzen of Goedkeuren daar en besliste
+  // meteen (gemeten van 768 tot 1920 px breed). Opent het paneel langs deze
+  // weg, dan doen de knoppen in de voet daarom even niets. Een teller, geen
+  // vlag: elke opening langs deze weg start de grendel opnieuw.
+  const [voetOpSlot, setVoetOpSlot] = useState(0);
+  useEffect(() => {
+    if (!voetOpSlot) return;
+    const klaar = window.setTimeout(() => setVoetOpSlot(0), 700);
+    return () => window.clearTimeout(klaar);
+  }, [voetOpSlot]);
+  // De grendel dekt alleen de eerste 0,7 s. Daarna ligt Afwijzen van de voet
+  // nog altijd onder de rijknop (1920 px; op 1280 en 1440 px zodra er een
+  // goedgekeurde rij in de tabel staat), en een tweede klik op dezelfde plek
+  // wees af zonder bevestiging: het omgekeerde van wat de planner koos, en een
+  // eindstatus. Zolang het paneel open staat dat langs de rijknop openging,
+  // vraagt Afwijzen in de voet daarom dezelfde bevestiging als in de rij. Via
+  // de naam of een link blijft het paneel zoals het was: één klik. Het id van
+  // de ruil, geen losse vlag: het paneel volgt de URL en sluit ook met de
+  // terugknop of een andere link, dus de opruiming hangt aan de ruil die open
+  // staat (en ze wist meteen ook de grendel).
+  const [rijknopId, setRijknopId] = useState<string | null>(null);
+  // Plaatsgrendel (herstelronde 2). Ook ná de 0,7 s ligt Goedkeuren van de voet
+  // onder de rijknop (768 tot 1440 px, met de rij onderaan het venster): wie
+  // dacht dat de eerste klik niet pakte en opnieuw op dezelfde plek klikte,
+  // keurde goed zonder de rustregels te lezen. Een langere tijd verschuift dat
+  // venster alleen. Daarom onthoudt de rijknop de plek van de klik (het punt en
+  // het vak van het icoon): zolang de aanwijzer daar niet weg is geweest, doet
+  // een klik in het paneel op die plek niets (ook niet op Afwijzen: de
+  // bevestiging hierboven is er voor een klik op een andere plek). De plek
+  // staat in een ref, zodat een aanraking elders ze al gelost heeft vóór de
+  // klik van datzelfde gebaar; de vlag stuurt alleen de luisteraars, die met
+  // het effect weer van `window` verdwijnen.
+  // Bekende grens: de plek is een plaats in het venster. Verschuift de pagina
+  // onder een stilliggende muis (zoomen, een balk van de browser), dan telt de
+  // volgende klik als een andere plek.
+  const plaatsSlot = useRef<Plek | null>(null);
+  const [plaatsSlotAan, setPlaatsSlotAan] = useState(false);
+  useEffect(() => {
+    if (!plaatsSlotAan) return;
+    const weg = (e: PointerEvent) => {
+      if (!isWeg(e, plaatsSlot.current)) return;
+      plaatsSlot.current = null;
+      setPlaatsSlotAan(false);
+    };
+    // Een klik op de plek van de openingsklik beslist niets, opent niets en
+    // verstuurt niets: hij brengt alleen de rustregels in beeld, daarom opende
+    // het paneel. Het indrukken ervoor mag de knop eronder ook de focus niet
+    // geven (onzichtbaar: geen focusring na een muisklik), anders keurt spatie
+    // of Enter daarna goed zonder dat de aanwijzer bewoog; de focus blijft op
+    // het venster. Vóór React, op `window`: de klik bereikt geen enkele knop.
+    // detail 0 = Enter of spatie op een knop: geen aanwijzer, geen plaats.
+    const slik = (e: MouseEvent) => {
+      if (!e.detail || isWeg(e, plaatsSlot.current)) return;
+      const venster = e.target instanceof Element ? e.target.closest<HTMLElement>('[role="dialog"]') : null;
+      if (!venster) return;
+      e.preventDefault();
+      if (e.type !== 'click') return;
+      e.stopPropagation();
+      venster.focus({ preventScroll: true });
+      venster.querySelector('section[aria-label="Rusttijd"]')
+        ?.scrollIntoView({ block: 'nearest', behavior: verminderdeBeweging() ? 'auto' : 'smooth' });
+    };
+    window.addEventListener('pointermove', weg, true);
+    window.addEventListener('pointerdown', weg, true);
+    window.addEventListener('mousedown', slik, true);
+    window.addEventListener('click', slik, true);
+    return () => {
+      window.removeEventListener('pointermove', weg, true);
+      window.removeEventListener('pointerdown', weg, true);
+      window.removeEventListener('mousedown', slik, true);
+      window.removeEventListener('click', slik, true);
+    };
+  }, [plaatsSlotAan]);
+  const paneelId = reviewSwap?.id ?? null;
+  useEffect(() => {
+    if (!paneelId) return;
+    return () => { setRijknopId(null); setVoetOpSlot(0); plaatsSlot.current = null; setPlaatsSlotAan(false); };
+  }, [paneelId]);
+  // Afwijzen in de rij zet dezelfde plaatsgrendel (zie vraagAfwijzenInRij): sluit
+  // de bevestiging, dan is hij weg, ook als de aanwijzer niet bewoog.
+  const vraagOpen = !!confirmAction;
+  useEffect(() => {
+    if (!vraagOpen) return;
+    return () => { plaatsSlot.current = null; setPlaatsSlotAan(false); };
+  }, [vraagOpen]);
+  const viaRijknop = !!reviewSwap && rijknopId === reviewSwap.id;
+  /** De rijknop onthoudt de plek van haar klik. Alleen een aanwijzer of een
+   *  vinger heeft een plaats; Enter en spatie geven detail 0 en zetten de focus
+   *  op het venster dat opent, niet op een knop. */
+  const onthoudPlek = (klik: ReactMouseEvent<HTMLElement>) => {
+    plaatsSlot.current = klik.detail > 0 ? { x: klik.clientX, y: klik.clientY, vak: klik.currentTarget.getBoundingClientRect() } : null;
+    setPlaatsSlotAan(klik.detail > 0);
+  };
+  const bekijkEerstRust = (swap: SwapRequest, klik: ReactMouseEvent<HTMLElement>) => {
+    setVoetOpSlot((n) => n + 1);
+    setRijknopId(swap.id);
+    onthoudPlek(klik);
+    setReviewSwap(swap);
+  };
+  /** Afwijzen in de desktoprij. De bevestiging staat midden in het venster; op
+   *  768 tot ±800 px breed, met de tabel naar rechts geschoven, ligt haar knop
+   *  Afwijzen onder Afwijzen van de rij, en de tweede klik van een dubbelklik
+   *  (of een herhaalde klik later) bevestigde de vraag ongelezen: een
+   *  eindstatus. Daarom dezelfde plaatsgrendel als bij Goedkeuren: zolang de
+   *  aanwijzer niet van het icoon weg is geweest, doet een klik op die plek in
+   *  de bevestiging niets. */
+  const vraagAfwijzenInRij = (swap: SwapRequest, klik: ReactMouseEvent<HTMLElement>) => {
+    onthoudPlek(klik);
+    vraagAfwijzen(swap);
+  };
+  /** Afwijzen in de voet van het beoordelingspaneel. */
+  const wijsAfInPaneel = (swap: SwapRequest) => {
+    if (viaRijknop) vraagAfwijzen(swap);
+    else handleStatusUpdate(swap.id, 'rejected', swap.status);
+    setReviewSwap(null);
+  };
+
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
   const handleAccept = (swapId: string) => {
     const swap = swaps.find((s) => s.id === swapId);
@@ -1041,6 +1203,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     {actionableSwaps.map(swap => {
                       const info = shiftInfoFor(swap);
                       const requester = users.find(u => u.id === swap.requesterId);
+                      // Te weinig rust (ronde 6, punt 16): zichtbaar in de rij, en
+                      // Goedkeuren opent dan eerst het paneel met de rustregels;
+                      // het blijft een waarschuwing, geen blokkade. Alleen voor een
+                      // ruil die nog beslist moet worden: na een goedkeuring draagt
+                      // de lokale kopie het oude `rust`-veld nog tot de lijst ververst.
+                      const teWeinigRust = (swap.status === 'pending' || swap.status === 'accepted') && !!swap.rust?.some((r) => r.teKort);
                       return (
                         <tr key={swap.id} className="hover:bg-surface-soft-hover transition-colors">
                           <Td>
@@ -1080,6 +1248,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   ? <Badge tone="emerald" stil icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>Gezien</Badge>
                                   : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">Niet bevestigd</Badge>
                               )}
+                              {teWeinigRust && <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge>}
                             </span>
                             <RuilVerloop compact swap={voorVerloop(swap)} naamVan={naamVan} className="mt-1.5 space-y-0.5" />
                           </Td>
@@ -1088,19 +1257,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <Button variant="ghost" size="sm" icon={<History size={16} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistorySwap(swap)} />
                               {swap.status === 'accepted' && (
                                 <>
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Goedkeuren" title="Goedkeuren (rij-/rusttijden ok)" onClick={() => handleStatusUpdate(swap.id, 'approved')} />
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label={teWeinigRust ? 'Goedkeuren, bekijk eerst de rusttijd' : 'Goedkeuren'} title={teWeinigRust ? 'Bekijk eerst de rusttijd' : 'Goedkeuren (rij-/rusttijden ok)'} onClick={(e) => (teWeinigRust ? bekijkEerstRust(swap, e) : handleStatusUpdate(swap.id, 'approved'))} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={(e) => vraagAfwijzenInRij(swap, e)} />
                                 </>
                               )}
                               {swap.status === 'pending' && (isAdmin ? (
                                 <>
-                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Direct goedkeuren" title="Direct goedkeuren, collega heeft nog niet bevestigd" onClick={() => handleAdminForceApprove(swap.id)} />
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label={teWeinigRust ? 'Direct goedkeuren, bekijk eerst de rusttijd' : 'Direct goedkeuren'} title={teWeinigRust ? 'Bekijk eerst de rusttijd, collega heeft nog niet bevestigd' : 'Direct goedkeuren, collega heeft nog niet bevestigd'} onClick={(e) => (teWeinigRust ? bekijkEerstRust(swap, e) : handleAdminForceApprove(swap.id))} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={(e) => vraagAfwijzenInRij(swap, e)} />
                                 </>
                               ) : (
                                 <>
                                   <Badge tone="amber" stil className="whitespace-nowrap">Wacht op collega</Badge>
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={(e) => vraagAfwijzenInRij(swap, e)} />
                                 </>
                               ))}
                               {swap.status === 'approved' && (
@@ -1604,7 +1773,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         subtitle={reviewSwap ? `Aangevraagd op ${formatDateHuman(reviewSwap.createdAt)}` : undefined}
         icon={reviewSwap ? <Avatar naam={users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend'} size="lg" /> : undefined}
         footer={reviewSwap ? (
-          <div className="flex items-center gap-2">
+          <div className={cn('flex items-center gap-2', voetOpSlot > 0 && 'pointer-events-none')}>
             <Button
               variant="ghost"
               size="md"
@@ -1619,7 +1788,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="danger"
                   size="lg"
                   className="flex-1"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
+                  onClick={() => wijsAfInPaneel(reviewSwap)}
                 >
                   Afwijzen
                 </Button>
@@ -1640,7 +1809,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="danger"
                   size="lg"
                   className="flex-1"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
+                  onClick={() => wijsAfInPaneel(reviewSwap)}
                 >
                   Afwijzen
                 </Button>
@@ -1660,7 +1829,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 <Button
                   variant="danger"
                   size="lg"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
+                  onClick={() => wijsAfInPaneel(reviewSwap)}
                 >
                   Afwijzen
                 </Button>

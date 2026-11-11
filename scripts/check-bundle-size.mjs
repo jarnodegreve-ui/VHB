@@ -209,7 +209,15 @@ import zlib from 'node:zlib';
 // controle-ronde 04-11 samen (index 79,27 lokaal) plus deze deps-ronde (vite
 // 6.4.5, framer-motion-patch) meten op de runner index 79,68 en totaal 747,
 // precies op de grens. Geen nieuwe dependency. Budget = de meting plus ±1 kB.
-const BUDGET_KB = 749;
+// 11-11 (ronde 6, eerste vijf PR's samen: #798 bezige knop en donker, #799
+// meldingsteksten, #800 kortere wegen, #801 rust in de ruilrij, #802 verlof
+// beslissen): 749 → 752. Elke PR bleef apart binnen het budget (747,8 tot
+// 749,15), de combinatie niet: lokaal samengevoegd gemeten 750,43 (main
+// 747,53). Geen nieuwe dependency; de groei zit in SwapRequestsView (de
+// grendels van de desktoprij), VerlofBeoordeling en LeaveManagementView
+// (doorschakelen, namen in de dekking) en het dashboard (komende diensten per
+// dag). Budget = de meting plus de ±0,5 kB van de runner en ±1 kB marge.
+const BUDGET_KB = 752;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -616,6 +624,16 @@ if (!kaartMatch) {
   // vandaag twee decimalen, zodat "84 (budget 84)" niet meer kan misleiden.
   WARMUP_BUDGET_KB.chauffeur = 85;
   WARMUP_BUDGET_KB.staf = 155.5;
+  // 11-11 (ronde 6, eerste vijf PR's samen, zie BUDGET_KB): chauffeur 85 → 86
+  // en staf 155,5 → 157,5. Elke PR bleef apart binnen het budget, de combinatie
+  // niet: lokaal samengevoegd chauffeur 85,04 en staf 156,38 (main 83,8 en
+  // 154,28). Dienstruil zit in beide sets (de rustwaarschuwing en de grendels
+  // van de desktoprij, ±0,8 kB, die een chauffeur nooit gebruikt), het
+  // dashboard en het rooster in die van de chauffeur (±0,4), de
+  // verlofbeoordeling in die van de staf (±1,0). De warmup start pas na
+  // LCP + 2 s. Budget = de meting plus ±1 kB; de index bleef 79,50 (80,5).
+  WARMUP_BUDGET_KB.chauffeur = 86;
+  WARMUP_BUDGET_KB.staf = 157.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
