@@ -156,4 +156,36 @@ test.describe('Rooster → Ritblad', () => {
     await expect(page.getByText(/Geen apart blad gevonden/)).toHaveCount(0);
     expect(gevraagd.at(-1)).toBe(dayOffset(2));
   });
+
+  // Twee diensten vandaag die nog lopen (einde in busvak-notatie, dus op elk uur "komend").
+  const VANDAAG_TWEE = [
+    dienst('t1', 0, '00:00', '30:00', '2101', '4500'),
+    dienst('t2', 0, '00:01', '30:00', '2607', '4611'),
+  ];
+
+  test('het menu "Ritblad van vandaag" neemt alle diensten van vandaag mee', async ({ page, baseURL }) => {
+    const gevraagd = await metBundel(page, baseURL!, VANDAAG_TWEE);
+    await page.getByRole('button', { name: 'Meer acties' }).click();
+    await page.getByRole('menuitem', { name: 'Ritblad van vandaag' }).click();
+
+    const dialoog = page.getByRole('dialog', { name: 'Ritblad · diensten 2101 / 2607', exact: true });
+    await expect(dialoog).toBeVisible({ timeout: 15_000 });
+    // Dienst 2101 staat op pagina 2 van de bundel, 2607 op pagina 3; 4101 (pagina 1) hoort er niet bij.
+    await expect(dialoog.getByRole('img', { name: 'Pagina 2 van de ritblad-bundel' })).toBeVisible({ timeout: 15_000 });
+    await expect(dialoog.getByRole('img', { name: 'Pagina 3 van de ritblad-bundel' })).toBeVisible();
+    await expect(bladen(page)).toHaveCount(2);
+    expect(gevraagd.at(-1)).toBe(dayOffset(0));
+  });
+
+  test('de maandweergave opent het blad van de dienst van de gekozen dag', async ({ page, baseURL, isMobile }) => {
+    test.skip(!isMobile, 'Vanaf xl staat de lijst naast de kalender en heeft vandaag daar zijn kaart; het dagdetail van vandaag is er dan niet.');
+    await metBundel(page, baseURL!, [VANDAAG_TWEE[0]]);
+    await page.getByRole('group', { name: 'Weergave' }).getByRole('button', { name: 'maand' }).click();
+    await page.getByRole('button', { name: 'Ritblad van vandaag', exact: true }).click();
+
+    const dialoog = page.getByRole('dialog', { name: 'Ritblad · dienst 2101', exact: true });
+    await expect(dialoog).toBeVisible({ timeout: 15_000 });
+    await expect(dialoog.getByRole('img', { name: 'Pagina 2 van de ritblad-bundel' })).toBeVisible({ timeout: 15_000 });
+    await expect(bladen(page)).toHaveCount(1);
+  });
 });
