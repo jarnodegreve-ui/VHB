@@ -1,6 +1,7 @@
 import type { LeaveRequest, PlanningMatrixImportHistory, Shift, SwapRequest, User, View } from '../types';
 import type { DayGap } from './coverage';
 import { isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from './availability';
+import { LEAVE_TYPE_LABELS } from './format';
 
 /**
  * Werkvoorraad van de planner — de éne bron van waarheid voor alles wat
@@ -29,7 +30,8 @@ export type Werkvoorraad = {
   vervalTaken: Array<VervaldataRij & { dagen: number }>;
   /** Diensten die nog op naam staan van iemand die afwezig gemeld is. */
   teHerverdelen: OpenstaandeDienst[];
-  herverdeelPerChauffeur: Array<{ driverId: string; naam: string; reden: string; diensten: OpenstaandeDienst[] }>;
+  /** `doel` + `doelParams`: waar de rij van die chauffeur landt (zie `herverdeelDoel`). */
+  herverdeelPerChauffeur: Array<{ driverId: string; naam: string; reden: string; diensten: OpenstaandeDienst[]; doel: View; doelParams: string[] }>;
   pendingLeave: LeaveRequest[];
   pendingSwaps: SwapRequest[];
   pendingDevices: PendingDevice[];
@@ -41,6 +43,32 @@ export type Werkvoorraad = {
 const STALE_PLANNING_DAYS = 7;
 const HORIZON_WAARSCHUWING_DAGEN = 5;
 const VERVAL_VENSTER_DAGEN = 30;
+
+/**
+ * Waar een "te herverdelen"-rij landt (ronde 6, punt 17). De vroegste dienst
+ * van de chauffeur beslist. Dekt een goedgekeurde ziekmelding die dag, dan
+ * het detail van die melding (`/beheer/ziekte/<id>`: daar staan de
+ * herverdeelknoppen); ziekte wint bij overlap, zoals op Vandaag. Verlof en
+ * klein verlet hebben geen blad op Ziekte: dan de Maandplanning op die dag
+ * (`/maandplanning/<maand>/<dag>`), waar het celdetail het overzetten
+ * aanbiedt aan wie dat mag.
+ */
+export function herverdeelDoel(
+  diensten: readonly OpenstaandeDienst[],
+  leaveRequests: readonly LeaveRequest[],
+): { doel: View; doelParams: string[] } {
+  const eerste = diensten.reduce<OpenstaandeDienst | undefined>((min, s) => (!min || s.date < min.date ? s : min), undefined);
+  if (!eerste) return { doel: 'ziekte', doelParams: [] };
+  const ziek = leaveRequests.find((l) =>
+    l.type === 'ziekte' && l.status === 'approved' && String(l.userId) === String(eerste.driverId)
+    && l.startDate <= eerste.date && l.endDate >= eerste.date);
+  return ziek
+    ? { doel: 'ziekte', doelParams: [String(ziek.id)] }
+    // Zelfde adres als `maandplanningParams` (src/lib/uitweg.ts), hier
+    // uitgeschreven: deze module laadt op elk scherm van de staf mee met de
+    // topbar en hoort daar geen tweede chunk voor op te halen.
+    : { doel: 'bezetting', doelParams: [eerste.date.slice(0, 7), eerste.date.slice(0, 10)] };
+}
 
 export function berekenWerkvoorraad({
   users,
@@ -87,7 +115,14 @@ export function berekenWerkvoorraad({
       map.set(key, groep);
       return map;
     }, new Map<string, { driverId: string; naam: string; reden: string; diensten: OpenstaandeDienst[] }>()).values(),
-  );
+  ).map((g) => {
+    const doel = herverdeelDoel(g.diensten, leaveRequests);
+    // Het label volgt het doel: opent de rij een ziekmelding, dan zegt ze ook
+    // Ziekte. Bij verlof én ziekte op dezelfde dag gaf de eerste afwezigheid
+    // in de lijst het label ("Betaald verlof") terwijl de klik het
+    // ziektedetail opende.
+    return { ...g, ...doel, reden: doel.doel === 'ziekte' && doel.doelParams.length > 0 ? LEAVE_TYPE_LABELS.ziekte : g.reden };
+  });
 
   // Dekking: null = niet geladen/fout, behandel als 'onbekend', nooit als
   // 'volledig gedekt'. Alleen vandaag en verder (na middernacht telde de
@@ -279,7 +314,7 @@ export function werkvoorraadItems(
       detail: `${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDag(s.date)} (${s.line})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`,
       wanneer: epochVanDag(eerste), wanneerTekst: eerste === today ? 'vandaag' : formatDag(eerste),
       naam: g.naam,
-      doel: 'ziekte',
+      doel: g.doel, doelParams: g.doelParams,
     });
   }
   for (const d of wv.gapDays) {
@@ -288,7 +323,8 @@ export function werkvoorraadItems(
       titel: `${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'}, ${formatDag(d.date)}`,
       detail: `Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`,
       wanneer: epochVanDag(d.date), wanneerTekst: d.date === today ? 'vandaag' : formatDag(d.date),
-      doel: 'dekking', doelParams: [d.date.slice(0, 7)],
+      // Maand én dag: Openstaande diensten brengt de rij van die dag in beeld.
+      doel: 'dekking', doelParams: [d.date.slice(0, 7), d.date],
     });
   }
   for (const req of wv.pendingLeave) {
@@ -334,7 +370,8 @@ export function werkvoorraadItems(
       detail: e.dagen < 0 ? `Verlopen sinds ${formatDag(e.validUntil)}` : `Verloopt ${formatDag(e.validUntil)}`,
       wanneer: epochVanDag(e.validUntil), wanneerTekst: overTekst(e.dagen),
       naam,
-      doel: 'vervaldata',
+      // Met de persoon erbij: Vervaldata opent zijn datums (`/beheer/vervaldata/<userId>`).
+      doel: 'vervaldata', doelParams: [String(e.userId)],
     });
   }
 

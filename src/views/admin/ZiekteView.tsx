@@ -23,12 +23,21 @@ import { DateInput, Field, Select, Textarea } from '../../components/Field';
 import { Formulier } from '../../components/Formulier';
 import { Modal } from '../../components/Modal';
 import { useVuil } from '../../lib/formulier';
+import { naOpruimen } from '../../lib/lagen';
 import { ZiekteInzicht } from '../../components/ZiekteInzicht';
 import { ZiekteMeldingen } from '../../components/ZiekteMeldingen';
 import { openZiekteDiensten } from '../../lib/ziekteInzicht';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 import { meldSchrijffout } from '../../lib/fouten';
 import { metOngedaan } from '../../lib/ongedaan';
+import { useRecordLink } from '../../app/useRecordLink';
+import { RecordOnbekend } from '../../components/RecordOnbekend';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
+
+/** Hoe lang de zoekopdracht naar een net geregistreerde melding geldt (zie `netGemeld`). */
+const NET_GEMELD_HOUDBAAR_MS = 10_000;
+/** Hoe lang hersteld melden en verwijderen uit staan in een detail dat via het doorschakelen opende. */
+const DOORSCHAKEL_REM_MS = 1000;
 
 /**
  * Ziekte — eigen blad, bewust gescheiden van het verlofbeheer (keuze Jarno
@@ -207,6 +216,24 @@ export function ZiekteView({
   // Onbewaarde invoer: sluiten vraagt eerst bevestiging (tranche 3A).
   const { vuil: meldVuil } = useVuil(meldForm, meldOpen);
   const sluitMelden = () => { setMeldOpen(false); setMeldForm({ userId: '', startDate: '', endDate: '', comment: '' }); setMeldFouten({}); };
+  // Doorschakelen (ronde 6, punt 17): na een geslaagde melding opent het
+  // detail van de nieuwe melding, zodat herverdelen de volgende stap is en de
+  // planner ze niet moet terugzoeken. `onSickReport` zegt alleen of het lukte,
+  // dus onthouden we wat we zoeken (chauffeur, periode, de id's van vóór de
+  // melding) en herkennen we het nieuwe record zodra de verse lijst er is;
+  // de server maakt per melding precies één nieuw record met die periode.
+  // De zoekopdracht vervalt zodra ze gebruikt is, zodra de planner iets
+  // anders opent, of na `NET_GEMELD_HOUDBAAR_MS`: komt het record dan pas in
+  // de lijst (de herlaad mislukte, realtime brengt het later), dan springt
+  // er geen detail meer open midden in ander werk en blijft het scherm op de
+  // lijst.
+  const [netGemeld, setNetGemeld] = useState<{ userId: string; startDate: string; endDate: string; bekend: Set<string> } | null>(null);
+  useEffect(() => {
+    if (!netGemeld) return;
+    const timer = window.setTimeout(() => setNetGemeld(null), NET_GEMELD_HOUDBAAR_MS);
+    return () => window.clearTimeout(timer);
+  }, [netGemeld]);
+  const openMelden = () => { setNetGemeld(null); setMeldOpen(true); };
   const verstuurMelding = async () => {
     if (isMelden) return;
     const startDate = meldForm.startDate || today;
@@ -217,9 +244,14 @@ export function ZiekteView({
     setMeldFouten(fouten);
     if (fouten.userId || fouten.endDate) return;
     setIsMelden(true);
-    const ok = await onSickReport({ userId: meldForm.userId, startDate, endDate, comment: meldForm.comment })
+    const userId = meldForm.userId;
+    const bekend = new Set(leaveRequests.map((r) => r.id));
+    const ok = await onSickReport({ userId, startDate, endDate, comment: meldForm.comment })
       .finally(() => setIsMelden(false));
-    if (ok) sluitMelden();
+    // Mislukt: het venster blijft open met de invoer, zoals altijd.
+    if (!ok) return;
+    sluitMelden();
+    setNetGemeld({ userId, startDate, endDate, bekend });
   };
 
   // --- "ziek" in de planning-Excel zonder registratie hier ------------------
@@ -247,20 +279,73 @@ export function ZiekteView({
   };
 
   // --- Detail: einddatum bijstellen of intrekken ----------------------------
-  // Het paneel onthoudt welk record open is en leest het verder uit de live
-  // lijst: stelt een collega intussen de einddatum bij (realtime), dan toont
-  // het detail die wijziging. Alleen als het record uit de lijst verdween
-  // (verwijderd) blijft de laatst geziene versie staan, zodat het paneel niet
+  // Welk record open is staat in het adres (`/beheer/ziekte/<leaveId>`, ronde
+  // 6, punt 17), volgens het recept van de andere recordlinks (useRecordLink):
+  // een rij van het Overzicht, het dashboard of Vandaag opent zo het juiste
+  // detail, een herlaad houdt het open en Terug sluit het. Alleen het adres
+  // beslist of het detail open is; alleen goedgekeurde meldingen tellen, zoals
+  // in de lijsten (een oud ingetrokken record is "niet beschikbaar").
+  //
+  // Het paneel leest het record uit de live lijst: stelt een collega intussen
+  // de einddatum bij (realtime), dan toont het detail die wijziging. Alleen
+  // als het record uit de lijst verdween (verwijderd) blijft de laatst geziene
+  // versie staan zolang hetzelfde id in het adres staat, zodat het paneel niet
   // onder je handen dichtklapt. Het veld Nieuwe einddatum houdt de waarde van
   // het openen: na zo'n wijziging staat het op de oude datum en leest het
   // formulier als gewijzigd, tot je het veld zelf aanpast of het paneel sluit.
+  const goedgekeurd = useMemo(() => ziektes.filter((r) => r.status === 'approved'), [ziektes]);
+  const link = useRecordLink('ziekte', goedgekeurd);
+  const linkId = link.staat === 'geen' ? null : link.id;
+  const detailLive = link.staat === 'gevonden' ? link.record : null;
   const [gekozen, setDetail] = useState<LeaveRequest | null>(null);
-  const detailLive = gekozen ? leaveRequests.find((r) => r.id === gekozen.id) : undefined;
-  useEffect(() => { if (detailLive && detailLive !== gekozen) setDetail(detailLive); }, [detailLive, gekozen]);
-  const detail = detailLive ?? gekozen;
   const [nieuwEinde, setNieuwEinde] = useState('');
   const [isOpslaan, setIsOpslaan] = useState(false);
-  const openDetail = (r: LeaveRequest) => { setDetail(r); setNieuwEinde(r.endDate); setBatchAdvies({}); setVerdeelFouten({}); };
+  /** De toestand die bij het geopende record hoort; loopt op "het id wisselde". */
+  const toonDetail = (r: LeaveRequest) => { setDetail(r); setNieuwEinde(r.endDate); setBatchAdvies({}); setVerdeelFouten({}); };
+  useEffect(() => {
+    if (!linkId) { if (gekozen) setDetail(null); return; }
+    if (!detailLive) return;
+    // Adres → detail (koude link, een rij van een ander scherm, Terug/Vooruit).
+    if (gekozen?.id !== detailLive.id) toonDetail(detailLive);
+    else if (detailLive !== gekozen) setDetail(detailLive);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkId, detailLive, gekozen]);
+  const detail = linkId && gekozen?.id === linkId ? (detailLive ?? gekozen) : null;
+  /** Het record dat net via het doorschakelen opende (zie "Rem na het doorschakelen"). */
+  const [rem, setRem] = useState<string | null>(null);
+  // Een klik in de lijst: de toestand en het adres in dezelfde ronde, zodat
+  // het venster in één keer met het juiste record opent.
+  const openDetail = (r: LeaveRequest) => { setNetGemeld(null); setRem(null); toonDetail(r); link.open(r.id); };
+  const sluitDetail = link.sluit;
+  // De net geregistreerde melding (zie `netGemeld`): zodra ze in de lijst
+  // staat opent haar detail via het adres. Pas na het opruimen van de lagen:
+  // het meldvenster ruimt bij het sluiten zijn stap in de historiek op met
+  // een terugstap, en een adres dat intussen op die stap gezet werd ging mee
+  // weg (src/lib/lagen.ts).
+  useEffect(() => {
+    if (!netGemeld) return;
+    const nieuw = goedgekeurd.find((r) => !netGemeld.bekend.has(r.id) && String(r.userId) === netGemeld.userId
+      && r.startDate === netGemeld.startDate && r.endDate === netGemeld.endDate);
+    if (!nieuw) return;
+    setNetGemeld(null);
+    setRem(nieuw.id);
+    naOpruimen(() => link.open(nieuw.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [netGemeld, goedgekeurd]);
+  // Rem na het doorschakelen (tegenlezing ronde 6). Het detail komt op de
+  // plek van het meldvenster: op desktop ligt "Melding verwijderen" dan onder
+  // de muis, waar net "Ziekmelding registreren" stond. Wie nog eens klikte
+  // omdat er niets leek te gebeuren, verwijderde zo de melding die hij net
+  // registreerde. Daarom staan de twee knoppen die in één klik schrijven
+  // (hersteld melden, verwijderen) kort uit zodra dat detail in beeld komt;
+  // de klok start pas dan, want het adres volgt na het opruimen van de
+  // lagen. Een detail dat de planner zelf opent kent die rem niet.
+  const geremd = !!detail && detail.id === rem;
+  useEffect(() => {
+    if (!geremd) return;
+    const timer = window.setTimeout(() => setRem(null), DOORSCHAKEL_REM_MS);
+    return () => window.clearTimeout(timer);
+  }, [geremd]);
   // Het bord van de dagen met een open dienst in het geopende detail: wie via
   // een wissel een schoolrit kreeg is die dag niet vrij, ook al toont de
   // matrix 'vrij'. Alleen de admin zet over, dus alleen dan geladen.
@@ -269,12 +354,12 @@ export function ZiekteView({
   // bord mislukte): anders stond iemand met een schoolrit even als vrij.
   const lijstKlaar = (datum: string) => planningMatrixGeladen && bordVan(datum) !== undefined;
   const bewaarEinde = async (endDate: string) => {
-    if (!detail || isOpslaan) return;
+    if (!detail || isOpslaan || geremd) return;
     if (!endDate || endDate < detail.startDate) { return; }
     setIsOpslaan(true);
     const ok = await Promise.resolve(onSave(leaveRequests.map((r) => (r.id === detail.id ? { ...r, endDate } : r))))
       .finally(() => setIsOpslaan(false));
-    if (ok) setDetail(null);
+    if (ok) sluitDetail();
   };
   // Verkeerd ingegeven = weg (Jarno 07-10): geen tussenstatus "ingetrokken"
   // die de historiek vult. Meteen verwijderen met een weg terug (ongedaan-
@@ -283,7 +368,7 @@ export function ZiekteView({
   const leaveRef = useRef(leaveRequests);
   leaveRef.current = leaveRequests;
   const verwijder = async () => {
-    if (!detail || isOpslaan) return;
+    if (!detail || isOpslaan || geremd) return;
     const record = detail;
     setIsOpslaan(true);
     const ok = await metOngedaan({
@@ -292,7 +377,7 @@ export function ZiekteView({
       herstellen: () => Promise.resolve(onSave([...leaveRef.current.filter((r) => r.id !== record.id), record])),
       toast: (message, tone, action, opties) => notify(message, tone, { action, opties }),
     }).finally(() => setIsOpslaan(false));
-    if (ok) setDetail(null);
+    if (ok) sluitDetail();
   };
 
   const [toonExcel, setToonExcel] = useState(false);
@@ -305,13 +390,18 @@ export function ZiekteView({
         description="Actuele meldingen, opvolging en inzicht in geregistreerde ziektedagen."
         actions={(
           <>
+            <AanwezigOpScherm />
             <VersheidRegel laatstGeladen={lastSyncedAt} verversen={false} online={online} />
-            <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setMeldOpen(true)}>
+            <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={openMelden}>
               Ziek melden
             </Button>
           </>
         )}
       />
+      {/* Een adres naar een melding die er niet (meer) is: de nette melding
+          boven de lijst. Niet terwijl het detail nog met de laatst geziene
+          versie open staat (net verwijderd). */}
+      {link.staat === 'onbekend' && !detail && <RecordOnbekend soort="ziekmelding" onSluit={sluitDetail} />}
 
       <section aria-label="Ziekte vandaag" className="space-y-3">
         {/* kpi-raster (B4, ronde 5): op de telefoon één kaart met rijen zoals
@@ -423,7 +513,7 @@ export function ZiekteView({
       {/* Detail: hersteld melden, einddatum bijstellen of intrekken. */}
       <Modal
         open={!!detail}
-        onClose={() => setDetail(null)}
+        onClose={sluitDetail}
         // Onbewaarde einddatum (tranche 3A): sluiten vraagt eerst bevestiging.
         vuil={!!detail && !!nieuwEinde && nieuwEinde !== detail.endDate}
         maxWidth="md"
@@ -434,7 +524,7 @@ export function ZiekteView({
               eyebrow="Ziekteperiode"
               title={naamVan(detail.userId)}
               description={`${formatDayLong(detail.startDate)} t/m ${formatDayLong(detail.endDate)} · ${daysBetween(detail.startDate, detail.endDate)} ${daysBetween(detail.startDate, detail.endDate) === 1 ? 'kalenderdag' : 'kalenderdagen'}`}
-              onClose={() => setDetail(null)}
+              onClose={sluitDetail}
             />
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-6">
               {detail.comment && <Card tone="muted" padding="sm"><MicroLabel>Opmerking</MicroLabel><p className="mt-2 whitespace-pre-wrap text-body-sm text-slate-600 [overflow-wrap:anywhere]">{detail.comment}</p></Card>}
@@ -464,7 +554,7 @@ export function ZiekteView({
                   </Field>
                 </Formulier>
                 {detail.endDate >= today && detail.startDate <= today && (
-                  <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan} onClick={() => void bewaarEinde(today)}>
+                  <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan || geremd} onClick={() => void bewaarEinde(today)}>
                     Hersteld, vandaag was de laatste ziektedag
                   </Button>
                 )}
@@ -488,18 +578,29 @@ export function ZiekteView({
                           <Button variant="secondary" size="sm" className="shrink-0" icon={<Mail size={16} />} onClick={() => { window.location.href = href; }}>Vraag een admin</Button>
                         ) : null;
                       })()}
-                      {isAdmin && (openDienstenLijst(detail).length > 1 || verdeelBezig) && (() => {
-                        const teVerdelen = openDienstenLijst(detail).filter((d) => vervangerPerDienst[d.id]).length;
+                      {/* "Stel kandidaten voor" ook bij één dienst (ronde 6, punt
+                          17): na een ziekmelding is dat het gewone geval. Het
+                          voorstel vult alleen de keuzelijst in, overzetten
+                          blijft een eigen klik. "Verdeel alles" blijft vanaf
+                          twee diensten; bij één doet "Zet over" hetzelfde. */}
+                      {isAdmin && (() => {
+                        const open = openDienstenLijst(detail);
+                        const teVerdelen = open.filter((d) => vervangerPerDienst[d.id]).length;
                         return (
                           <div className="flex shrink-0 flex-wrap gap-2">
-                            <Button variant="secondary" size="sm" disabled={batchLaden || verdeelBezig} onClick={() => void haalKandidatenVoorstel(detail)}>
+                            {/* Uit tot de keuzelijsten hun kandidaten hebben: een
+                                voorstel in een lijst die het nog niet kan tonen
+                                zou "Zet over" aanzetten zonder zichtbare naam. */}
+                            <Button variant="secondary" size="sm" disabled={batchLaden || verdeelBezig || !open.every((d) => lijstKlaar(d.date))} onClick={() => void haalKandidatenVoorstel(detail)}>
                               {batchLaden ? 'Advies berekenen…' : 'Stel kandidaten voor'}
                             </Button>
                             {/* Secundair: de enige gouden knop in dit detail is "Opslaan"
                                 bij de einddatum (afwerking 04-09, nr. 5). */}
-                            <Button variant="secondary" size="sm" disabled={verdeelBezig || batchLaden || teVerdelen === 0} onClick={() => setVerdeelConfirm(true)}>
-                              {verdeelBezig ? 'Bezig…' : `Verdeel alles (${teVerdelen})`}
-                            </Button>
+                            {(open.length > 1 || verdeelBezig) && (
+                              <Button variant="secondary" size="sm" disabled={verdeelBezig || batchLaden || teVerdelen === 0} onClick={() => setVerdeelConfirm(true)}>
+                                {verdeelBezig ? 'Bezig…' : `Verdeel alles (${teVerdelen})`}
+                              </Button>
+                            )}
                           </div>
                         );
                       })()}
@@ -514,7 +615,7 @@ export function ZiekteView({
                                 <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
                                 {/* Admin: rechtstreeks naar die dag in de Maandplanning. */}
                                 {isAdmin && (
-                                  <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => { setDetail(null); navigeer('bezetting', { params: maandplanningParams(dienst.date) }); }}>
+                                  <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => navigeer('bezetting', { params: maandplanningParams(dienst.date) })}>
                                     Maandplanning
                                   </Button>
                                 )}
@@ -562,7 +663,9 @@ export function ZiekteView({
                     </div>
                   </div>
                 )}
-                <Button variant="danger" size="md" full disabled={isOpslaan} onClick={() => void verwijder()}>
+                {/* Kort uit na het doorschakelen (`geremd`): deze knop ligt dan
+                    op de plek van "Ziekmelding registreren". */}
+                <Button variant="danger" size="md" full disabled={isOpslaan || geremd} onClick={() => void verwijder()}>
                   Melding verwijderen (foutief geregistreerd)
                 </Button>
             </div>

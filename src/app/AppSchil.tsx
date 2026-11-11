@@ -467,7 +467,12 @@ export function AppSchil({
                       <LazyWerkvoorraadMenu
                         werkvoorraad={werkvoorraad}
                         userNaam={(id) => users.find((u) => String(u.id) === String(id))?.name || 'Onbekend'}
-                        onNavigate={setCurrentView}
+                        // `navigeer` zelf (niet setCurrentView, dat hetzelfde
+                        // doet zonder parameters): de rij "te herverdelen"
+                        // geeft een record of een dag mee, en kiest een andere
+                        // weg als haar doel het open scherm zelf is.
+                        onNavigate={navigeer}
+                        huidig={resolvedCurrentView}
                       />
                     </Suspense>
                   ) : (

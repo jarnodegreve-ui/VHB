@@ -61,3 +61,51 @@ describe('Verlof: eigen aanvraag intrekken', () => {
     window.removeEventListener('vhb-toast', opToast);
   });
 });
+
+// Ronde 6, punt 13 (herstel na tegenlezing): de stand van een dag bestaat uit
+// twee getallen, het aantal afwezigen en de limiet. Kwamen de limieten niet
+// van de server (fout, of een antwoord dat het schema niet haalt), dan staat
+// er geen stand en geen knop: de limiet wordt niet geraden uit de standaard.
+describe('Verlof: de stand van een dag wacht op de echte limieten', () => {
+  const DAG = '2026-11-18';
+  const metLimieten = (limieten: () => unknown) => {
+    apiJsonMock.mockImplementation(async (pad: string) => {
+      if (pad.startsWith('/api/leave/bezetting')) return { dagen: [{ datum: DAG, aantal: 1 }] };
+      if (pad === '/api/verlof/limieten') return limieten();
+      return {};
+    });
+  };
+  const openDag = async () => {
+    render(<LeaveManagementView user={CHAUFFEUR} leaveRequests={[]} users={[CHAUFFEUR]} onSave={vi.fn()} />);
+    const cel = await screen.findByRole('button', { name: /^18: .*1 van \d afwezig$/ });
+    await act(async () => { fireEvent.click(cel); });
+    return cel;
+  };
+  const vanafKnop = () => screen.queryByRole('button', { name: 'Verlof aanvragen vanaf deze dag' });
+
+  it('geldige limieten: de stand rekent met de limiet van de server en de knop staat er', async () => {
+    metLimieten(() => ({ standaard: 1, periodes: [] }));
+    await openDag();
+    expect(await screen.findByText('Volzet, 1 van 1 afwezig')).toBeTruthy();
+    expect(document.querySelector('[data-dagstand]')?.getAttribute('data-dagstand')).toBe('volzet');
+    expect(vanafKnop()).toBeTruthy();
+  });
+
+  it('limieten mislukt: geen stand en geen knop, de kalendercel kleurt zoals vroeger met de standaard', async () => {
+    metLimieten(() => { throw new Error('kapot'); });
+    const cel = await openDag();
+    expect(cel.getAttribute('aria-label')).toBe('18: deels vrij, 1 van 2 afwezig');
+    expect(await screen.findByText('De bezetting van deze dag is niet geladen.')).toBeTruthy();
+    expect(document.querySelector('[data-dagstand]')).toBeNull();
+    expect(vanafKnop()).toBeNull();
+  });
+
+  it('een antwoord met een ongeldige periode telt als niet geladen, ook al is het een 200', async () => {
+    // parseVerlofLimieten valt dan terug op de standaard van 2 en verliest perDag.
+    metLimieten(() => ({ standaard: 1, periodes: [{ id: 'p1', naam: '', van: '2026-11-01', tot: '2026-11-30', max: 0 }], perDag: { [DAG]: 0 } }));
+    await openDag();
+    expect(await screen.findByText('De bezetting van deze dag is niet geladen.')).toBeTruthy();
+    expect(document.querySelector('[data-dagstand]')).toBeNull();
+    expect(vanafKnop()).toBeNull();
+  });
+});
