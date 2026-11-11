@@ -281,6 +281,40 @@ async function geenToetsBeslist(page: Page, venster: Locator, wanneer: string) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
 }
+/** Schuift de strook van de tabel helemaal naar rechts, zodat de kolom Acties
+ *  in beeld staat (768 px met een goedgekeurde rij: de tabel is breder dan haar
+ *  kader). Geeft terug of er een strook was die schuift. */
+const schuifNaarActies = (knop: Locator) => knop.evaluate((el) => {
+  let strook = el.parentElement;
+  while (strook && !(strook.scrollWidth > strook.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(strook).overflowX))) strook = strook.parentElement;
+  if (strook) strook.scrollLeft = strook.scrollWidth;
+  return !!strook;
+});
+/** Meet waar de bevestigknop van "Dienstruil afwijzen?" ligt (open via de
+ *  rijknop, meet, sluit) en maakt het venster zo hoog dat Afwijzen van de rij
+ *  op de lijn van die knop ligt. De bevestiging staat verticaal in het midden:
+ *  met een venster van h hoog ligt haar knop op h/2 + d. Geeft een punt terug
+ *  dat op de rijknop ligt en, zodra de vraag open staat, op de bevestigknop. */
+async function rijknopOpVraagknop(page: Page, rijKnop: Locator, vraagKnop: Locator): Promise<Punt> {
+  const venster = page.viewportSize()!;
+  expect(await schuifNaarActies(rijKnop), 'de tabel is breder dan haar kader en schuift').toBe(true);
+  await rijKnop.click();
+  const knop = await midden(vraagKnop);
+  const knopVak = (await vraagKnop.boundingBox())!;
+  await page.keyboard.press('Escape');
+  await expect(vraagKnop).toHaveCount(0);
+  await historiekOpgeruimd(page);
+  const rijVoor = await midden(rijKnop);
+  await page.setViewportSize({ width: venster.width, height: Math.round(2 * (rijVoor.y - (knop.y - venster.height / 2))) });
+  await schuifNaarActies(rijKnop);
+  const rij = await midden(rijKnop);
+  const rijVak = (await rijKnop.boundingBox())!;
+  const links = Math.max(rijVak.x, knopVak.x);
+  const rechts = Math.min(rijVak.x + rijVak.width, knopVak.x + knopVak.width);
+  expect(rechts - links, 'Afwijzen van de rij en de bevestigknop overlappen').toBeGreaterThan(6);
+  return { x: Math.round((links + rechts) / 2), y: rij.y };
+}
+
 test.describe('beheertabel op desktop: rustwaarschuwing in de rij, afwijzen met bevestiging', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < TABEL_VANAF, 'De beheertabel bestaat pas vanaf 768 px; op de telefoon staat de ruil in de lijst (zie het blok hieronder).');
 
@@ -817,6 +851,86 @@ test.describe('plaatsgrendel op een aanraakscherm (tabletbreedte)', () => {
       await expect(open).toHaveCount(0);
     });
   }
+});
+
+/**
+ * Afwijzen in de rij opent de bevestiging "Dienstruil afwijzen?", midden in het
+ * venster. Op 768 tot ±800 px breed, met een goedgekeurde rij in de tabel en de
+ * tabel naar rechts geschoven, ligt haar knop Afwijzen onder Afwijzen van de
+ * rij: de tweede klik van een dubbelklik (of een herhaalde klik een seconde
+ * later) bevestigde de vraag die de planner nog niet gelezen had, een
+ * eindstatus met een melding naar de chauffeur. De rijknop zet daarom dezelfde
+ * plaatsgrendel als Goedkeuren: zolang de aanwijzer niet van het icoon weg is
+ * geweest, doet een klik op die plek niets.
+ */
+const AFWIJZING = { methode: 'PATCH', pad: '/api/swaps/rr1', body: { status: 'rejected', ifStatus: 'accepted' } };
+
+test.describe('Afwijzen in de rij: een herhaalde klik op dezelfde plek bevestigt de vraag niet', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < TABEL_VANAF, 'De beheertabel bestaat pas vanaf 768 px; op de telefoon is er geen rijknop.');
+
+  for (const wacht of [150, 1000]) {
+    test(`768 px met de tabel naar rechts geschoven, ${wacht} ms later opnieuw op dezelfde plek: de vraag blijft staan, geen verzoek; elders op de knop: precies één afwijzing`, async ({ page }) => {
+      await page.setViewportSize({ width: 768, height: 900 });
+      const { schrijf, extra } = ruilServer([teBeoordelen({ rust: TE_KORT }), GOEDGEKEURD()]);
+      await seed(page, { user: ADMIN, extra });
+      await page.goto('/dienstruil');
+      const rijKnop = rijVan(page).getByRole('button', { name: 'Afwijzen', exact: true });
+      const vraag = afwijsVraag(page);
+      const bevestig = vraag.getByRole('button', { name: 'Afwijzen', exact: true });
+      const klik = await rijknopOpVraagknop(page, rijKnop, bevestig);
+      expect(await ligtOp(rijKnop, klik), 'de eerste klik valt op Afwijzen van de rij').toBe(true);
+
+      await page.mouse.click(klik.x, klik.y);
+      await page.waitForTimeout(wacht);
+      for (const keer of ['tweede', 'derde']) {
+        await expect.poll(() => ligtOp(bevestig, klik), { message: `vóór de ${keer} klik: Afwijzen van de bevestiging ligt op het punt van de rijknop` }).toBe(true);
+        await page.mouse.click(klik.x, klik.y);
+        await geenToetsBeslist(page, vraag, `na de ${keer} klik`);
+        expect(schrijf, `de ${keer} klik op dezelfde plek bevestigt niets, spatie en Enter daarna ook niet`).toEqual([]);
+        await expect(vraag, 'de vraag staat er nog').toBeVisible();
+      }
+
+      // Weg van het icoon, naar een andere plek op dezelfde knop: nu bevestigt de klik gewoon.
+      const opzij = await opzijOpKnop(bevestig, klik);
+      await page.mouse.click(opzij.x, opzij.y);
+      await expect(vraag).toHaveCount(0);
+      await expect.poll(() => schrijf).toEqual([AFWIJZING]);
+      await page.waitForTimeout(200);
+      expect(schrijf, 'precies één verzoek').toEqual([AFWIJZING]);
+    });
+  }
+});
+
+test.describe('Afwijzen in de rij op een aanraakscherm (tabletbreedte)', () => {
+  test.use({ hasTouch: true });
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < TABEL_VANAF, 'De beheertabel bestaat pas vanaf 768 px; op de telefoon is er geen rijknop.');
+
+  test('768 px: een tweede tik op dezelfde plek bevestigt de vraag niet; een tik elders op de knop wijst af', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    const { schrijf, extra } = ruilServer([teBeoordelen({ rust: TE_KORT }), GOEDGEKEURD()]);
+    await seed(page, { user: ADMIN, extra });
+    await page.goto('/dienstruil');
+    const rijKnop = rijVan(page).getByRole('button', { name: 'Afwijzen', exact: true });
+    const vraag = afwijsVraag(page);
+    const bevestig = vraag.getByRole('button', { name: 'Afwijzen', exact: true });
+    const klik = await rijknopOpVraagknop(page, rijKnop, bevestig);
+    expect(await ligtOp(rijKnop, klik), 'de eerste tik valt op Afwijzen van de rij').toBe(true);
+
+    await page.touchscreen.tap(klik.x, klik.y);
+    await page.waitForTimeout(300);
+    for (const keer of ['tweede', 'derde']) {
+      await expect.poll(() => ligtOp(bevestig, klik), { message: `vóór de ${keer} tik: Afwijzen van de bevestiging ligt op het punt van de rijknop` }).toBe(true);
+      await page.touchscreen.tap(klik.x, klik.y);
+      await geenToetsBeslist(page, vraag, `na de ${keer} tik`);
+      expect(schrijf, `de ${keer} tik op dezelfde plek bevestigt niets`).toEqual([]);
+      await expect(vraag, 'de vraag staat er nog').toBeVisible();
+    }
+
+    const opzij = await opzijOpKnop(bevestig, klik);
+    await page.touchscreen.tap(opzij.x, opzij.y);
+    await expect.poll(() => schrijf).toEqual([AFWIJZING]);
+    await expect(vraag).toHaveCount(0);
+  });
 });
 
 test.describe('beheerlijst op de telefoon bleef zoals ze was', () => {

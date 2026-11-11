@@ -704,15 +704,37 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     if (!paneelId) return;
     return () => { setRijknopId(null); setVoetOpSlot(0); plaatsSlot.current = null; setPlaatsSlotAan(false); };
   }, [paneelId]);
+  // Afwijzen in de rij zet dezelfde plaatsgrendel (zie vraagAfwijzenInRij): sluit
+  // de bevestiging, dan is hij weg, ook als de aanwijzer niet bewoog.
+  const vraagOpen = !!confirmAction;
+  useEffect(() => {
+    if (!vraagOpen) return;
+    return () => { plaatsSlot.current = null; setPlaatsSlotAan(false); };
+  }, [vraagOpen]);
   const viaRijknop = !!reviewSwap && rijknopId === reviewSwap.id;
+  /** De rijknop onthoudt de plek van haar klik. Alleen een aanwijzer of een
+   *  vinger heeft een plaats; Enter en spatie geven detail 0 en zetten de focus
+   *  op het venster dat opent, niet op een knop. */
+  const onthoudPlek = (klik: ReactMouseEvent<HTMLElement>) => {
+    plaatsSlot.current = klik.detail > 0 ? { x: klik.clientX, y: klik.clientY, vak: klik.currentTarget.getBoundingClientRect() } : null;
+    setPlaatsSlotAan(klik.detail > 0);
+  };
   const bekijkEerstRust = (swap: SwapRequest, klik: ReactMouseEvent<HTMLElement>) => {
     setVoetOpSlot((n) => n + 1);
     setRijknopId(swap.id);
-    // Alleen een aanwijzer of een vinger heeft een plaats; Enter en spatie
-    // geven detail 0 en zetten de focus op het paneel, niet op een knop.
-    plaatsSlot.current = klik.detail > 0 ? { x: klik.clientX, y: klik.clientY, vak: klik.currentTarget.getBoundingClientRect() } : null;
-    setPlaatsSlotAan(klik.detail > 0);
+    onthoudPlek(klik);
     setReviewSwap(swap);
+  };
+  /** Afwijzen in de desktoprij. De bevestiging staat midden in het venster; op
+   *  768 tot ±800 px breed, met de tabel naar rechts geschoven, ligt haar knop
+   *  Afwijzen onder Afwijzen van de rij, en de tweede klik van een dubbelklik
+   *  (of een herhaalde klik later) bevestigde de vraag ongelezen: een
+   *  eindstatus. Daarom dezelfde plaatsgrendel als bij Goedkeuren: zolang de
+   *  aanwijzer niet van het icoon weg is geweest, doet een klik op die plek in
+   *  de bevestiging niets. */
+  const vraagAfwijzenInRij = (swap: SwapRequest, klik: ReactMouseEvent<HTMLElement>) => {
+    onthoudPlek(klik);
+    vraagAfwijzen(swap);
   };
   /** Afwijzen in de voet van het beoordelingspaneel. */
   const wijsAfInPaneel = (swap: SwapRequest) => {
@@ -1236,18 +1258,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               {swap.status === 'accepted' && (
                                 <>
                                   <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label={teWeinigRust ? 'Goedkeuren, bekijk eerst de rusttijd' : 'Goedkeuren'} title={teWeinigRust ? 'Bekijk eerst de rusttijd' : 'Goedkeuren (rij-/rusttijden ok)'} onClick={(e) => (teWeinigRust ? bekijkEerstRust(swap, e) : handleStatusUpdate(swap.id, 'approved'))} />
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => vraagAfwijzen(swap)} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={(e) => vraagAfwijzenInRij(swap, e)} />
                                 </>
                               )}
                               {swap.status === 'pending' && (isAdmin ? (
                                 <>
                                   <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label={teWeinigRust ? 'Direct goedkeuren, bekijk eerst de rusttijd' : 'Direct goedkeuren'} title={teWeinigRust ? 'Bekijk eerst de rusttijd, collega heeft nog niet bevestigd' : 'Direct goedkeuren, collega heeft nog niet bevestigd'} onClick={(e) => (teWeinigRust ? bekijkEerstRust(swap, e) : handleAdminForceApprove(swap.id))} />
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => vraagAfwijzen(swap)} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={(e) => vraagAfwijzenInRij(swap, e)} />
                                 </>
                               ) : (
                                 <>
                                   <Badge tone="amber" stil className="whitespace-nowrap">Wacht op collega</Badge>
-                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => vraagAfwijzen(swap)} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={(e) => vraagAfwijzenInRij(swap, e)} />
                                 </>
                               ))}
                               {swap.status === 'approved' && (

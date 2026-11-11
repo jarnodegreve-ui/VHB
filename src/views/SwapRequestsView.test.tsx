@@ -579,6 +579,97 @@ describe('Dienstruil: beheertabel op desktop', () => {
         expect(onDecide).toHaveBeenCalledWith('r2', 'approved', 'accepted');
         klaar();
       });
+
+      it('de bevestiging van Afwijzen in de rij sluiten wist de grendel en haalt de luisteraars van window, na Annuleren en na bevestigen', async () => {
+        const { hangend, klaar } = bespied();
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        await wijs(tabel().getByRole('button', { name: 'Afwijzen' }));
+        const vraag = await screen.findByRole('dialog', { name: 'Dienstruil afwijzen?' });
+        expect(hangend()).toEqual(GRENDEL);
+        // Annuleren met het toetsenbord: de aanwijzer bewoog niet.
+        await klik(within(vraag).getByRole('button', { name: 'Annuleren' }));
+        expect(hangend()).toEqual([]);
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 });
+        // De plek is gewist: in het paneel via de naam beslist een klik op het oude punt gewoon.
+        await klik(tabel().getByTitle('Details bekijken'));
+        const open = await paneel();
+        await wijs(inVoet(open, 'Goedkeuren'));
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(onDecide).toHaveBeenLastCalledWith('r1', 'approved', 'accepted');
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 });
+
+        // Opnieuw, en nu bevestigen op een andere plek: ook dan is alles weg.
+        await wijs(tabel().getByRole('button', { name: 'Afwijzen' }));
+        expect(hangend()).toEqual(GRENDEL);
+        await wijs(within(await screen.findByRole('dialog', { name: 'Dienstruil afwijzen?' })).getByRole('button', { name: 'Afwijzen' }), { x: P.x - 60, y: P.y });
+        expect(onDecide).toHaveBeenLastCalledWith('r1', 'rejected', 'accepted');
+        await waitFor(() => expect(hangend()).toEqual([]));
+        klaar();
+      });
+    });
+
+    // Afwijzen in de rij opent de bevestiging midden in het venster. Op 768 tot
+    // ±800 px breed, met de tabel naar rechts geschoven, ligt haar knop Afwijzen
+    // onder Afwijzen van de rij: de tweede klik van een dubbelklik (of een
+    // herhaalde klik later) bevestigde de vraag ongelezen. De rijknop zet daarom
+    // dezelfde plaatsgrendel; de geometrie zelf staat in de e2e-spec.
+    describe('Afwijzen in de rij', () => {
+      const openVraag = async (hoe: (knop: HTMLElement) => Promise<void> = wijs) => {
+        await hoe(tabel().getByRole('button', { name: 'Afwijzen' }));
+        return screen.findByRole('dialog', { name: 'Dienstruil afwijzen?' });
+      };
+
+      it('een klik in de bevestiging op de plek van de rijknop bevestigt niets en sluit niets; elders op de knop wijst de klik af', async () => {
+        // Ook zonder rustwaarschuwing: Afwijzen vraagt in elke rij een bevestiging.
+        const { onDecide } = toonBeheer(PLANNER, [ruil()]);
+        const vraag = await openVraag();
+        const bevestig = within(vraag).getByRole('button', { name: 'Afwijzen' });
+        expect(fireEvent.mouseDown(bevestig, { detail: 1, clientX: P.x, clientY: P.y }), 'indrukken op de plek geeft de knop geen focus').toBe(false);
+        await wijs(bevestig);
+        await wijs(bevestig, { x: P.x + 11, y: P.y });
+        await wijs(within(vraag).getByRole('button', { name: 'Annuleren' }), { x: P.x - 8, y: P.y + 8 });
+        expect(onDecide).not.toHaveBeenCalled();
+        expect(screen.getAllByRole('dialog')).toEqual([vraag]);
+        expect(document.activeElement).toBe(vraag);
+
+        await wijs(bevestig, { x: P.x - 60, y: P.y });
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'accepted');
+      });
+
+      it('na wegbewegen bevestigt een klik op het punt zelf weer gewoon', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const vraag = await openVraag();
+        // De planner leest de vraag (de aanwijzer gaat erheen) en komt terug.
+        await aanwijzer('pointermove', { x: P.x - 200, y: P.y - 80 });
+        await wijs(within(vraag).getByRole('button', { name: 'Afwijzen' }));
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'accepted');
+      });
+
+      it('admin bij een ruil die op de collega wacht: dezelfde grendel, met de status pending', async () => {
+        const { onDecide } = toonBeheer(ADMIN, [ruil({ status: 'pending' })]);
+        const vraag = await openVraag();
+        await wijs(within(vraag).getByRole('button', { name: 'Afwijzen' }));
+        expect(onDecide).not.toHaveBeenCalled();
+        await wijs(within(vraag).getByRole('button', { name: 'Afwijzen' }), { x: P.x, y: P.y + 40 });
+        expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'pending');
+      });
+
+      it('geopend met Enter of spatie is er geen plaatsgrendel: de bevestiging werkt op elk punt', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const vraag = await openVraag(klik);
+        await wijs(within(vraag).getByRole('button', { name: 'Afwijzen' }), { x: 0, y: 0 });
+        expect(onDecide).toHaveBeenCalledTimes(1);
+      });
+
+      it('toetsenbord in de bevestiging (detail 0) valt niet onder de grendel', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const vraag = await openVraag();
+        await act(async () => { fireEvent.click(within(vraag).getByRole('button', { name: 'Afwijzen' }), { clientX: P.x, clientY: P.y }); });
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'accepted');
+      });
     });
   });
 });
