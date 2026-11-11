@@ -503,19 +503,20 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       const betrokkenen = stap.naar === "completed" ? [] : [String(current.requesterId), String(current.targetDriverId ?? "")]
         .filter((uid) => uid && uid !== selfId);
       // Dezelfde ontvangers, elk met zijn eigen tekst: wie dezelfde tekst
-      // krijgt gaat samen in één verzending.
+      // krijgt gaat samen in één verzending. Twee teksten vertrekken samen,
+      // niet na elkaar: zoals vroeger (één verzending voor beide chauffeurs)
+      // staat elke melding er dan op hetzelfde moment, en een verzending die
+      // traag is of omvalt houdt die van de andere chauffeur niet tegen.
       const perTekst = meldingenPerTekst(betrokkenen, (uid) => ruilBeslisMelding(
         { ruil: current, namen: meldingNamen, van: stap.van, naar: stap.naar, doorStaf: staf, planning: i === 0 ? meldingPlanning : null },
         uid,
       ));
-      for (const melding of perTekst) {
-        await sendPushToUsers(melding.userIds, {
-          title: melding.titel,
-          soort: "ruil",
-          body: melding.body,
-          url: recordUrl("ruil-verzoeken", current.id),
-        });
-      }
+      await Promise.all(perTekst.map((melding) => sendPushToUsers(melding.userIds, {
+        title: melding.titel,
+        soort: "ruil",
+        body: melding.body,
+        url: recordUrl("ruil-verzoeken", current.id),
+      })));
     }
     // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
     // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
@@ -1363,19 +1364,18 @@ export function mountRuilRoutes(app: express.Express) {
           // stil, zie de delta-route.
           const betrokkenen = stap.naar === "completed" ? [] : [String(prev.requesterId), String(prev.targetDriverId ?? "")]
             .filter((id) => id && id !== actorId);
-          // Dezelfde ontvangers, elk met zijn eigen tekst (meldingTeksten.ts).
+          // Dezelfde ontvangers, elk met zijn eigen tekst (meldingTeksten.ts);
+          // twee teksten vertrekken samen, niet na elkaar (zie de delta-route).
           const perTekst = meldingenPerTekst(betrokkenen, (uid) => ruilBeslisMelding(
             { ruil: next, namen: meldingNamen, van: stap.van, naar: stap.naar, doorStaf: staf, planning: i === 0 ? planning : null },
             uid,
           ));
-          for (const melding of perTekst) {
-            await sendPushToUsers(melding.userIds, {
-              title: melding.titel,
-              soort: "ruil",
-              body: melding.body,
-              url: recordUrl("ruil-verzoeken", next.id),
-            });
-          }
+          await Promise.all(perTekst.map((melding) => sendPushToUsers(melding.userIds, {
+            title: melding.titel,
+            soort: "ruil",
+            body: melding.body,
+            url: recordUrl("ruil-verzoeken", next.id),
+          })));
           // Geaccepteerd = er wacht een validatie op de planner, die kreeg
           // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
           // actor zelf, als die toevallig planner/admin is).

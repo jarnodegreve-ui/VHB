@@ -627,3 +627,33 @@ describe('ruilmeldingen, deel 3: de lijstroute herkent "stond al in de planning"
     expect(gebreken()).toEqual([]);
   });
 });
+
+describe('ruilmeldingen, deel 3: twee chauffeurs met elk een eigen tekst krijgen hun melding samen, niet na elkaar', () => {
+  // Vroeger gingen beide chauffeurs in één verzending. Nu elk zijn eigen tekst
+  // krijgt, mag de verzending naar de ene die naar de andere niet ophouden.
+  for (const weg of ['PATCH', 'lijst'] as const) {
+    it(`${weg}: valt de verzending naar de aanvrager om, dan is die naar de collega toch vertrokken`, async () => {
+      const { vi } = await import('vitest');
+      const push = await import('../../api/_lib/push.js');
+      const gewoon = push.sendPushToUsers;
+      const spion = vi.spyOn(push, 'sendPushToUsers').mockImplementation(async (userIds: string[], payload: any) => {
+        if (userIds.includes(A)) throw new Error('pushdienst onbereikbaar');
+        return gewoon(userIds, payload);
+      });
+      const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        zaai('dienst', 'accepted');
+        const res = await wissel(weg, PLANNER, 'approved');
+        // De beslissing zelf is geschreven. Dat de route daarna een fout meldt
+        // als een verzending omvalt, is van vóór deze wijziging.
+        expect(mem.swaps.find((s: any) => s.id === 's-m')?.status).toBe('approved');
+        expect(res.status).toBe(500);
+        expect(perOntvanger()).toEqual({ [B]: GOEDGEKEURD('dienst')[B] });
+        expect(mem.meldingen.map((m: any) => m.userId)).toEqual([B]);
+      } finally {
+        spion.mockRestore();
+        stil.mockRestore();
+      }
+    });
+  }
+});
