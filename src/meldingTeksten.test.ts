@@ -6,7 +6,8 @@ import {
 } from '../api/_lib/meldingTeksten';
 import { getServiceSegments } from '../api/_lib/storage';
 import { isStafRol } from '../api/_lib/types';
-import { persoonsVerloop, verloopUitLog } from '../shared/ruilVerloop';
+import { isHandmatigeRuil, persoonsVerloop, verloopUitLog } from '../shared/ruilVerloop';
+import { HANDMATIGE_WISSEL_PREFIX } from '../shared/schemas/constanten';
 
 /**
  * De tekst van de meldingen over een dienstruil en een toegewezen dienst
@@ -313,6 +314,67 @@ describe('de planning draait een goedgekeurde ruil terug (annuleren of alsnog af
   });
 });
 
+describe('de planning draait een handmatige wissel terug: "de wissel", nooit een aanvraag of een goedkeuring', () => {
+  // Zo slaat POST /api/admin/shift-swap een wissel op: de reden begint met het
+  // vaste voorvoegsel en de naam van wie hem invoerde. Jan en Piet vroegen niets
+  // aan; de planning zette dienst 4101 van Jan op Piet.
+  const REDEN = `${HANDMATIGE_WISSEL_PREFIX}Annelies Admin, Ziekte`;
+  const overgezet: RuilVoorMelding = { ...RUIL.overname, reason: REDEN };
+  const gewisseld: RuilVoorMelding = { ...RUIL.zelfdeDag, reason: REDEN };
+  const draaiTerug = (ruil: RuilVoorMelding, ontvanger: string, opties: { naar?: string; planning?: RuilPlanningStand | null } = {}) =>
+    ruilBeslisMelding({ ruil, namen: NAMEN, van: 'approved', naar: opties.naar ?? 'cancelled', doorStaf: true, planning: 'planning' in opties ? opties.planning : TERUGGEDRAAID }, ontvanger);
+
+  it('herkent de wissel met dezelfde toets als het verloop per persoon', () => {
+    const aanvraag: RuilVoorMelding = RUIL.overname;
+    expect(isHandmatigeRuil(overgezet)).toBe(true);
+    expect(isHandmatigeRuil(aanvraag)).toBe(false);
+  });
+
+  it('een overgezette dienst: de gever rijdt ze weer zelf, de ontvanger leest wie ze weer rijdt', () => {
+    expect(draaiTerug(overgezet, A)).toEqual({
+      titel: 'Dienstruil geannuleerd',
+      body: 'De planning draaide de wissel terug: je rijdt dienst 4101 op wo 11/11 weer zelf.',
+    });
+    expect(draaiTerug(overgezet, C)).toEqual({
+      titel: 'Dienstruil geannuleerd',
+      body: 'De planning draaide de wissel terug: Jan Peeters rijdt dienst 4101 op wo 11/11 weer zelf.',
+    });
+  });
+
+  it('twee diensten 1-op-1 gewisseld: elk rijdt zijn eigen dienst weer', () => {
+    expect(draaiTerug(gewisseld, A).body).toBe('De planning draaide de wissel terug: je rijdt dienst 4101 op wo 11/11 weer zelf, Piet Janssens rijdt dienst 4205.');
+    expect(draaiTerug(gewisseld, C).body).toBe('De planning draaide de wissel terug: je rijdt dienst 4205 op wo 11/11 weer zelf, Jan Peeters rijdt dienst 4101.');
+    expect(draaiTerug(gewisseld, A, { naar: 'rejected' })).toEqual({
+      titel: 'Dienstruil afgewezen',
+      body: 'De planning draaide de wissel terug: je rijdt dienst 4101 op wo 11/11 weer zelf, Piet Janssens rijdt dienst 4205.',
+    });
+  });
+
+  it('niets aantoonbaar teruggezet (een schoolrit of bureaudienst heeft geen rijen in de planning): het rooster, zonder "goedgekeurde"', () => {
+    const schoolrit: RuilVoorMelding = { ...overgezet, shiftLine: 'EEK6' };
+    for (const planning of [null, undefined, DOORGEVOERD]) for (const wie of [A, C, 'u-derde']) {
+      expect(draaiTerug(schoolrit, wie, { planning }).body).toBe('De planning draaide de wissel van wo 11/11 (dienst EEK6) terug. Bekijk je rooster.');
+    }
+    // Een gewone aanvraag was wel goedgekeurd, en blijft zo heten.
+    expect(draaiTerug(RUIL.overname, A, { planning: null }).body).toBe('De planning draaide de goedgekeurde overname van wo 11/11 (dienst 4101) terug. Bekijk je rooster.');
+  });
+
+  it('de reden van de wissel (hier een ziekte) en wie hem invoerde staan nooit in de melding', () => {
+    for (const ruil of [overgezet, gewisseld]) for (const wie of [A, C, 'u-derde']) for (const planning of [TERUGGEDRAAID, null]) {
+      for (const naar of ['cancelled', 'rejected', 'completed', 'approved']) {
+        const tekst = draaiTerug(ruil, wie, { naar, planning });
+        expect(`${tekst.titel} ${tekst.body}`).not.toMatch(/ziek|Annelies|Handmatige/i);
+      }
+    }
+  });
+
+  it('alleen het vaste voorvoegsel maakt er een handmatige wissel van, niet een reden die er toevallig op lijkt', () => {
+    for (const reason of ['Ik vraag een handmatige wissel door ziekte', ` ${REDEN}`, '', null, undefined, 7, {}, [REDEN]]) {
+      expect(draaiTerug({ ...RUIL.overname, reason }, A).body, String(reason)).toBe('De planning draaide de overname terug: je rijdt dienst 4101 op wo 11/11 weer zelf.');
+    }
+  });
+});
+
 describe('ontbrekende gegevens: een kortere, juiste zin', () => {
   const ZONDER_NAMEN = { aanvrager: '', collega: null };
 
@@ -414,10 +476,17 @@ describe('geen enkele tekst lekt iets wat een chauffeur niet hoort te lezen', ()
     ['een dienst zonder nummer', /\bdienst\s*(?:[-,.)]|$)/],
     ['een dubbele spatie of spatie voor een leesteken', / {2}| [,.:]/],
     ['een onbekende gebruiker met id', /Onbekende gebruiker|u-aanvrager|u-collega/],
+    ['de reden van een handmatige wissel of wie hem invoerde', /Handmatige wissel door|Annelies|griep/i],
   ];
 
+  const HANDMATIG = `${HANDMATIGE_WISSEL_PREFIX}Annelies Admin, griep`;
   const RUILEN: RuilVoorMelding[] = [
     ...Object.values(RUIL),
+    // Handmatige wissels van de planning: een dienst overgezet, twee diensten gewisseld, een schoolrit.
+    { ...RUIL.overname, reason: HANDMATIG },
+    { ...RUIL.zelfdeDag, reason: HANDMATIG },
+    { ...RUIL.overname, shiftLine: 'EEK6', reason: HANDMATIG },
+    { ...RUIL.dienst, reason: { toString: () => HANDMATIG } },
     { ...RUIL.vrij, returnCode: 'vrij', returnDate: '2026-11-11' },
     { ...RUIL.dienst, shiftDate: undefined },
     { ...RUIL.dienst, shiftLine: null },

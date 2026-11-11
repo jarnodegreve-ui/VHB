@@ -159,6 +159,20 @@ const bewegingVan = (
 const planningVoorMelding = (stondAlInPlanning: boolean, beweging: PlanningBeweging | null): RuilPlanningStand | null =>
   stondAlInPlanning ? { richting: "doorgevoerd", benen: { aangeboden: true, terug: true } } : beweging;
 
+type WisselVelden = Partial<Record<"requesterId" | "targetDriverId" | "shiftDate" | "shiftLine" | "returnDate" | "returnCode", unknown>>;
+
+/**
+ * Beschrijven twee versies van één ruil dezelfde wissel in de planning: wie,
+ * welke dienst, welke terugdienst? Alleen voor de TEKST van de melding. De
+ * lijstroute herkent een wissel die al in de rijen staat op het opgeslagen
+ * record, en bouwt de tekst op het record zoals het geschreven is; een admin
+ * kan een open aanvraag in dezelfde save op een andere collega zetten, en dan
+ * tonen de rijen niet wat het geschreven record zegt.
+ */
+const zelfdeWisselInPlanning = (a: WisselVelden, b: WisselVelden): boolean =>
+  (["requesterId", "targetDriverId", "shiftDate", "shiftLine", "returnDate", "returnCode"] as const)
+    .every((veld) => String(a[veld] ?? "") === String(b[veld] ?? ""));
+
 /** Naam bij een gebruikers-id voor de tekst van een melding; onbekend blijft
  *  leeg, zodat de zin op "je collega" terugvalt en geen id toont. */
 const naamVoorMelding = (users: ReadonlyArray<{ id: unknown; name?: unknown }>, id: unknown): string | undefined => {
@@ -1432,7 +1446,9 @@ export function mountRuilRoutes(app: express.Express) {
           afgebroken = await naVerlorenStatuswissel({ swap: next, beweging, logReq: req });
           break;
         }
-        await logStatusWissel(prev, next, carry, planningVoorMelding(alDoorgevoerdIds.has(String(next.id)), beweging));
+        // "Stond al in de planning" is vastgesteld op `prev`; de tekst mag dat
+        // alleen overnemen als `next` dezelfde wissel beschrijft.
+        await logStatusWissel(prev, next, carry, planningVoorMelding(alDoorgevoerdIds.has(String(next.id)) && zelfdeWisselInPlanning(prev, next), beweging));
       }
       if (afgebroken) {
         return res.status(afgebroken.status).json({ error: afgebroken.error, ...(afgebroken.currentStatus ? { currentStatus: afgebroken.currentStatus } : {}) });

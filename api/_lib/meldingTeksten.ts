@@ -29,10 +29,12 @@
  *
  * Geen "hij" of "zijn": de tekst kent het geslacht van de collega niet.
  * Statuswoorden volgen shared/status.ts: de planning wijst af, de collega
- * weigert.
+ * weigert. Een wissel die de planning zelf in de planning zette
+ * (`isHandmatigeRuil`) heet "de wissel": niemand vroeg er een ruil of een
+ * overname voor aan en niemand keurde iets goed.
  */
 import { DAG_DMJ } from "./helpers.js";
-import { persoonsVerloop } from "../../shared/ruilVerloop.js";
+import { isHandmatigeRuil, persoonsVerloop } from "../../shared/ruilVerloop.js";
 import { normaliseerTijd } from "../../shared/tijdNotatie.js";
 
 export type MeldingTekst = { titel: string; body: string };
@@ -46,6 +48,9 @@ export type RuilVoorMelding = {
   shiftLine?: unknown;
   returnDate?: unknown;
   returnCode?: unknown;
+  /** Alleen gelezen om een handmatige wissel van de planning te herkennen
+   *  (`isHandmatigeRuil`); de reden zelf komt nooit in de tekst. */
+  reason?: unknown;
 };
 
 /** Namen van de twee chauffeurs van de ruil; leeg of onbekend mag. */
@@ -104,7 +109,11 @@ type Gelezen = {
   aanvragerId: string;
   collegaId: string;
   overname: boolean;
-  /** "ruil" of "overname", voor midden in een zin. */
+  /** Door de planning rechtstreeks in de planning gezet: geen aanvraag, geen
+   *  goedkeuring (zelfde toets als het verloop per persoon). */
+  handmatig: boolean;
+  /** "ruil" of "overname", voor midden in een zin; "wissel" voor een
+   *  handmatige wissel van de planning. */
   woord: string;
   /** De aangeboden dienst zoals de ruil ze draagt, ook zonder collega: zo heet de ruil in een zin. */
   dienst: string;
@@ -139,11 +148,14 @@ const lees = (ruil: RuilVoorMelding): Gelezen => {
   const krijgt = (rol: Partij) => regels.find((r) => r.rol === rol)?.krijgt;
   const collegaKrijgt = krijgt("collega");
   const aanvragerKrijgt = krijgt("aanvrager");
+  // Alleen een tekst kan een reden zijn; al het andere is geen handmatige wissel.
+  const handmatig = typeof ruil.reason === "string" && isHandmatigeRuil({ reason: ruil.reason });
   return {
     aanvragerId,
     collegaId,
     overname,
-    woord: overname ? "overname" : "ruil",
+    handmatig,
+    woord: handmatig ? "wissel" : overname ? "overname" : "ruil",
     dienst: schoon(ruil.shiftLine),
     dag: dagKort(ruil.shiftDate),
     aangeboden: collegaKrijgt
@@ -370,7 +382,8 @@ export const ruilBeslisMelding = (b: RuilBeslissing, ontvangerId: unknown): Meld
         if (stand?.richting === "teruggedraaid" && ander) {
           return { titel, body: `De planning draaide de ${r.woord} terug: ${anderePartij(ander.rijder)} rijdt dienst ${ander.dienst}${op(ander.dag)} weer zelf.${rooster}` };
         }
-        return { titel, body: `De planning draaide ${noem(r, `de goedgekeurde ${r.woord}`)} terug. Bekijk je rooster.` };
+        // Een handmatige wissel is nooit goedgekeurd: de planning zette hem zelf.
+        return { titel, body: `De planning draaide ${noem(r, r.handmatig ? "de wissel" : `de goedgekeurde ${r.woord}`)} terug. Bekijk je rooster.` };
       }
       return { titel, body: b.naar === "cancelled" ? `De planning annuleerde ${deRuil}.` : `De planning wees ${deRuil} af.` };
     }
