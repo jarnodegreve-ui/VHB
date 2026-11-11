@@ -19,8 +19,14 @@ import { microLabelClass } from './primitives';
  * naar het begin of einde van de week; wie de maand uit loopt, bladert mee.
  * Dagen vóór `min` (een eigen aanvraag in het verleden) en na `max` (de
  * uiterste einddatum van verlof) zijn uitgeschakeld en de cursor komt er niet.
+ *
+ * `dagInfo` (ronde 6, punt 13) zet onder het dagcijfer de bezettingsstip van
+ * de verlofkalender, met de tekst in het label van de dag. Het is alleen
+ * informatie: een volzette dag blijft kiesbaar. Zonder `dagInfo`, of als die
+ * voor een dag niets geeft (bezetting niet geladen), staat er geen stip; een
+ * uitgeschakelde dag krijgt er nooit een.
  */
-export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKies, onNaarMaand, verledenTitel, laterTitel }: {
+export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKies, onNaarMaand, verledenTitel, laterTitel, dagInfo }: {
   /** 'YYYY-MM' van de getoonde maand. */
   maand: string;
   start: string;
@@ -36,6 +42,8 @@ export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKi
   verledenTitel?: string;
   /** Uitleg bij een uitgeschakelde dag na `max` (title). */
   laterTitel?: string;
+  /** Bezetting van een dag: `staat` (data-bezetting), `stip` (kleurklasse van de stip) en `tekst` (in het label); null = onbekend, geen stip. */
+  dagInfo?: (iso: string) => { staat: string; stip: string; tekst: string } | null;
 }) {
   const klem = (iso: string) => (min && iso < min ? min : max && iso > max ? max : iso);
   const beginVanMaand = () => klem(`${maand}-01`);
@@ -108,6 +116,7 @@ export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKi
             const inRange = !!start && iso >= start && iso <= bereikEind;
             const isVandaag = iso === vandaag;
             const rol = isStart && isEind ? ', begin en einde van de periode' : isStart ? ', begin van de periode' : isEind ? ', einde van de periode' : '';
+            const info = uit ? null : dagInfo?.(iso) ?? null;
             return (
               // rauw: rastercel (role=gridcell, roving tabindex) met eigen bereik-/randstijl, zelfde recept als de dagcel van DatePicker.
               <button
@@ -115,7 +124,8 @@ export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKi
                 type="button"
                 role="gridcell"
                 data-iso={iso}
-                aria-label={`${formatDatumKiezer(iso)}${rol}`}
+                data-bezetting={info?.staat}
+                aria-label={`${formatDatumKiezer(iso)}${info ? `, ${info.tekst}` : ''}${rol}`}
                 aria-selected={inRange || undefined}
                 aria-current={isVandaag ? 'date' : undefined}
                 title={teVroeg ? verledenTitel : uit ? laterTitel : undefined}
@@ -124,7 +134,7 @@ export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKi
                 onClick={() => { setCursor(iso); onKies(iso); }}
                 onFocus={() => setCursor(iso)}
                 className={cn(
-                  'aspect-square rounded-xl text-xs font-semibold transition-colors flex items-center justify-center',
+                  'relative aspect-square rounded-xl text-xs font-semibold transition-colors flex items-center justify-center',
                   uit && 'text-slate-300 cursor-not-allowed',
                   // Begin en einde = neutrale selectie (bg-keuze), de dagen ertussen
                   // een gedempt vlak; vandaag = de gouden ring van DatePicker.
@@ -135,6 +145,8 @@ export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKi
                 )}
               >
                 {Number(iso.slice(8, 10))}
+                {/* Absoluut onderaan: het cijfer blijft in het midden, ook als de stippen pas later binnenkomen. */}
+                {info && <span aria-hidden="true" className={cn('absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full', info.stip)} />}
               </button>
             );
           })}
