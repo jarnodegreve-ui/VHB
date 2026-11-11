@@ -8,7 +8,7 @@ import { Modal, SluitKnop } from '../components/Modal';
 import { Formulier } from '../components/Formulier';
 import { useVeldfouten, useVuil } from '../lib/formulier';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
-import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge } from '../components/primitives';
+import { Button, IconButton, MicroLabel, microLabelClass, Pressable, StatusBadge, Badge } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
 import { ToonMeer, useToonMeer } from '../components/ToonMeer';
@@ -41,7 +41,8 @@ import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type Ver
 import { uitersteVerlofdag, verlofGrensMelding } from '../../shared/verlofGrens';
 import { vandaagBrussel } from '../lib/brussel';
 import { BEZETTING_LABEL, bezettingVanDag } from '../lib/verlofBezetting';
-import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
+import { aanvragerNaam, BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
+import { ookAangevraagd, volgendeWachtende } from '../lib/verlofWachtrij';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -411,8 +412,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const isDraftBoundary = (dateStr: string) =>
     showRequestModal && (dateStr === formData.startDate || dateStr === formData.endDate);
 
-  const decisionToast = (status: LeaveRequest['status']) =>
-    status === 'approved' ? 'Verlof goedgekeurd.' : status === 'rejected' ? 'Verlof afgewezen.' : 'Verlof geannuleerd.';
+  /** De bevestiging noemt wie en wat (ronde 6): nu het paneel na een
+   *  beslissing doorschakelt naar de volgende aanvraag, moet de toast zeggen
+   *  over welke aanvraag net beslist is. */
+  const decisionToast = (status: LeaveRequest['status'], aanvraag?: LeaveRequest) => {
+    const wat = status === 'approved' ? 'Verlof goedgekeurd' : status === 'rejected' ? 'Verlof afgewezen' : 'Verlof geannuleerd';
+    return aanvraag ? `${wat}: ${aanvragerNaam(users, aanvraag)}, ${formatPeriodeDMJ(aanvraag.startDate, aanvraag.endDate)}.` : `${wat}.`;
+  };
 
   const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status'], seenStatus?: string, reden?: string) => {
     // Delta-pad (PATCH per record): conflictveilig bij twee gelijktijdige
@@ -423,8 +429,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     if (onDecide) {
       // Succes-toast bij bevestiging: een beslissing zonder enige feedback
       // voelde als "is er iets gebeurd?" (controleronde 30/07).
+      const aanvraag = leaveRequests.find((r) => r.id === requestId);
       return onDecide(requestId, newStatus, seenStatus, reden).then((ok) => {
-        if (ok) notify(decisionToast(newStatus), 'success');
+        if (ok) notify(decisionToast(newStatus, aanvraag), 'success');
         return ok;
       });
     }
@@ -444,6 +451,29 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const reviewLeave = isPlanner && link.staat === 'gevonden' ? link.record : null;
   const setReviewLeave = (req: LeaveRequest | null) => (req ? link.open(req.id) : link.sluit());
   const eigenDoelId = !isPlanner && link.staat === 'gevonden' ? link.id : null;
+  // De lijst "Wachtend op goedkeuring" van planner en admin. Sinds ronde 6
+  // ook de volgorde waarin het paneel na een beslissing doorschakelt en de
+  // bron van "Ook aangevraagd voor deze periode" in het paneel, vandaar hier
+  // en niet meer in de lijst zelf.
+  const plannerPending = useMemo(() => (isPlanner ? verlofRequests.filter((r) => {
+    if (r.status !== 'pending') return false;
+    const requester = users.find((u) => u.id === r.userId);
+    const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+    const isMe = r.userId === user.id;
+    if (isBeheerder && !isMe) return false;
+    return true;
+  }) : []), [isPlanner, verlofRequests, users, user.id]);
+  // De verse stand voor ná het antwoord van de server: wat er dan nog wacht
+  // en welke aanvraag het paneel dan toont (de render van de klik is dan oud).
+  const wachtendRef = useRef(plannerPending);
+  wachtendRef.current = plannerPending;
+  const getoondRef = useRef<string | null>(null);
+  getoondRef.current = reviewLeave?.id ?? null;
+  // Staat dit scherm er nog? Wie tijdens een lopende beslissing naar een ander
+  // scherm ging (en misschien al terug is), krijgt daarna geen paneel dat
+  // vanzelf op een volgende aanvraag opengaat.
+  const hierRef = useRef(false);
+  useEffect(() => { hierRef.current = true; return () => { hierRef.current = false; }; }, []);
   const togglePendingSelection = (id: string) => {
     setSelectedPendingIds((prev) => {
       const next = new Set(prev);
@@ -614,6 +644,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
    *  zonder paginawissel. Op desktop bovenaan de linkerkolom, op mobiel een
    *  SlideOver. De verlofkalender toont sinds punt 16 dezelfde beoordeling. */
   function renderBeoordelingPaneel() {
+    // Wie voor dezelfde periode nog op een antwoord wacht (ronde 6): wie hier
+    // goedkeurt, beslist mee over hen. Uit dezelfde lijst als "Wachtend op
+    // goedkeuring", de oudste aanvraag eerst. Elke regel wisselt het paneel
+    // via de recordnavigatie (replace, geen extra stap in de historiek); de
+    // beslisknoppen zijn daarna even inert (VerlofBeoordelingKnoppen).
+    const ook = reviewLeave ? ookAangevraagd(plannerPending, reviewLeave) : [];
     return (
       <VerlofBeoordeling
         aanvraag={reviewLeave}
@@ -623,9 +659,65 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         limieten={limieten}
         today={today}
         isPlanner={isPlanner}
+        wachtrij={ook.length > 0 && (
+          <div>
+            <MicroLabel className="text-slate-600">Ook aangevraagd voor deze periode</MicroLabel>
+            <ul className="mt-2 space-y-1.5">
+              {ook.map((r) => {
+                const naam = aanvragerNaam(users, r);
+                return (
+                  <li key={r.id}>
+                    {/* Zelfde rij als in "Wachtend op goedkeuring": het is dezelfde aanvraag. */}
+                    <Pressable
+                      onClick={() => link.open(r.id)}
+                      className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 hover:bg-surface-row-hover hover:ring-hairline-strong"
+                    >
+                      <Avatar naam={naam} size="md" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-md font-semibold text-slate-800">{naam}</span>
+                        <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">{formatPeriodeDMJ(r.startDate, r.endDate)}</span>
+                      </span>
+                      <ChevronRightSmall size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
+                    </Pressable>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         onClose={() => setReviewLeave(null)}
-        // Paneel sluit pas ná het antwoord (fase 2): de knop toont intussen `bezig`.
-        onDecide={async (id, status, seenStatus, reden) => { await handleStatusUpdate(id, status, seenStatus, reden); setReviewLeave(null); }}
+        // Het paneel beweegt pas ná het antwoord (fase 2): de knop toont
+        // intussen `bezig`. Geslaagd = door naar de volgende wachtende in de
+        // volgorde van de lijst zoals ze bij de klik stond (ronde 6); was dit
+        // de laatste, mislukte de beslissing (fout, 409), koos de beslisser
+        // intussen zelf een andere aanvraag of verliet hij het scherm, dan
+        // sluit het paneel zoals altijd.
+        //
+        // En alleen waar de bevestiging ("Verlof goedgekeurd: …") de kop van
+        // het paneel vrijlaat, anders ligt ze 4,2 s over de naam van de
+        // VOLGENDE aanvraag terwijl Goedkeuren alweer werkt. Gemeten op 11-11
+        // (Chromium en WebKit, zelfde cijfers): onder 768 px staat de toast
+        // onderaan, ver van de kop; van 768 tot 1023 px ligt hij over naam,
+        // datum en sluitknop van de SlideOver; van 1024 tot 1194 px overlapt
+        // hij de kaart nog horizontaal (toast vanaf venster − 400, kaart tot
+        // 695 + 7/12 × (venster − 1024)) en raakt hij de kop op een gescrolde
+        // pagina; vanaf 1195 px staat hij ernaast, waar de pagina ook staat
+        // en hoeveel toasts er ook zijn. Tussen 768 en 1194 px sluit het
+        // paneel dus na elke beslissing, zoals vroeger. Gelezen ná het
+        // antwoord, niet bij het laden: een venster kan versleept zijn. Wijzigt
+        // de zijbalk, het raster of de toast, meet dan opnieuw
+        // (e2e/deeplinks-verlof-beslissen.spec.ts faalt eerst).
+        onDecide={async (id, status, seenStatus, reden) => {
+          const volgorde = plannerPending.map((r) => r.id);
+          const ok = await handleStatusUpdate(id, status, seenStatus, reden);
+          const breed = (px: number) => window.matchMedia(`(min-width: ${px}px)`).matches;
+          const kopVrij = !breed(768) || breed(1195);
+          const volgende = ok === true && hierRef.current && getoondRef.current === id && kopVrij
+            ? volgendeWachtende(volgorde, id, wachtendRef.current.map((r) => r.id))
+            : null;
+          if (volgende) link.open(volgende);
+          else setReviewLeave(null);
+        }}
         onCancel={handleCancel}
         onHistoriek={setHistoryLeave}
       />
@@ -811,14 +903,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           </div>
 
           {isPlanner && (() => {
-            const plannerPending = verlofRequests.filter((r) => {
-              if (r.status !== 'pending') return false;
-              const requester = users.find((u) => u.id === r.userId);
-              const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
-              const isMe = r.userId === user.id;
-              if (isBeheerder && !isMe) return false;
-              return true;
-            });
             const allSelected = plannerPending.length > 0 && plannerPending.every((r) => selectedPendingIds.has(r.id));
             return (
               <div className="space-y-3">
