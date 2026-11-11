@@ -50,11 +50,24 @@ type ReturnOption = { date: string; code: string; isFree: boolean };
  *  van een stilliggende muis of vinger en kleiner dan de rijknop zelf, zodat
  *  elke echte handbeweging de voet vrijgeeft. */
 const PLAATSSLOT_STRAAL = 12;
-type Punt = { x: number; y: number };
-/** Eén regel voor de klik in de voet én voor de beweging die de grendel lost:
- *  ligt dit buiten de straal rond het onthouden punt (of is er geen punt)? */
-const isWeg = (e: { clientX: number; clientY: number }, punt: Punt | null) =>
-  !punt || Math.hypot(e.clientX - punt.x, e.clientY - punt.y) >= PLAATSSLOT_STRAAL;
+/** Voor de planner is "dezelfde plek" het icoon waarop ze klikte, niet één
+ *  punt, en een vinger raakt nooit twee keer hetzelfde punt: ook het vak van de
+ *  rijknop telt, met deze marge (px) eromheen voor een tik die net naast de
+ *  rand neerkomt. Het icoon is 40 px breed, dus met de marge blijft de plek
+ *  smaller dan een derde van een knop in de voet. */
+const PLAATSSLOT_MARGE = 8;
+type Plek = { x: number; y: number; vak: DOMRect };
+/** Eén regel voor de klik die geslikt wordt én voor de beweging die de grendel
+ *  lost: ligt dit buiten het vak van de rijknop én buiten de straal rond het
+ *  punt van de klik (of is er geen plek)? Een vak zonder maat telt niet. */
+const isWeg = (e: { clientX: number; clientY: number }, plek: Plek | null) => {
+  if (!plek) return true;
+  const { vak } = plek;
+  const inVak = vak.width > 0
+    && e.clientX >= vak.left - PLAATSSLOT_MARGE && e.clientX <= vak.right + PLAATSSLOT_MARGE
+    && e.clientY >= vak.top - PLAATSSLOT_MARGE && e.clientY <= vak.bottom + PLAATSSLOT_MARGE;
+  return !inVak && Math.hypot(e.clientX - plek.x, e.clientY - plek.y) >= PLAATSSLOT_STRAAL;
+};
 
 /** Vaste visuele identiteit van de overname (ruil zonder tegenprestatie) —
  *  overal dezelfde badge i.p.v. losse blauwe tekstregels per lijst. Stil:
@@ -638,13 +651,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // onder de rijknop (768 tot 1440 px, met de rij onderaan het venster): wie
   // dacht dat de eerste klik niet pakte en opnieuw op dezelfde plek klikte,
   // keurde goed zonder de rustregels te lezen. Een langere tijd verschuift dat
-  // venster alleen. Daarom onthoudt de rijknop het punt van de klik: zolang de
-  // aanwijzer daar niet weg is geweest, doet een klik in de voet op dat punt
-  // niets (ook niet op Afwijzen: de bevestiging hierboven is er voor een klik
-  // op een andere plek). Het punt staat in een ref, zodat een aanraking elders
-  // het al gelost heeft vóór de klik van datzelfde gebaar; de vlag stuurt
-  // alleen de luisteraars, die met het effect weer van `window` verdwijnen.
-  const plaatsSlot = useRef<Punt | null>(null);
+  // venster alleen. Daarom onthoudt de rijknop de plek van de klik (het punt en
+  // het vak van het icoon): zolang de aanwijzer daar niet weg is geweest, doet
+  // een klik in het paneel op die plek niets (ook niet op Afwijzen: de
+  // bevestiging hierboven is er voor een klik op een andere plek). De plek
+  // staat in een ref, zodat een aanraking elders ze al gelost heeft vóór de
+  // klik van datzelfde gebaar; de vlag stuurt alleen de luisteraars, die met
+  // het effect weer van `window` verdwijnen.
+  // Bekende grens: de plek is een plaats in het venster. Verschuift de pagina
+  // onder een stilliggende muis (zoomen, een balk van de browser), dan telt de
+  // volgende klik als een andere plek.
+  const plaatsSlot = useRef<Plek | null>(null);
   const [plaatsSlotAan, setPlaatsSlotAan] = useState(false);
   useEffect(() => {
     if (!plaatsSlotAan) return;
@@ -653,11 +670,33 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       plaatsSlot.current = null;
       setPlaatsSlotAan(false);
     };
+    // Een klik op de plek van de openingsklik beslist niets, opent niets en
+    // verstuurt niets: hij brengt alleen de rustregels in beeld, daarom opende
+    // het paneel. Het indrukken ervoor mag de knop eronder ook de focus niet
+    // geven (onzichtbaar: geen focusring na een muisklik), anders keurt spatie
+    // of Enter daarna goed zonder dat de aanwijzer bewoog; de focus blijft op
+    // het venster. Vóór React, op `window`: de klik bereikt geen enkele knop.
+    // detail 0 = Enter of spatie op een knop: geen aanwijzer, geen plaats.
+    const slik = (e: MouseEvent) => {
+      if (!e.detail || isWeg(e, plaatsSlot.current)) return;
+      const venster = e.target instanceof Element ? e.target.closest<HTMLElement>('[role="dialog"]') : null;
+      if (!venster) return;
+      e.preventDefault();
+      if (e.type !== 'click') return;
+      e.stopPropagation();
+      venster.focus({ preventScroll: true });
+      venster.querySelector('section[aria-label="Rusttijd"]')
+        ?.scrollIntoView({ block: 'nearest', behavior: verminderdeBeweging() ? 'auto' : 'smooth' });
+    };
     window.addEventListener('pointermove', weg, true);
     window.addEventListener('pointerdown', weg, true);
+    window.addEventListener('mousedown', slik, true);
+    window.addEventListener('click', slik, true);
     return () => {
       window.removeEventListener('pointermove', weg, true);
       window.removeEventListener('pointerdown', weg, true);
+      window.removeEventListener('mousedown', slik, true);
+      window.removeEventListener('click', slik, true);
     };
   }, [plaatsSlotAan]);
   const paneelId = reviewSwap?.id ?? null;
@@ -666,25 +705,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     return () => { setRijknopId(null); setVoetOpSlot(0); plaatsSlot.current = null; setPlaatsSlotAan(false); };
   }, [paneelId]);
   const viaRijknop = !!reviewSwap && rijknopId === reviewSwap.id;
-  const bekijkEerstRust = (swap: SwapRequest, klik: { detail: number; clientX: number; clientY: number }) => {
+  const bekijkEerstRust = (swap: SwapRequest, klik: ReactMouseEvent<HTMLElement>) => {
     setVoetOpSlot((n) => n + 1);
     setRijknopId(swap.id);
     // Alleen een aanwijzer of een vinger heeft een plaats; Enter en spatie
     // geven detail 0 en zetten de focus op het paneel, niet op een knop.
-    plaatsSlot.current = klik.detail > 0 ? { x: klik.clientX, y: klik.clientY } : null;
+    plaatsSlot.current = klik.detail > 0 ? { x: klik.clientX, y: klik.clientY, vak: klik.currentTarget.getBoundingClientRect() } : null;
     setPlaatsSlotAan(klik.detail > 0);
     setReviewSwap(swap);
-  };
-  /** Voet van het beoordelingspaneel, vóór de knoppen: een klik op de plek van
-   *  de openingsklik beslist niets, opent niets en verstuurt niets. Hij brengt
-   *  alleen de rustregels in beeld, daarom opende het paneel. */
-  const slikOpDezelfdePlek = (e: ReactMouseEvent<HTMLElement>) => {
-    // detail 0 = Enter of spatie op een knop in de voet: geen aanwijzer, geen plaats.
-    if (!e.detail || isWeg(e, plaatsSlot.current)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.closest('[role="dialog"]')?.querySelector('section[aria-label="Rusttijd"]')
-      ?.scrollIntoView({ block: 'nearest', behavior: verminderdeBeweging() ? 'auto' : 'smooth' });
   };
   /** Afwijzen in de voet van het beoordelingspaneel. */
   const wijsAfInPaneel = (swap: SwapRequest) => {
@@ -1723,7 +1751,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         subtitle={reviewSwap ? `Aangevraagd op ${formatDateHuman(reviewSwap.createdAt)}` : undefined}
         icon={reviewSwap ? <Avatar naam={users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend'} size="lg" /> : undefined}
         footer={reviewSwap ? (
-          <div className={cn('flex items-center gap-2', voetOpSlot > 0 && 'pointer-events-none')} onClickCapture={slikOpDezelfdePlek}>
+          <div className={cn('flex items-center gap-2', voetOpSlot > 0 && 'pointer-events-none')}>
             <Button
               variant="ghost"
               size="md"

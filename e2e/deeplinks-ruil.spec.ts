@@ -272,7 +272,15 @@ async function opzijOpKnop(knop: Locator, punt: Punt): Promise<Punt> {
   expect(opzij.x > vak.x && opzij.x < vak.x + vak.width, 'het tweede punt ligt op dezelfde knop').toBe(true);
   return opzij;
 }
-
+/** Na een geslikte klik of tik: de focus staat op het venster zelf (het paneel
+ *  of de bevestiging), niet op een knop die beslist, en spatie en Enter doen
+ *  niets. De aanroeper kijkt daarna na dat er niets verstuurd of geopend is. */
+async function geenToetsBeslist(page: Page, venster: Locator, wanneer: string) {
+  await expect(venster, `${wanneer} staat de focus op het venster, niet op een knop`).toBeFocused();
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+}
 test.describe('beheertabel op desktop: rustwaarschuwing in de rij, afwijzen met bevestiging', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < TABEL_VANAF, 'De beheertabel bestaat pas vanaf 768 px; op de telefoon staat de ruil in de lijst (zie het blok hieronder).');
 
@@ -598,8 +606,11 @@ test.describe('plaatsgrendel: een herhaalde klik op de plek van de rijknop besli
         for (const keer of ['tweede', 'derde']) {
           await expect.poll(() => ligtOp(voetKnop, klik), { message: `vóór de ${keer} klik: Goedkeuren van de voet ligt op het punt van de rijknop en de tijdgrendel is voorbij` }).toBe(true);
           await page.mouse.click(klik.x, klik.y);
-          await page.waitForTimeout(300);
-          expect(schrijf, `de ${keer} klik op dezelfde plek beslist niets`).toEqual([]);
+          // De geslikte klik laat de focus niet op de knop achter (het indrukken
+          // gaf ze haar, onzichtbaar): spatie of Enter keurde dan goed zonder
+          // dat de aanwijzer bewoog.
+          await geenToetsBeslist(page, open, `na de ${keer} klik`);
+          expect(schrijf, `de ${keer} klik op dezelfde plek beslist niets, spatie en Enter daarna ook niet`).toEqual([]);
           await expect(page.getByRole('dialog'), 'alleen het paneel staat open, geen bevestiging').toHaveCount(1);
           await expect(open.getByRole('region', { name: 'Rusttijd' })).toBeVisible();
         }
@@ -641,8 +652,9 @@ test.describe('plaatsgrendel: een herhaalde klik op de plek van de rijknop besli
       for (const keer of ['tweede', 'derde']) {
         await expect.poll(() => ligtOp(voetKnop, klik), { message: `vóór de ${keer} klik: Afwijzen van de voet ligt op het punt van de rijknop en de tijdgrendel is voorbij` }).toBe(true);
         await page.mouse.click(klik.x, klik.y);
-        await page.waitForTimeout(300);
-        expect(schrijf, `de ${keer} klik op dezelfde plek beslist niets`).toEqual([]);
+        // Met de focus op Afwijzen opende spatie of Enter hier de bevestiging.
+        await geenToetsBeslist(page, open, `na de ${keer} klik`);
+        expect(schrijf, `de ${keer} klik op dezelfde plek beslist niets, spatie en Enter daarna ook niet`).toEqual([]);
         await expect(vraag, 'geen bevestigingsvenster').toHaveCount(0);
         await expect(page.getByRole('dialog'), 'alleen het paneel staat open').toHaveCount(1);
       }
@@ -710,6 +722,63 @@ test.describe('plaatsgrendel: een herhaalde klik op de plek van de rijknop besli
     await expect(rust, 'de geslikte klik brengt de rustregels in beeld').toBeInViewport({ ratio: 1 });
     expect(schrijf, 'en beslist niets').toEqual([]);
   });
+
+  // "Dezelfde plek" is voor de planner het icoon, niet één punt: een tweede klik
+  // elders op hetzelfde rij-icoon (hier van de ene hoek naar de andere, ±40 px
+  // verder) viel buiten de straal van 12 px en keurde goed.
+  for (const breed of [768, 1440]) {
+    test(`${breed} px: een herhaalde klik op een ander punt van hetzelfde rij-icoon beslist niets; naast het icoon keurt de klik gewoon goed`, async ({ page }) => {
+      await page.setViewportSize({ width: breed, height: 900 });
+      const { schrijf, extra } = ruilServer([teBeoordelen({ rust: TE_KORT })]);
+      await seed(page, { user: ADMIN, extra });
+      await page.goto('/dienstruil');
+      const rij = rijVan(page);
+      const rijKnop = rij.getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd', exact: true });
+      const open = paneel(page, TEST_CHAUFFEUR);
+      const voetKnop = open.getByRole('button', { name: 'Goedkeuren', exact: true });
+      const hart = await rijknopOpVoetlijn(page, rij, rijKnop, voetKnop);
+      const vak = (await rijKnop.boundingBox())!;
+      const linksboven = { x: Math.ceil(vak.x) + 4, y: Math.ceil(vak.y) + 4 };
+      const rechtsonder = { x: Math.floor(vak.x + vak.width) - 4, y: Math.floor(vak.y + vak.height) - 4 };
+      expect(await ligtOp(rijKnop, linksboven), 'de eerste klik valt op het rij-icoon').toBe(true);
+
+      await page.mouse.click(linksboven.x, linksboven.y);
+      await page.waitForTimeout(1000);
+      for (const [waar, punt] of [['de andere hoek van het icoon', rechtsonder], ['het midden', hart], ['de eerste hoek', linksboven]] as const) {
+        await expect.poll(() => ligtOp(voetKnop, punt), { message: `vóór de klik op ${waar}: Goedkeuren van de voet ligt daar en de tijdgrendel is voorbij` }).toBe(true);
+        await page.mouse.click(punt.x, punt.y);
+        await geenToetsBeslist(page, open, `na de klik op ${waar}`);
+        expect(schrijf, `de klik op ${waar} beslist niets`).toEqual([]);
+        await expect(page.getByRole('dialog'), 'alleen het paneel staat open').toHaveCount(1);
+      }
+
+      // Naast het icoon (de aanwijzer verlaat het vak): de voet werkt gewoon.
+      const opzij = await opzijOpKnop(voetKnop, hart);
+      await page.mouse.click(opzij.x, opzij.y);
+      await expect(open).toHaveCount(0);
+      await expect.poll(() => schrijf).toEqual([GOEDKEURING]);
+    });
+  }
+
+  test('admin, ruil die op de collega wacht: de herhaalde klik op Goedkeuren van de voet opent de bevestiging niet, spatie en Enter daarna ook niet', async ({ page }) => {
+    const { schrijf, extra } = ruilServer([teBeoordelen({ status: 'pending', rust: TE_KORT })]);
+    await seed(page, { user: ADMIN, extra });
+    await page.goto('/dienstruil');
+    const rij = rijVan(page);
+    const rijKnop = rij.getByRole('button', { name: 'Direct goedkeuren, bekijk eerst de rusttijd', exact: true });
+    const open = paneel(page, TEST_CHAUFFEUR);
+    const voetKnop = open.getByRole('button', { name: 'Goedkeuren', exact: true });
+    const klik = await rijknopOpVoetlijn(page, rij, rijKnop, voetKnop);
+
+    await page.mouse.click(klik.x, klik.y);
+    await page.waitForTimeout(1000);
+    await expect.poll(() => ligtOp(voetKnop, klik), { message: 'Goedkeuren van de voet ligt op het punt van de rijknop en de tijdgrendel is voorbij' }).toBe(true);
+    await page.mouse.click(klik.x, klik.y);
+    await geenToetsBeslist(page, open, 'na de herhaalde klik');
+    await expect(page.getByRole('dialog', { name: 'Direct goedkeuren' }), 'geen bevestigingsvenster').toHaveCount(0);
+    await expect(page.getByRole('dialog'), 'alleen het paneel staat open').toHaveCount(1);
+    expect(schrijf, 'niets beslist').toEqual([]);
+  });
 });
 
 test.describe('plaatsgrendel op een aanraakscherm (tabletbreedte)', () => {
@@ -730,11 +799,15 @@ test.describe('plaatsgrendel op een aanraakscherm (tabletbreedte)', () => {
 
       await page.touchscreen.tap(klik.x, klik.y);
       await page.waitForTimeout(1000);
-      for (const keer of ['tweede', 'derde']) {
-        await expect.poll(() => ligtOp(voetKnop, klik), { message: `vóór de ${keer} tik: Goedkeuren van de voet ligt op het punt van de rijknop en de tijdgrendel is voorbij` }).toBe(true);
-        await page.touchscreen.tap(klik.x, klik.y);
-        await page.waitForTimeout(300);
-        expect(schrijf, `de ${keer} tik op dezelfde plek beslist niets`).toEqual([]);
+      // Een vinger raakt nooit twee keer hetzelfde punt: ook 13 px ernaast, nog
+      // op de plek van het rij-icoon (40 x 44 px), is "dezelfde plek". Daarna
+      // een toetsenbord aan de tablet: Enter keurde goed zolang de geslikte tik
+      // de focus op de knop liet.
+      for (const [keer, punt] of [['tweede', klik], ['derde', klik], ['vierde, 13 px opzij', { x: klik.x + 13, y: klik.y }], ['vijfde, 13 px lager', { x: klik.x, y: klik.y + 13 }]] as const) {
+        await expect.poll(() => ligtOp(voetKnop, punt), { message: `vóór de ${keer} tik: Goedkeuren van de voet ligt op dat punt en de tijdgrendel is voorbij` }).toBe(true);
+        await page.touchscreen.tap(punt.x, punt.y);
+        await geenToetsBeslist(page, open, `na de ${keer} tik`);
+        expect(schrijf, `de ${keer} tik op de plek van het rij-icoon beslist niets, Enter daarna ook niet`).toEqual([]);
         await expect(page.getByRole('dialog')).toHaveCount(1);
       }
 

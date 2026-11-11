@@ -349,6 +349,121 @@ describe('Dienstruil: beheertabel op desktop', () => {
       expect(onDecide).toHaveBeenCalledWith('r1', 'approved', 'accepted');
     });
 
+    // "Dezelfde plek" is voor de planner het icoon, niet één punt: een tweede
+    // klik of tik elders op hetzelfde rij-icoon viel buiten de straal en keurde
+    // goed. Het vak van de rijknop telt daarom mee, met een marge van 8 px.
+    // jsdom meet niets (elk vak is 0 x 0, en dan geldt alleen de straal): hier
+    // krijgt de rijknop het vak van een icoon van 40 x 32 px.
+    describe('het vak van de rijknop', () => {
+      const VAK = { left: 880, right: 920, top: 544, bottom: 576, width: 40, height: 32, x: 880, y: 544, toJSON: () => ({}) } as DOMRect;
+      const HOEK = { x: VAK.left + 4, y: VAK.top + 4 };
+      const openOpIcoon = async () => {
+        const rijKnop = tabel().getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd' });
+        vi.spyOn(rijKnop, 'getBoundingClientRect').mockReturnValue(VAK);
+        await wijs(rijKnop, HOEK);
+        return paneel();
+      };
+
+      it('een klik elders op het icoon, of binnen de marge ernaast, is geslikt, ook ver buiten de straal rond het punt', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const open = await openOpIcoon();
+        // De andere hoek van het icoon: 40 px van het punt van de eerste klik.
+        await wijs(inVoet(open, 'Goedkeuren'), { x: VAK.right - 4, y: VAK.bottom - 4 });
+        await wijs(inVoet(open, 'Goedkeuren'), { x: VAK.right + 8, y: VAK.bottom + 8 });
+        await wijs(inVoet(open, 'Afwijzen'), { x: VAK.left - 8, y: VAK.top - 8 });
+        expect(onDecide).not.toHaveBeenCalled();
+        expect(screen.getAllByRole('dialog')).toEqual([open]);
+      });
+
+      it('net buiten de marge gaat de klik gewoon door', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        await wijs(inVoet(await openOpIcoon(), 'Goedkeuren'), { x: VAK.right + 9, y: VAK.bottom - 4 });
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(onDecide).toHaveBeenCalledWith('r1', 'approved', 'accepted');
+      });
+
+      it('de straal rond het punt blijft gelden waar ze buiten het vak met marge valt', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const rijKnop = tabel().getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd' });
+        vi.spyOn(rijKnop, 'getBoundingClientRect').mockReturnValue(VAK);
+        // De klik valt op de linkerrand van het icoon; 11 px verder naar links
+        // is buiten vak plus marge (8 px), binnen de straal (12 px).
+        await wijs(rijKnop, { x: VAK.left, y: 560 });
+        const open = await paneel();
+        await wijs(inVoet(open, 'Goedkeuren'), { x: VAK.left - 11, y: 560 });
+        expect(onDecide).not.toHaveBeenCalled();
+        await wijs(inVoet(open, 'Goedkeuren'), { x: VAK.left - 12, y: 560 });
+        expect(onDecide).toHaveBeenCalledTimes(1);
+      });
+
+      it('een beweging of aanraking binnen het vak lost de grendel niet, pas buiten het vak met marge', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const open = await openOpIcoon();
+        await aanwijzer('pointermove', { x: VAK.right - 2, y: VAK.bottom - 2 });
+        await aanwijzer('pointerdown', { x: VAK.right + 8, y: VAK.top });
+        await wijs(inVoet(open, 'Goedkeuren'), HOEK);
+        expect(onDecide).not.toHaveBeenCalled();
+        await aanwijzer('pointermove', { x: VAK.right + 9, y: VAK.top });
+        await wijs(inVoet(open, 'Goedkeuren'), HOEK);
+        expect(onDecide).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    // De geslikte klik annuleerde alleen de klik: het indrukken ervoor gaf de
+    // knop van de voet al de focus, zonder focusring. Spatie of Enter keurde dan
+    // goed zonder dat de aanwijzer bewoog en zonder dat de rustregels gelezen
+    // waren. Het indrukken op de plek geeft daarom geen focus meer, en na de
+    // geslikte klik staat de focus op het paneel.
+    describe('focus na een geslikte klik', () => {
+      /** Indrukken met een aanwijzer; `false` = de standaardactie (focus geven) is tegengehouden. */
+      const drukIn = (knop: HTMLElement, punt: Punt = P) => fireEvent.mouseDown(knop, { detail: 1, clientX: punt.x, clientY: punt.y });
+
+      it('indrukken op de plek geeft de knop eronder geen focus; elders en na wegbewegen wel', async () => {
+        toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const open = await openLangsRijknop();
+        expect(drukIn(inVoet(open, 'Goedkeuren'))).toBe(false);
+        expect(drukIn(inVoet(open, 'Afwijzen'), { x: P.x + 11, y: P.y })).toBe(false);
+        expect(drukIn(inVoet(open, 'Goedkeuren'), { x: P.x + 12, y: P.y })).toBe(true);
+        await aanwijzer('pointermove', { x: P.x + 60, y: P.y });
+        expect(drukIn(inVoet(open, 'Goedkeuren'))).toBe(true);
+      });
+
+      it('na de geslikte klik staat de focus op het paneel, ook als de knop ze toch kreeg', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const open = await openLangsRijknop();
+        const knop = inVoet(open, 'Goedkeuren');
+        // Een browser die de focus geeft vóór het indrukken geannuleerd kan worden.
+        knop.focus();
+        expect(document.activeElement).toBe(knop);
+        await wijs(knop);
+        expect(document.activeElement).toBe(open);
+        expect(onDecide).not.toHaveBeenCalled();
+      });
+
+      it('buiten een venster (de pagina, de achtergrond) blijft een klik op de plek wat hij was', async () => {
+        toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        await openLangsRijknop();
+        const buiten = screen.getByRole('table', { name: 'Dienstruilen' });
+        const opRij = vi.fn();
+        buiten.addEventListener('click', opRij);
+        expect(drukIn(buiten)).toBe(true);
+        await wijs(buiten);
+        expect(opRij).toHaveBeenCalledTimes(1);
+        buiten.removeEventListener('click', opRij);
+      });
+
+      it('toetsenbord in de voet blijft gewoon werken: Tab naar Goedkeuren, Enter keurt goed', async () => {
+        const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
+        const open = await openLangsRijknop();
+        const knop = inVoet(open, 'Goedkeuren');
+        knop.focus();
+        // Enter of spatie op een knop geeft een klik met detail 0.
+        await klik(knop);
+        expect(onDecide).toHaveBeenCalledTimes(1);
+        expect(onDecide).toHaveBeenCalledWith('r1', 'approved', 'accepted');
+      });
+    });
+
     it('op een ander punt vraagt Afwijzen de bevestiging van de rijknop, zoals voorheen', async () => {
       const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
       await wijs(inVoet(await openLangsRijknop(), 'Afwijzen'), { x: P.x - 60, y: P.y });
@@ -401,21 +516,24 @@ describe('Dienstruil: beheertabel op desktop', () => {
     });
 
     describe('opruiming', () => {
-      /** Luisteraars op window voor de aanwijzer die er nog hangen. */
+      /** Luisteraars op window voor de aanwijzer die er nog hangen: de twee die
+       *  de grendel lossen (beweging, aanraking) en de twee die op de plek
+       *  slikken (indrukken, klik). */
       const bespied = () => {
         const erbij = vi.spyOn(window, 'addEventListener');
         const eraf = vi.spyOn(window, 'removeEventListener');
         const hangend = () => erbij.mock.calls
-          .filter(([soort, fn]) => /^pointer(move|down)$/.test(soort) && !eraf.mock.calls.some(([s, f]) => s === soort && f === fn))
+          .filter(([soort, fn]) => /^(pointer(move|down)|mousedown|click)$/.test(soort) && !eraf.mock.calls.some(([s, f]) => s === soort && f === fn))
           .map(([soort]) => soort).sort();
         return { hangend, klaar: () => { erbij.mockRestore(); eraf.mockRestore(); } };
       };
+      const GRENDEL = ['click', 'mousedown', 'pointerdown', 'pointermove'];
 
       it('het paneel sluiten wist de grendel en haalt de luisteraars van window; via de naam werkt het oude punt meteen', async () => {
         const { hangend, klaar } = bespied();
         const { onDecide } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
         const open = await openLangsRijknop();
-        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        expect(hangend()).toEqual(GRENDEL);
         await klik(within(open).getByRole('button', { name: 'Sluiten' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 });
         expect(hangend()).toEqual([]);
@@ -431,7 +549,7 @@ describe('Dienstruil: beheertabel op desktop', () => {
         const { hangend, klaar } = bespied();
         const { unmount } = toonBeheer(PLANNER, [ruil({ rust: TE_KORT })]);
         const open = await openLangsRijknop();
-        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        expect(hangend()).toEqual(GRENDEL);
         await aanwijzer('pointermove', { x: P.x + 40, y: P.y });
         expect(hangend()).toEqual([]);
 
@@ -439,7 +557,7 @@ describe('Dienstruil: beheertabel op desktop', () => {
         await klik(within(open).getByRole('button', { name: 'Sluiten' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 });
         await openLangsRijknop();
-        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        expect(hangend()).toEqual(GRENDEL);
         unmount();
         expect(hangend()).toEqual([]);
         klaar();
@@ -451,7 +569,7 @@ describe('Dienstruil: beheertabel op desktop', () => {
         const rij = (dienst: string) => within(screen.getAllByRole('row').find((r) => r.textContent?.includes(`Dienst ${dienst}`))!);
         await wijs(rij('2505').getByRole('button', { name: 'Goedkeuren, bekijk eerst de rusttijd' }));
         await paneel();
-        expect(hangend()).toEqual(['pointerdown', 'pointermove']);
+        expect(hangend()).toEqual(GRENDEL);
         // In het echt een link of de terugknop; jsdom kent de achtergrond van
         // het paneel niet, dus de naam van de andere rij is hier aanklikbaar.
         await klik(rij('2606').getByTitle('Details bekijken'));
