@@ -217,7 +217,13 @@ import zlib from 'node:zlib';
 // grendels van de desktoprij), VerlofBeoordeling en LeaveManagementView
 // (doorschakelen, namen in de dekking) en het dashboard (komende diensten per
 // dag). Budget = de meting plus de ±0,5 kB van de runner en ±1 kB marge.
-const BUDGET_KB = 752;
+// 11-11 (ronde 6, de volgende drie PR's samen: juiste record, verlofdag,
+// klein gemak voor de staf): 752 → 755. Bovenop de vijf van hierboven meten
+// de acht samen lokaal 752,94 (record +1,3: het recordadres van Ziekte, het
+// doorschakelen en het voorstel in stap 2; verlofdag +0,6; gemak +0,5). Geen
+// nieuwe dependency. Budget = de meting plus de ±0,5 kB van de runner en
+// ±1,5 kB marge.
+const BUDGET_KB = 755;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -634,6 +640,12 @@ if (!kaartMatch) {
   // LCP + 2 s. Budget = de meting plus ±1 kB; de index bleef 79,50 (80,5).
   WARMUP_BUDGET_KB.chauffeur = 86;
   WARMUP_BUDGET_KB.staf = 157.5;
+  // 11-11 (ronde 6, de volgende drie PR's samen, zie BUDGET_KB): staf 157,5 →
+  // 158,5. De acht samen meten lokaal staf 157,10 (werkvoorraad met het doel
+  // per rij, Openstaande diensten met de dag in het adres, "Kijkt ook mee" op
+  // de Maandplanning); de chauffeur-set blijft 85,07 (budget 86, ongewijzigd).
+  // Budget = de meting plus ±1 kB; de runner meet tot ±0,5 kB zwaarder.
+  WARMUP_BUDGET_KB.staf = 158.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

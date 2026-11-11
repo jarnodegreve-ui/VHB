@@ -25,6 +25,8 @@ type Rij = {
   label: string;
   sub?: string;
   view: View;
+  /** Route-parameters van het doel (een record, of maand en dag); zonder = het scherm zelf. */
+  params?: readonly string[];
 };
 
 /** "Naam A, Naam B +3" — compacte opsomming voor de subregel. */
@@ -37,11 +39,15 @@ export function WerkvoorraadMenu({
   werkvoorraad,
   userNaam,
   onNavigate,
+  huidig,
 }: {
   werkvoorraad: Werkvoorraad;
   /** Naam bij een user-id (App heeft de users-lijst). */
   userNaam: (id: string) => string;
-  onNavigate: (view: View) => void;
+  /** Zelfde vorm als `navigeer` uit de router, zodat een rij een record of een dag kan meegeven. */
+  onNavigate: (view: View, opts?: { params?: readonly string[] }) => void;
+  /** Het scherm dat nu openstaat (zie de rij "te herverdelen"). */
+  huidig?: View;
 }) {
   const { open, setOpen, wortel } = useDropdown({ mobielVol: true });
 
@@ -79,13 +85,31 @@ export function WerkvoorraadMenu({
     });
   }
   if (wv.teHerverdelen.length > 0) {
+    // Eén rij voor alle chauffeurs samen (ronde 6, punt 17). Gaat het om
+    // precies één chauffeur, dan landt ze waar zijn rij in het Overzicht
+    // landt: het detail van zijn ziekmelding, of bij verlof en klein verlet
+    // de Maandplanning op de dag (`doel` en `doelParams` uit de werkvoorraad,
+    // geen tweede regel hier). Bij meer dan één chauffeur opent ze het
+    // Overzicht, waar elke chauffeur zijn eigen rij met het juiste doel
+    // heeft. Vroeger ging ze altijd naar Ziekte, en dat scherm toont alleen
+    // ziekmeldingen: een dood spoor voor wie met verlof is.
+    //
+    // Eén uitzondering: staat de Maandplanning zelf al open, dan opent de
+    // rij ook het Overzicht. Dat scherm leest maand en dag alleen bij het
+    // openen en zet een adres dat het zelf niet schreef meteen terug
+    // (gemeten 11-11: de klik deed daar niets). Vanuit het Overzicht opent
+    // de rij van de chauffeur de Maandplanning wel vers op de dag. Het
+    // ziektedetail volgt zijn adres ook als Ziekte al openstaat.
+    const enkel = wv.herverdeelPerChauffeur.length === 1 ? wv.herverdeelPerChauffeur[0] : null;
+    const enige = enkel && !(enkel.doel === 'bezetting' && huidig === 'bezetting') ? enkel : null;
     rijen.push({
       key: 'herverdeel',
       icon: <UserX size={16} />,
       tone: 'red',
       label: `${enkelvoud(wv.teHerverdelen.length, 'dienst', 'diensten')} te herverdelen`,
       sub: somOp(wv.herverdeelPerChauffeur.map((g) => `${g.naam} (${g.diensten.length})`)),
-      view: 'ziekte',
+      view: enige ? enige.doel : 'werkvoorraad',
+      params: enige?.doelParams,
     });
   }
   if (wv.gapDays.length > 0) {
@@ -148,7 +172,7 @@ export function WerkvoorraadMenu({
     blue: 'text-blue-700',
   };
 
-  const ga = (view: View) => () => { setOpen(false); onNavigate(view); };
+  const ga = (view: View, params?: readonly string[]) => () => { setOpen(false); onNavigate(view, params && { params }); };
 
   // Urgentie zichtbaar zonder het menu te openen: zit er een rode categorie
   // in (herverdelen, open diensten, verlopen documenten, kapotte import),
@@ -202,7 +226,7 @@ export function WerkvoorraadMenu({
             </div>
           ) : (
             rijen.map((r) => (
-              <MenuItem key={r.key} icon={r.icon} iconClassName={toonKleur[r.tone]} sub={r.sub} onClick={ga(r.view)}>
+              <MenuItem key={r.key} icon={r.icon} iconClassName={toonKleur[r.tone]} sub={r.sub} onClick={ga(r.view, r.params)}>
                 {r.label}
               </MenuItem>
             ))
