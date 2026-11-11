@@ -71,7 +71,10 @@ test.describe('Mijn dag: omleidingen van de gekozen dag', () => {
     await expect(detail).toContainText('Halte Station vervalt.');
 
     // Terug: op de telefoon sluit de eerste stap het paneel, daarna ben je weer op Mijn dag.
+    // Eerst wachten tot het paneel dicht is (zoals terugNaar in deeplinks-ruil.spec.ts):
+    // onder belasting las de test het pad anders vóór de terugstap verwerkt was.
     await page.goBack();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     if (pad(page) !== '/mijn-dag') await page.goBack();
     await expect.poll(() => pad(page)).toBe('/mijn-dag');
     await expect(page.getByRole('region', { name: 'Omleidingen' })).toBeVisible();
