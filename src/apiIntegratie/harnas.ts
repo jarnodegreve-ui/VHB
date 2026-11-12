@@ -201,6 +201,14 @@ const mem = vi.hoisted(() => ({
   sessieFunctieOntbreekt: false,
   // true = de users-lezing faalt (databasefout), zoals PostgREST dan gooit.
   usersFaalt: false,
+  // true = replacePlanningAndMatrix vervangt alleen het bereik van het
+  // bestand, zoals de echte RPC (zie de mock zelf).
+  periodeImportGetrouw: false,
+  // Wat getPlanningData doet in plaats van lezen zolang dit gezet is: 'faalt'
+  // gooit, 'hangt' komt nooit terug. null = gewoon lezen.
+  planningLezing: null as null | 'faalt' | 'hangt',
+  // Aantal lezingen van de hele planning (getPlanningData).
+  planningLezingen: 0,
 }));
 
 vi.mock('../../api/_lib/db.js', () => {
@@ -673,6 +681,9 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
     },
     getPlanningData: async (f?: { driverId?: string; monthIso?: string }) => {
       mem.planningMaandFilters.push(f?.monthIso ?? null);
+      mem.planningLezingen += 1;
+      if (mem.planningLezing === 'faalt') throw new Error('planning: connection failure');
+      if (mem.planningLezing === 'hangt') return new Promise<any[]>(() => {});
       return mem.planning.filter((s: any) =>
         (!f?.driverId || String(s.driverId) === String(f.driverId)) &&
         (!f?.monthIso || String(s.date ?? '').startsWith(`${f.monthIso}-`)));
@@ -975,7 +986,24 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
       if (!mem.planningVersies || mem.planningVersies.length === 0) return null;
       return mem.planningVersies.length > 1 ? mem.planningVersies.shift()! : mem.planningVersies[0];
     },
-    replacePlanningAndMatrix: async (rows: any[], shifts: any[]) => { mem.planningMatrix = rows; mem.planning = shifts; },
+    // Standaard vervangt deze mock alles (zo zijn de oudere tests geschreven).
+    // Met mem.periodeImportGetrouw doet hij wat de RPC
+    // replace_planning_and_matrix_periode doet (supabase/2026-08-19_periode_import.sql;
+    // dbtests/planning.test.ts bewijst dat tegen een echte database): alleen
+    // het bereik van het bestand (min/max source_date) wordt vervangen, matrix
+    // en planning daarbuiten blijven staan, en een dienst buiten het bereik
+    // wordt geweigerd.
+    replacePlanningAndMatrix: async (rows: any[], shifts: any[]) => {
+      if (!mem.periodeImportGetrouw) { mem.planningMatrix = rows; mem.planning = shifts; return; }
+      const dagen = rows.map((r: any) => String(r.source_date ?? '')).filter(Boolean).sort();
+      const van = dagen[0];
+      const tot = dagen[dagen.length - 1];
+      if (!van || !tot) throw new Error('Lege matrix-set geweigerd: er valt geen periode uit af te leiden.');
+      const buiten = (dag: unknown) => String(dag ?? '') < van || String(dag ?? '') > tot;
+      if (shifts.some((s: any) => buiten(s.date))) throw new Error(`Import geweigerd: dienst(en) vallen buiten het matrixbereik ${van} t/m ${tot}.`);
+      mem.planningMatrix = [...mem.planningMatrix.filter((r: any) => buiten(r.source_date)), ...rows];
+      mem.planning = [...mem.planning.filter((s: any) => buiten(s.date)), ...shifts];
+    },
     // Herstelpunt-keten (import → historiek + snapshot → restore), in-memory.
     savePlanningMatrixHistoryEntry: async (entry: any) => {
       if (mem.historiekFaalt) return false;
@@ -1327,6 +1355,9 @@ beforeEach(() => {
   mem.planningVerplaatsenFaalt = null;
   mem.voorSwapToevoegen = null;
   mem.planningToestandLezingen = 0;
+  mem.periodeImportGetrouw = false;
+  mem.planningLezing = null;
+  mem.planningLezingen = 0;
   mem.swapHerlezingFaalt = false;
   mem.doorvoerUitActiviteit = false;
   mem.devices = [

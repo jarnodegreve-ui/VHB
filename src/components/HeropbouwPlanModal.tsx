@@ -1,5 +1,6 @@
+import type { ReactNode } from 'react';
 import { RotateCcw } from 'lucide-react';
-import type { HeropbouwPlan, HeropbouwPlanDag } from '../../shared/heropbouwPlan';
+import type { HeropbouwPlan, HeropbouwPlanChauffeur, HeropbouwPlanDag } from '../../shared/heropbouwPlan';
 import { beschrijfRuilNietToepasbaar } from '../../shared/ruilNietToepasbaar';
 import { aantal, formatDatumDMJ, formatPeriodeDMJ } from '../lib/format';
 import { Modal } from './Modal';
@@ -35,6 +36,37 @@ function DagRegel({ dag }: { dag: HeropbouwPlanDag }) {
         {dag.soort === 'erbij' ? wordt : dag.soort === 'weg' ? was : `${was}, wordt ${wordt}`}
       </span>
     </li>
+  );
+}
+
+/**
+ * De chauffeurs van een plan, elk met zijn gewijzigde dagen (wat hij nu heeft
+ * en wat het wordt). Gedeeld met het voorbeeld van een planning-import (ronde
+ * 6, punt 18), zodat een plan overal dezelfde opmaak heeft. `voet` = een
+ * laatste regel in hetzelfde kader (de "Toon meer" van het import-voorbeeld);
+ * zonder voet is het de lijst zoals ze in dit venster altijd stond.
+ */
+export function HeropbouwPlanChauffeurs({ chauffeurs, voet }: { chauffeurs: readonly HeropbouwPlanChauffeur[]; voet?: ReactNode }) {
+  const rijen = chauffeurs.map((c) => (
+    <li key={c.id} className="px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-row-title">{c.naam}</span>
+        <MicroLabel>{aantal(c.dagen.length, 'dag', 'dagen')}</MicroLabel>
+      </div>
+      <ul className="mt-1 divide-y divide-hairline-subtle">
+        {c.dagen.slice(0, DAGEN_VOLUIT).map((d) => <DagRegel key={d.dag} dag={d} />)}
+        {c.dagen.length > DAGEN_VOLUIT && (
+          <li className="py-2 text-body-sm text-slate-500">+ {aantal(c.dagen.length - DAGEN_VOLUIT, 'dag', 'dagen')} meer</li>
+        )}
+      </ul>
+    </li>
+  ));
+  if (!voet) return <ul className="divide-y divide-hairline-subtle rounded-2xl ring-1 ring-hairline">{rijen}</ul>;
+  return (
+    <div className="overflow-hidden rounded-2xl ring-1 ring-hairline">
+      <ul className="divide-y divide-hairline-subtle">{rijen}</ul>
+      {voet}
+    </div>
   );
 }
 
@@ -108,22 +140,7 @@ export function HeropbouwPlanModal({ open, stand, bezig, onClose, onBevestig, on
                   <Callout tone="warning" title={`${aantal(plan.totaal.chauffeurs, 'chauffeur', 'chauffeurs')}, ${aantal(plan.totaal.dagen, 'dag', 'dagen')} veranderen`} role="status">
                     Wat hieronder staat komt uit de matrix en het dienstoverzicht. Wijzigingen die met de hand in de planning gezet zijn (een toewijzing, een wissel buiten een ruil) en hier als “weg” of “gewijzigd” staan, komen niet terug.
                   </Callout>
-                  <ul className="divide-y divide-hairline-subtle rounded-2xl ring-1 ring-hairline">
-                    {plan.chauffeurs.map((c) => (
-                      <li key={c.id} className="px-4 py-3">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className="text-row-title">{c.naam}</span>
-                          <MicroLabel>{aantal(c.dagen.length, 'dag', 'dagen')}</MicroLabel>
-                        </div>
-                        <ul className="mt-1 divide-y divide-hairline-subtle">
-                          {c.dagen.slice(0, DAGEN_VOLUIT).map((d) => <DagRegel key={d.dag} dag={d} />)}
-                          {c.dagen.length > DAGEN_VOLUIT && (
-                            <li className="py-2 text-body-sm text-slate-500">+ {aantal(c.dagen.length - DAGEN_VOLUIT, 'dag', 'dagen')} meer</li>
-                          )}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
+                  <HeropbouwPlanChauffeurs chauffeurs={plan.chauffeurs} />
                 </>
               )}
             </>

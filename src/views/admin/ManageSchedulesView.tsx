@@ -10,7 +10,9 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../../lib/api';
 import { matrixVerzoek, pakBestandIn, teGrootFout, type IngepaktBestand } from '../../lib/bestandInpakken';
 import { Modal } from '../../components/Modal';
-import { HeropbouwPlanModal, type HeropbouwPlanStand } from '../../components/HeropbouwPlanModal';
+import { HeropbouwPlanChauffeurs, HeropbouwPlanModal, type HeropbouwPlanStand } from '../../components/HeropbouwPlanModal';
+import { ToonMeer, useToonMeer } from '../../components/ToonMeer';
+import type { HeropbouwPlan, HeropbouwPlanChauffeur } from '../../../shared/heropbouwPlan';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Callout } from '../../components/Callout';
@@ -24,6 +26,39 @@ import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type Zie
 import { meldSchrijffout } from '../../lib/fouten';
 import { Td, Th } from '../../components/TabelBasis';
 import { MaandInput } from '../../components/MaandInput';
+
+/** Wat het import-voorbeeld van het plan toont: de totalen en per chauffeur
+ *  de dagen die veranderen. */
+type ImportPlan = Pick<HeropbouwPlan, 'totaal' | 'chauffeurs'>;
+
+const GEEN_CHAUFFEURS: HeropbouwPlanChauffeur[] = [];
+const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
+const isTekstLijst = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+
+/**
+ * Het plan uit het antwoord van het voorbeeld, of null. Niets raden: ontbreekt
+ * het plan (oudere server, geblokkeerd, niet te berekenen) of heeft het een
+ * onverwachte vorm, dan is er geen plan en zegt het scherm dat. De totalen
+ * van de server moeten bij zijn lijst passen (aantal chauffeurs, dagen, en
+ * per soort): "geen wijzigingen" staat er alleen als de server dat echt zei.
+ */
+function leesImportPlan(ruw: any): ImportPlan | null {
+  const totaal = ruw?.totaal;
+  const chauffeurs = ruw?.chauffeurs;
+  if (!totaal || !Array.isArray(chauffeurs)) return null;
+  const tel: Record<string, number> = { erbij: 0, weg: 0, gewijzigd: 0 };
+  let dagen = 0;
+  for (const c of chauffeurs) {
+    if (typeof c?.id !== 'string' || typeof c.naam !== 'string' || !Array.isArray(c.dagen) || c.dagen.length === 0) return null;
+    for (const d of c.dagen) {
+      if (typeof d?.dag !== 'string' || !ISO_DAG.test(d.dag) || !isTekstLijst(d.was) || !isTekstLijst(d.wordt) || typeof tel[d.soort] !== 'number') return null;
+      tel[d.soort] += 1;
+      dagen += 1;
+    }
+  }
+  if (totaal.chauffeurs !== chauffeurs.length || totaal.dagen !== dagen || Object.keys(tel).some((soort) => totaal[soort] !== tel[soort])) return null;
+  return { totaal, chauffeurs };
+}
 
 /** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
  *  met een kop + teller per blok blijft het scanbaar en klap je alleen open
@@ -129,6 +164,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     /** Doorgevoerde ruilen die na deze import met de planning in tegenspraak
      *  zijn: de dienst staat in de Excel bij iemand anders (06-11). */
     ruilenNietToepasbaar: RuilNietToepasbaar[];
+    /** Per chauffeur de dagen die deze import verandert (ronde 6, punt 18);
+     *  null = geen plan (geblokkeerd, niet te berekenen, onverwachte vorm). */
+    plan: ImportPlan | null;
+    /** De periode waarvoor dit voorbeeld berekend is. Het plan staat alleen in
+     *  beeld zolang dat de periode is die de import zou versturen. */
+    planPeriode: { van: string; tot: string };
   }>(null);
   const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0 || matrixPreview.verlofConflicts.length > 0);
 
@@ -216,7 +257,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const fetchMatrixPreview = (bestand: IngepaktBestand, periode?: { van: string; tot: string }) =>
     verstuurMatrix('/api/planning-matrix/preview', bestand, periode ? { periode } : undefined);
 
-  const previewToState = (data: any) => ({
+  const previewToState = (data: any, periode: { van: string; tot: string }) => ({
     importedDays: data.importedDays || 0,
     detectedDrivers: data.detectedDrivers || 0,
     generatedShifts: data.generatedShifts || 0,
@@ -243,6 +284,21 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     ziekTeRegistreren: Array.isArray(data.ziekTeRegistreren) ? data.ziekTeRegistreren : [],
     verwachtingsCheck: Array.isArray(data.verwachtingsCheck) ? data.verwachtingsCheck : [],
     ruilenNietToepasbaar: Array.isArray(data.ruilenNietToepasbaar) ? data.ruilenNietToepasbaar : [],
+    plan: leesImportPlan(data.plan),
+    planPeriode: periode,
+  });
+
+  // Het plan hoort bij één bestand en één periode. Het staat alleen in beeld
+  // als het voorbeeld berekend is voor de periode die nu in de velden staat
+  // (dezelfde die de import verstuurt): na een mislukte herberekening of een
+  // leeggemaakt datumveld toont het scherm geen plan van een vorige periode.
+  const importPlan = matrixPreview && matrixPreview.planPeriode.van === periodeVan && matrixPreview.planPeriode.tot === periodeTot
+    ? matrixPreview.plan
+    : null;
+  // De eerste tien chauffeurs, de rest op vraag; een ander bestand of een
+  // andere periode begint opnieuw bij tien.
+  const planLijst = useToonMeer(importPlan?.chauffeurs ?? GEEN_CHAUFFEURS, {
+    sleutel: `${pendingMatrixFilename}|${matrixPreview?.planPeriode.van ?? ''}|${matrixPreview?.planPeriode.tot ?? ''}`,
   });
 
   // Eén-klik ziekte-registratie vanuit de preview: de reeks komt uit de Excel
@@ -283,14 +339,20 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Een nieuw bestand: een herberekening van het vorige bestand die nog
+    // onderweg is telt niet meer mee (ze zou het voorbeeld van dit bestand
+    // anders overschrijven met de cijfers en het plan van het vorige).
+    const volgnummer = ++previewVolgnummerRef.current;
+    setIsPreviewVerversen(false);
     try {
       setIsMatrixImporting(true);
       const bestand = await pakBestandIn(file);
       const data = await fetchMatrixPreview(bestand);
+      if (volgnummer !== previewVolgnummerRef.current) return;
       setPendingMatrixBestand(bestand);
       setPendingMatrixFilename(file.name);
       setZiekteGeregistreerd(new Set());
-      setMatrixPreview(previewToState(data));
+      setMatrixPreview(previewToState(data, { van: data.startDate || '', tot: data.endDate || '' }));
       // Periode start op het volledige bestand; inkorten kan in de preview.
       setPeriodeVan(data.startDate || '');
       setPeriodeTot(data.endDate || '');
@@ -314,10 +376,17 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       setIsPreviewVerversen(true);
       const data = await fetchMatrixPreview(pendingMatrixBestand, { van, tot });
       if (volgnummer !== previewVolgnummerRef.current) return;
-      setMatrixPreview(previewToState(data));
+      setMatrixPreview(previewToState(data, { van, tot }));
     } catch (error) {
       if (volgnummer === previewVolgnummerRef.current) {
-        meldSchrijffout('Voorbeeld bijwerken', error, () => void handlePeriodeChange(van, tot));
+        // "Opnieuw proberen" blijft tien seconden staan en draagt het bestand
+        // van deze render. Kwam er intussen een ander bestand, een andere
+        // periode of Annuleren (elk verhoogt het volgnummer), dan hoort de
+        // knop bij een voorbeeld dat er niet meer is en doet hij niets: anders
+        // zette hij cijfers en plan van het vorige bestand onder het nieuwe.
+        meldSchrijffout('Voorbeeld bijwerken', error, () => {
+          if (volgnummer === previewVolgnummerRef.current) void handlePeriodeChange(van, tot);
+        });
       }
     } finally {
       if (volgnummer === previewVolgnummerRef.current) setIsPreviewVerversen(false);
@@ -1190,6 +1259,54 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   </Card>
                 )}
 
+                {/* Wat de import voor wie verandert (ronde 6, punt 18): hetzelfde
+                    soort plan als de droge run van de heropbouw, berekend met
+                    de opbouw en de ruil-replay van de import zelf. Bij een
+                    blokkade schrijft de import niets, dan staat hier niets.
+                    Geen plan (niet te berekenen, onverwachte vorm, of van een
+                    andere periode dan de velden hierboven) is één neutrale
+                    regel, nooit "geen wijzigingen": de import blijft mogelijk.
+                    Het plan vergelijkt de rijen van de planning. Een code
+                    zonder uren (bureau, schoolrit, garage) heeft geen rijen:
+                    verhuist die in de Excel, of valt een ruil ervan weg, dan
+                    staat dat hier niet. Daarom zegt de lege staat alleen iets
+                    over de diensten met uren, en staat die grens onder elk
+                    plan (tegenlezing ronde 6). */}
+                {!matrixPreviewHasIssues && (
+                  <section aria-label="Wat verandert voor de chauffeurs">
+                    <Card>
+                      <MicroLabel>Wat verandert voor de chauffeurs</MicroLabel>
+                      {isPreviewVerversen ? (
+                        <p className="mt-2 text-body-sm text-slate-500" role="status">Het verschil per chauffeur wordt opnieuw berekend…</p>
+                      ) : !importPlan ? (
+                        <p className="mt-2 text-body-sm text-slate-500" role="status">Het verschil per chauffeur kon niet berekend worden.</p>
+                      ) : importPlan.totaal.chauffeurs === 0 ? (
+                        <p className="mt-2 text-body-sm text-slate-700" role="status">Geen wijzigingen in de diensten met uren.</p>
+                      ) : (
+                        <>
+                          <p className="mt-2 text-body-sm text-slate-700" role="status">
+                            {aantal(importPlan.totaal.chauffeurs, 'chauffeur', 'chauffeurs')}, {aantal(importPlan.totaal.dagen, 'dag', 'dagen')} {importPlan.totaal.dagen === 1 ? 'verandert' : 'veranderen'}
+                            {' '}({[
+                              importPlan.totaal.erbij > 0 ? `${importPlan.totaal.erbij} erbij` : '',
+                              importPlan.totaal.weg > 0 ? `${importPlan.totaal.weg} weg` : '',
+                              importPlan.totaal.gewijzigd > 0 ? `${importPlan.totaal.gewijzigd} gewijzigd` : '',
+                            ].filter(Boolean).join(', ')}).
+                          </p>
+                          <div className="mt-3">
+                            <HeropbouwPlanChauffeurs
+                              chauffeurs={planLijst.zichtbaar}
+                              voet={planLijst.volgende > 0 ? <ToonMeer getoond={planLijst.getoond} totaal={planLijst.totaal} volgende={planLijst.volgende} onMeer={planLijst.meer} /> : undefined}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {!isPreviewVerversen && importPlan && (
+                        <p className="mt-3 text-body-sm text-slate-500">Codes zonder uren (bureau, schoolrit, garage) en ruilen daarvan staan niet in dit overzicht.</p>
+                      )}
+                    </Card>
+                  </section>
+                )}
+
                 {/* Kleur volgt de zwaarste inhoud: rood alleen bij onbekende
                     codes; alleen niet-gematchte chauffeurs = amber (zoals hun
                     eigen kaart) — rode kop om amber inhoud gaf een gemengd
@@ -1299,6 +1416,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   size="lg"
                   className="flex-1"
                   onClick={() => {
+                    // Een herberekening die nog onderweg is hoort bij het
+                    // bestand dat hier wegvalt: haar antwoord telt niet meer.
+                    previewVolgnummerRef.current += 1;
+                    setIsPreviewVerversen(false);
                     setMatrixPreviewOpen(false);
                     setPendingMatrixBestand(null);
                     setPendingMatrixFilename('');

@@ -2658,6 +2658,371 @@ describe('matrix-import: een doorgevoerde ruil die de Excel tegenspreekt wordt b
   });
 });
 
+describe('import-voorbeeld: het plan per chauffeur per dag is wat de import doet (ronde 6, punt 18)', () => {
+  // Het voorbeeld toont vóór het schrijven wat voor wie verandert. De hoofdtest
+  // van elk scenario: eerst het voorbeeld, dan de echte import met exact
+  // dezelfde body, en dan het verschil tussen de planning vóór en na, hier
+  // zelf uitgerekend op de rijen (niet met bouwHeropbouwPlan). Dat verschil
+  // moet exact zijn wat het plan voorspelde. De mock van de schrijfactie doet
+  // hier wat de echte RPC doet (alleen het bereik van het bestand vervangen).
+  const bouwXlsx = async (aoa: unknown[][]) => {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+  const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+  const KOP = ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'Chauffeur C', 'aantal'];
+  const A = '3';
+  const B = '4';
+  const C = '7';
+  const VR = '2030-08-02'; // vrijdag
+  const ZA = '2030-08-03'; // zaterdag
+  const rij = (dag: string, a: string, b: string, c: string, dagtype = 'W') => [serial(dag), dagtype, a, b, c, [a, b, c].filter(Boolean).length];
+
+  /** Een dienst zoals een mens hem leest; de eigen lezing van deze test. */
+  const leesbaar = (r: any) => {
+    const loop = String(r.loopnr ?? '').trim();
+    return `dienst ${r.line}, ${r.startTime} tot ${r.endTime}${loop ? ` (loop ${loop})` : ''}`;
+  };
+  const perChauffeurDag = (rijen: any[]) => {
+    const uit = new Map<string, string[]>();
+    for (const r of rijen) uit.set(`${r.driverId}|${r.date}`, [...(uit.get(`${r.driverId}|${r.date}`) ?? []), leesbaar(r)]);
+    for (const [sleutel, diensten] of uit) uit.set(sleutel, diensten.sort());
+    return uit;
+  };
+  /** Wat er tussen twee standen van de planning echt verschilt, per chauffeur per dag. */
+  const echtVerschil = (voor: any[], na: any[]) => {
+    const a = perChauffeurDag(voor);
+    const b = perChauffeurDag(na);
+    const uit: Record<string, { was: string[]; wordt: string[]; soort: string }> = {};
+    for (const sleutel of new Set([...a.keys(), ...b.keys()])) {
+      const was = a.get(sleutel) ?? [];
+      const wordt = b.get(sleutel) ?? [];
+      if (JSON.stringify(was) === JSON.stringify(wordt)) continue;
+      uit[sleutel] = { was, wordt, soort: was.length === 0 ? 'erbij' : wordt.length === 0 ? 'weg' : 'gewijzigd' };
+    }
+    return uit;
+  };
+  const uitPlan = (plan: any) => Object.fromEntries(
+    plan.chauffeurs.flatMap((c: any) => c.dagen.map((d: any) => [`${c.id}|${d.dag}`, { was: d.was, wordt: d.wordt, soort: d.soort }])),
+  );
+  /** Alles wat een voorbeeld niet mag raken: gegevens, log, pushes, meldingen, historiek, herstelpunten, instellingen. */
+  const stand = () => JSON.stringify({
+    planning: mem.planning, matrix: mem.planningMatrix, swaps: mem.swaps, leave: mem.leave, activity: mem.activity,
+    pushes: mem.pushesSent, meldingen: mem.meldingen, historiek: mem.importHistory, snapshots: mem.snapshots, instellingen: mem.appSettings,
+  });
+  const voorbeeld = async (aoa: unknown[][], extra: Record<string, unknown> = {}) =>
+    api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: await bouwXlsx(aoa), ...extra } });
+  const importeer = async (aoa: unknown[][], extra: Record<string, unknown> = {}) => {
+    const res = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: await bouwXlsx(aoa), ...extra } });
+    expect(res.status).toBe(200);
+    return res;
+  };
+  /** Voorbeeld, dan de echte import met dezelfde body; geeft het plan en het echte verschil terug. */
+  const voorspelEnImporteer = async (aoa: unknown[][], extra: Record<string, unknown> = {}) => {
+    const body = { xlsxBase64: await bouwXlsx(aoa), ...extra };
+    const voor = structuredClone(mem.planning);
+    const onaangeroerd = stand();
+    const vb = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body });
+    expect(vb.status).toBe(200);
+    // Het voorbeeld schreef, logde en pushte niets.
+    expect(stand()).toBe(onaangeroerd);
+    const plan = vb.json.plan;
+    expect(plan).toBeTruthy();
+    const imp = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body });
+    expect(imp.status).toBe(200);
+    const verschil = echtVerschil(voor, mem.planning);
+    // De kern: wat het plan voorspelde is exact wat de import veranderde.
+    expect(uitPlan(plan)).toEqual(verschil);
+    const soorten = Object.values(verschil).map((d) => d.soort);
+    expect(plan.totaal).toEqual({
+      chauffeurs: new Set(Object.keys(verschil).map((s) => s.split('|')[0])).size,
+      dagen: soorten.length,
+      erbij: soorten.filter((s) => s === 'erbij').length,
+      weg: soorten.filter((s) => s === 'weg').length,
+      gewijzigd: soorten.filter((s) => s === 'gewijzigd').length,
+    });
+    // Het plan noemt de set die de import wegschreef en zijn bereik.
+    expect(plan.diensten).toBe(imp.json.generatedShifts);
+    expect(plan.dagenInMatrix).toBe(imp.json.importedDays);
+    expect(plan.periode).toEqual({ van: imp.json.startDate, tot: imp.json.endDate });
+    return { plan, verschil, voor, vb, imp };
+  };
+
+  beforeEach(() => {
+    mem.periodeImportGetrouw = true;
+    mem.users = [...mem.users, { id: C, name: 'Chauffeur C', email: 'c@vhb.be', role: 'chauffeur', isActive: true }];
+    invalidateUsersCache();
+    mem.planningCodes = [
+      { code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true },
+      { code: 'bur', category: 'service', description: 'Bureau', countsAsShift: true },
+    ];
+    mem.leave = [];
+    mem.swaps = [];
+    mem.planning = [];
+    mem.planningMatrix = [];
+    mem.activity = [];
+    mem.pushesSent = [];
+    mem.meldingen = [];
+  });
+
+  it('een verse maand: iedereen met een dienst krijgt die dagen erbij', async () => {
+    const { plan } = await voorspelEnImporteer([KOP, rij(VR, '12', '14', ''), rij(ZA, '12', 'vrij', '15')]);
+    expect(plan.totaal).toEqual({ chauffeurs: 3, dagen: 4, erbij: 4, weg: 0, gewijzigd: 0 });
+    expect(plan.chauffeurs.map((c: any) => c.naam)).toEqual(['Chauffeur A', 'Chauffeur B', 'Chauffeur C']);
+    expect(plan.chauffeurs[0].dagen).toEqual([
+      { dag: VR, was: [], wordt: ['dienst 12, 08:00 tot 16:00'], soort: 'erbij' },
+      { dag: ZA, was: [], wordt: ['dienst 12, 08:00 tot 16:00'], soort: 'erbij' },
+    ]);
+  });
+
+  it('dezelfde Excel nog eens: geen wijzigingen voor de chauffeurs, en ook dat schrijft niets', async () => {
+    const aoa = [KOP, rij(VR, '12', '14', ''), rij(ZA, '12', 'vrij', '15')];
+    await importeer(aoa);
+    const { plan } = await voorspelEnImporteer(aoa);
+    expect(plan.totaal).toEqual({ chauffeurs: 0, dagen: 0, erbij: 0, weg: 0, gewijzigd: 0 });
+    expect(plan.chauffeurs).toEqual([]);
+    expect(plan.diensten).toBe(4);
+  });
+
+  it('een gewijzigde dienst: een andere dienst in de Excel en andere uren in het dienstoverzicht', async () => {
+    await importeer([KOP, rij(VR, '12', '14', ''), rij(ZA, '12', '14', '')]);
+    // Dienst 12 begint voortaan om 08:45 (het dienstoverzicht), en B rijdt
+    // zaterdag dienst 15 in plaats van 14 (de Excel).
+    mem.services = mem.services.map((s: any) => (s.serviceNumber === '12' ? { ...s, startTime: '08:45' } : s));
+    const { plan } = await voorspelEnImporteer([KOP, rij(VR, '12', '14', ''), rij(ZA, '12', '15', '')]);
+    expect(plan.totaal).toEqual({ chauffeurs: 2, dagen: 3, erbij: 0, weg: 0, gewijzigd: 3 });
+    expect(plan.chauffeurs.find((c: any) => c.id === A).dagen[0]).toEqual({ dag: VR, was: ['dienst 12, 08:00 tot 16:00'], wordt: ['dienst 12, 08:45 tot 16:00'], soort: 'gewijzigd' });
+    expect(plan.chauffeurs.find((c: any) => c.id === B).dagen).toEqual([{ dag: ZA, was: ['dienst 14, 10:00 tot 18:00'], wordt: ['dienst 15, 11:00 tot 19:00'], soort: 'gewijzigd' }]);
+  });
+
+  it('een chauffeur erbij en een chauffeur weg: de ene verliest zijn dagen, de andere krijgt ze', async () => {
+    await importeer([KOP, rij(VR, '12', '14', ''), rij(ZA, '12', '14', '')]);
+    // A staat niet meer in het bestand (kolom weg), C komt erbij op dienst 12.
+    const zonderA = ['datum', 'dagtype', 'Chauffeur B', 'Chauffeur C', 'aantal'];
+    const { plan } = await voorspelEnImporteer([zonderA, [serial(VR), 'W', '14', '12', 2], [serial(ZA), 'W', '14', '12', 2]]);
+    expect(plan.totaal).toEqual({ chauffeurs: 2, dagen: 4, erbij: 2, weg: 2, gewijzigd: 0 });
+    expect(plan.chauffeurs.find((c: any) => c.id === A).dagen.map((d: any) => d.soort)).toEqual(['weg', 'weg']);
+    expect(plan.chauffeurs.find((c: any) => c.id === C).dagen.map((d: any) => d.soort)).toEqual(['erbij', 'erbij']);
+    expect(mem.planning.some((p: any) => p.driverId === A)).toBe(false);
+  });
+
+  describe('een goedgekeurde ruil die de Excel niet kent (06-11)', () => {
+    const aNaarB = {
+      id: 's-2101', shiftId: 'x', requesterId: A, targetDriverId: B, status: 'approved', swapType: 'overname',
+      shiftDate: ZA, shiftLine: '12', reason: 'Handmatige wissel door Annelies Admin', createdAt: '2030-07-20T16:00:00Z', decidedAt: '2030-07-20T16:00:00Z',
+    };
+    // De stand na de ruil: de Excel zei A op 12, de ruil bracht hem bij B.
+    beforeEach(async () => {
+      mem.swaps = [aNaarB];
+      await importeer([KOP, rij(ZA, '12', 'vrij', '')]);
+      expect(mem.planning.find((p: any) => p.date === ZA && String(p.line) === '12')?.driverId).toBe(B);
+      mem.activity = [];
+      mem.pushesSent = [];
+    });
+
+    it('staat de dienst in de nieuwe Excel bij een derde, dan zegt het plan vooraf dat de ruil teruggedraaid wordt', async () => {
+      const { plan } = await voorspelEnImporteer([KOP, rij(ZA, '', 'vrij', '12')]);
+      expect(plan.totaal).toEqual({ chauffeurs: 2, dagen: 2, erbij: 1, weg: 1, gewijzigd: 0 });
+      expect(plan.chauffeurs.find((c: any) => c.id === B).dagen).toEqual([{ dag: ZA, was: ['dienst 12, 08:00 tot 16:00'], wordt: [], soort: 'weg' }]);
+      expect(plan.chauffeurs.find((c: any) => c.id === C).dagen).toEqual([{ dag: ZA, was: [], wordt: ['dienst 12, 08:00 tot 16:00'], soort: 'erbij' }]);
+      // Zelfde ruil, bij naam, als in de bestaande waarschuwing van het voorbeeld.
+      expect(plan.ruilen).toMatchObject({ toegepast: 0, nietToepasbaar: 1 });
+      expect(plan.ruilen.lijst).toEqual([{ id: 's-2101', van: 'Chauffeur A', naar: 'Chauffeur B', dienst: '12', dag: ZA, been: 'aangeboden', dienstBij: ['Chauffeur C'], handmatig: true }]);
+      // De Excel won: C rijdt, de ruil staat nog op goedgekeurd.
+      expect(mem.planning.find((p: any) => p.date === ZA && String(p.line) === '12')?.driverId).toBe(C);
+    });
+
+    it('staat de dienst in de nieuwe Excel nog bij de gever, dan legt de import de ruil er weer over: geen wijziging', async () => {
+      const { plan, vb } = await voorspelEnImporteer([KOP, rij(ZA, '12', 'vrij', '')]);
+      expect(plan.totaal.chauffeurs).toBe(0);
+      expect(plan.ruilen).toMatchObject({ toegepast: 1, nietToepasbaar: 0, lijst: [] });
+      expect(vb.json.ruilenNietToepasbaar).toEqual([]);
+      expect(mem.planning.find((p: any) => p.date === ZA && String(p.line) === '12')?.driverId).toBe(B);
+    });
+  });
+
+  it('een dienst met een afwijking per dagtype: de zaterdag krijgt de uren van de afwijking', async () => {
+    // Kolom B draagt het dagtype: 25 = vrijdag, 26 = zaterdag.
+    const aoa = [KOP, rij(VR, '12', '', '', '25'), rij(ZA, '12', '', '', '26')];
+    await importeer(aoa);
+    // Sindsdien kreeg dienst 12 op zaterdag andere uren (afwijking per dagtype).
+    mem.services = mem.services.map((s: any) => (s.serviceNumber === '12'
+      ? { ...s, varianten: [{ dagtypes: ['26'], startTime: '09:30', endTime: '13:00', loopnr: '7' }] }
+      : s));
+    const { plan } = await voorspelEnImporteer(aoa);
+    expect(plan.totaal).toEqual({ chauffeurs: 1, dagen: 1, erbij: 0, weg: 0, gewijzigd: 1 });
+    expect(plan.chauffeurs[0].dagen).toEqual([{ dag: ZA, was: ['dienst 12, 08:00 tot 16:00'], wordt: ['dienst 12, 09:30 tot 13:00 (loop 7)'], soort: 'gewijzigd' }]);
+  });
+
+  it('een code-dienst zonder rijen: wie van een dienst naar bureau gaat, verliest in de planning zijn rijen', async () => {
+    await importeer([KOP, rij(ZA, '12', '14', '')]);
+    const { plan, imp } = await voorspelEnImporteer([KOP, rij(ZA, 'bur', '14', 'bur')]);
+    // De code-dienst heeft geen rijen: het plan toont wat de planning toont.
+    expect(plan.totaal).toEqual({ chauffeurs: 1, dagen: 1, erbij: 0, weg: 1, gewijzigd: 0 });
+    expect(plan.chauffeurs[0]).toMatchObject({ id: A, dagen: [{ dag: ZA, was: ['dienst 12, 08:00 tot 16:00'], wordt: [], soort: 'weg' }] });
+    expect(imp.json.unknownCodes).toEqual([]);
+    expect(mem.planning.map((p: any) => `${p.driverId}|${p.line}`)).toEqual([`${B}|14`]);
+  });
+
+  it('de grens van het plan: een code-dienst die van chauffeur wisselt staat er niet in, het scherm zegt dat erbij', async () => {
+    // Bureau heeft geen rijen in de planning, het bord (de matrix) is daar de
+    // waarheid. Het plan vergelijkt rijen en ziet dus niet dat bureau van A
+    // naar C gaat. Daarom zegt het scherm bij een leeg plan alleen "Geen
+    // wijzigingen in de diensten met uren." en staat onder elk plan dat codes
+    // zonder uren er niet in staan (tegenlezing ronde 6). Rekent het plan
+    // ooit het bord mee, dan hoort deze test en die regel mee te veranderen.
+    await importeer([KOP, rij(ZA, 'bur', '14', 'vrij')]);
+    const { plan } = await voorspelEnImporteer([KOP, rij(ZA, 'vrij', '14', 'bur')]);
+    expect(plan.totaal).toEqual({ chauffeurs: 0, dagen: 0, erbij: 0, weg: 0, gewijzigd: 0 });
+    // De import verlegde bureau wel: de matrix draagt het nu bij C.
+    const cellen = mem.planningMatrix.find((r: any) => r.source_date === ZA)?.assignments ?? {};
+    expect([cellen['Chauffeur A'], cellen['Chauffeur C']].map((c) => String(c).toLowerCase())).toEqual(['vrij', 'bur']);
+    expect(mem.planning.map((p: any) => `${p.driverId}|${p.line}`)).toEqual([`${B}|14`]);
+  });
+
+  it('lopen de dagen in het bestand niet op, dan is er geen plan: het zou dagen tonen die de import niet meeneemt', async () => {
+    const DO = '2030-08-01';
+    await importeer([KOP, rij(DO, '12', '14', ''), rij(VR, '12', '14', ''), rij(ZA, '12', '14', '')]);
+    // Zelfde dagen, maar donderdag staat tussen vrijdag en zaterdag, en A
+    // rijdt donderdag dienst 15. Begin en einde zijn de eerste en de laatste
+    // rij (vrijdag en zaterdag); die periode stuurt het scherm mee met de import.
+    const doorElkaar = [KOP, rij(VR, '12', '14', ''), rij(DO, '15', '14', ''), rij(ZA, '12', '14', '')];
+    const onaangeroerd = stand();
+    const lezingen = mem.planningLezingen;
+    const vb = await voorbeeld(doorElkaar);
+    expect(vb.status).toBe(200);
+    expect(vb.json).toMatchObject({ success: true, importedDays: 3, startDate: VR, endDate: ZA, unknownCodes: [] });
+    expect(vb.json.plan).toBeNull();
+    // Geen plan betekent ook: de planning is er niet voor gelezen, en niets geschreven.
+    expect(mem.planningLezingen).toBe(lezingen);
+    expect(stand()).toBe(onaangeroerd);
+    // Wat het scherm dan importeert (vrijdag tot zaterdag) raakt donderdag niet:
+    // een plan over het hele bestand had A op donderdag als gewijzigd getoond.
+    const voor = structuredClone(mem.planning);
+    await importeer(doorElkaar, { periode: { van: vb.json.startDate, tot: vb.json.endDate } });
+    expect(echtVerschil(voor, mem.planning)).toEqual({});
+    // Dezelfde rijen in oplopende volgorde geven wel een plan, en dat klopt met de import.
+    const { plan } = await voorspelEnImporteer([KOP, rij(DO, '15', '14', ''), rij(VR, '12', '14', ''), rij(ZA, '12', '14', '')]);
+    expect(plan.totaal).toEqual({ chauffeurs: 1, dagen: 1, erbij: 0, weg: 0, gewijzigd: 1 });
+    expect(plan.chauffeurs[0].dagen[0]).toMatchObject({ dag: DO, soort: 'gewijzigd' });
+  });
+
+  describe('een maandgrens', () => {
+    const DAGEN = ['2030-08-30', '2030-08-31', '2030-09-01', '2030-09-02'];
+    const buiten = (rijen: any[]) => JSON.stringify(rijen.filter((r: any) => (r.date ?? r.source_date) < '2030-08-31' || (r.date ?? r.source_date) > '2030-09-01'));
+
+    it('een gekozen periode over de maandgrens: alleen die dagen staan in het plan, de rest blijft byte-gelijk staan', async () => {
+      await importeer([KOP, ...DAGEN.map((d) => rij(d, '12', '14', ''))]);
+      const planningBuiten = buiten(mem.planning);
+      const matrixBuiten = buiten(mem.planningMatrix);
+      // Het bestand wijzigt elke dag (B rijdt 15), maar alleen 31/08 en 01/09 worden gekozen.
+      const { plan } = await voorspelEnImporteer([KOP, ...DAGEN.map((d) => rij(d, '12', '15', 'vrij'))], { periode: { van: '2030-08-31', tot: '2030-09-01' } });
+      expect(plan.periode).toEqual({ van: '2030-08-31', tot: '2030-09-01' });
+      expect(plan.totaal).toEqual({ chauffeurs: 1, dagen: 2, erbij: 0, weg: 0, gewijzigd: 2 });
+      expect(plan.chauffeurs[0].dagen.map((d: any) => d.dag)).toEqual(['2030-08-31', '2030-09-01']);
+      expect(buiten(mem.planning)).toBe(planningBuiten);
+      expect(buiten(mem.planningMatrix)).toBe(matrixBuiten);
+      expect(mem.planning.filter((p: any) => p.date === '2030-08-30' || p.date === '2030-09-02')).toHaveLength(4);
+    });
+
+    it('een 1-op-1-ruil over de maandgrens, met alleen de terugdienst in het bereik', async () => {
+      // A gaf dienst 12 van 30/08 aan B en kreeg dienst 14 van 01/09 terug.
+      mem.swaps = [{
+        id: 's-grens', shiftId: 'x', requesterId: A, targetDriverId: B, status: 'approved', swapType: 'ruil',
+        shiftDate: '2030-08-30', shiftLine: '12', returnDate: '2030-09-01', returnCode: '14',
+        reason: '', createdAt: '2030-07-20T16:00:00Z', decidedAt: '2030-07-21T08:00:00Z',
+      }];
+      await importeer([KOP, ...DAGEN.map((d) => rij(d, '12', '14', ''))]);
+      const op = (dag: string, lijn: string) => mem.planning.find((p: any) => p.date === dag && String(p.line) === lijn)?.driverId;
+      expect([op('2030-08-30', '12'), op('2030-09-01', '14')]).toEqual([B, A]);
+      const augustus = () => JSON.stringify(mem.planning.filter((p: any) => p.date < '2030-09-01'));
+      const augustusVoor = augustus();
+      // September opnieuw, de Excel kent de ruil niet: de import legt de
+      // terugdienst er weer over, augustus (met de aangeboden dienst) blijft staan.
+      const { plan } = await voorspelEnImporteer([KOP, ...DAGEN.map((d) => rij(d, '12', '14', ''))], { periode: { van: '2030-09-01', tot: '2030-09-02' } });
+      expect(plan.totaal.chauffeurs).toBe(0);
+      expect(augustus()).toBe(augustusVoor);
+      expect([op('2030-08-30', '12'), op('2030-09-01', '14')]).toEqual([B, A]);
+    });
+  });
+
+  it('een geblokkeerde import heeft geen plan: de import zou niets schrijven', async () => {
+    await importeer([KOP, rij(ZA, '12', '14', '')]);
+    const onbekend = await voorbeeld([KOP, rij(ZA, '12', 'xyz', '')]);
+    expect(onbekend.status).toBe(200);
+    expect(onbekend.json.unknownCodes).toEqual(['xyz']);
+    expect(onbekend.json.plan).toBeNull();
+    // Gepland verlof op de dag van een dienst blokkeert ook.
+    mem.leave = [{ id: 'l-x', userId: A, startDate: ZA, endDate: ZA, type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2030-07-01T08:00:00Z' }];
+    const verlof = await voorbeeld([KOP, rij(ZA, '12', '14', '')]);
+    expect(verlof.json.verlofConflicts).toHaveLength(1);
+    expect(verlof.json.plan).toBeNull();
+  });
+
+  it('lukt de lezing van de planning niet, dan gaat het voorbeeld door met de tellingen en zonder plan', async () => {
+    await importeer([KOP, rij(ZA, '12', '14', '')]);
+    const aoa = [KOP, rij(ZA, '12', '15', '')];
+    mem.planningLezing = 'faalt';
+    const fout = await voorbeeld(aoa);
+    expect(fout.status).toBe(200);
+    expect(fout.json.plan).toBeNull();
+    expect(fout.json).toMatchObject({ success: true, importedDays: 1, generatedShifts: 2, unknownCodes: [] });
+    // Komt de planning niet binnen het budget terug, dan wacht het voorbeeld er niet op.
+    mem.planningLezing = 'hangt';
+    const vorig = process.env.IMPORT_PLAN_BUDGET_MS;
+    process.env.IMPORT_PLAN_BUDGET_MS = '40';
+    try {
+      const traag = await voorbeeld(aoa);
+      expect(traag.status).toBe(200);
+      expect(traag.json.plan).toBeNull();
+      expect(traag.json).toMatchObject({ success: true, importedDays: 1, generatedShifts: 2 });
+    } finally {
+      if (vorig === undefined) delete process.env.IMPORT_PLAN_BUDGET_MS; else process.env.IMPORT_PLAN_BUDGET_MS = vorig;
+    }
+    // De import zelf hangt daar niet van af: met een gezonde lezing gaat hij gewoon door.
+    mem.planningLezing = null;
+    const { plan } = await voorspelEnImporteer(aoa);
+    expect(plan.totaal).toEqual({ chauffeurs: 1, dagen: 1, erbij: 0, weg: 0, gewijzigd: 1 });
+  });
+
+  it('een maand met 60 chauffeurs: één lezing van de planning, geen lezing in een lus, en ruim binnen de tijd van een functie', async () => {
+    const namen = Array.from({ length: 60 }, (_, i) => `Proefchauffeur ${String(i + 1).padStart(2, '0')}`);
+    mem.users = [...mem.users, ...namen.map((name, i) => ({ id: `p${i + 1}`, name, email: `p${i + 1}@vhb.be`, role: 'chauffeur', isActive: true }))];
+    invalidateUsersCache();
+    const DIENSTEN = ['10', '11', '12', '13', '14', '15'];
+    const kop = ['datum', 'dagtype', ...namen, 'aantal'];
+    const dagen = Array.from({ length: 30 }, (_, i) => `2030-09-${String(i + 1).padStart(2, '0')}`);
+    const maand = (schuif: number) => [kop, ...dagen.map((dag, d) => [serial(dag), 'W', ...namen.map((_, c) => ((c + d) % 7 === 6 ? 'vrij' : DIENSTEN[(c + d + schuif) % DIENSTEN.length])), 60])];
+    // De stand: een volledige maand staat er al.
+    await importeer(maand(0));
+    expect(mem.planning.length).toBeGreaterThan(1500);
+
+    const tel = async (aoa: unknown[][]) => {
+      const voor = { planning: mem.planningLezingen, diensten: mem.servicesLezingen, codes: mem.codesLezingen };
+      const start = performance.now();
+      const res = await voorbeeld(aoa);
+      const ms = performance.now() - start;
+      expect(res.status).toBe(200);
+      return { res, ms, planning: mem.planningLezingen - voor.planning, diensten: mem.servicesLezingen - voor.diensten, codes: mem.codesLezingen - voor.codes };
+    };
+    // Eén dag met één chauffeur tegenover de hele maand met zestig: evenveel lezingen.
+    const klein = await tel([['datum', 'dagtype', namen[0], 'aantal'], [serial(dagen[0]), 'W', '10', 1]]);
+    const groot = await tel(maand(1));
+    expect(groot.planning).toBe(1);
+    expect({ planning: groot.planning, diensten: groot.diensten, codes: groot.codes }).toEqual({ planning: klein.planning, diensten: klein.diensten, codes: klein.codes });
+    // Elke chauffeur krijgt op elke werkdag een andere dienst: het zwaarste plan dat een maand kan geven.
+    expect(groot.res.json.plan.totaal.chauffeurs).toBe(60);
+    expect(groot.res.json.plan.totaal.dagen).toBeGreaterThan(1500);
+    const kb = Buffer.byteLength(JSON.stringify(groot.res.json.plan)) / 1024;
+    console.info(`[import-voorbeeld] maand met 60 chauffeurs: ${Math.round(groot.ms)} ms voor het hele voorbeeld (parsen, opbouw, replay, plan; opslag in het geheugen), plan ${Math.round(kb)} kB JSON, ${groot.res.json.plan.totaal.dagen} gewijzigde dagen`);
+    // Ruime grens: de functie heeft 60 s, dit meet alleen het rekenwerk.
+    expect(groot.ms).toBeLessThan(5000);
+    expect(kb).toBeLessThan(1024);
+  });
+});
+
 describe('verbeterronde 20-08, import-signalen & planning-aanwezigheid', () => {
   const bouwXlsx = async (aoa: unknown[][]) => {
     const XLSX = await import('xlsx');

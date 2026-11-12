@@ -32,6 +32,27 @@ import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
 import { dagtypeLabel, dagtypePeriode, dagtypeVanDag } from "../../shared/dagtype.js";
 import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
 import { planningTijdFout } from "./planningTijden.js";
+import { type HeropbouwPlan, bouwHeropbouwPlan } from "../../shared/heropbouwPlan.js";
+
+/** Hoe lang het voorbeeld hoogstens wacht op de planning van nu om het
+ *  verschil per chauffeur te rekenen. Daarna gaat het voorbeeld zonder plan
+ *  de deur uit: de tellingen zijn dan al klaar en de import mag er nooit op
+ *  wachten. Instelbaar voor de tests (zoals BIJLAGEN_OPRUIM_BUDGET_MS). */
+const importPlanBudgetMs = () => {
+  const ingesteld = Number(process.env.IMPORT_PLAN_BUDGET_MS);
+  return Number.isFinite(ingesteld) && ingesteld > 0 ? ingesteld : 8000;
+};
+
+/** De lezing, of null als ze niet binnen het budget terugkomt. Een fout van
+ *  de lezing zelf gooit door. */
+const binnenBudget = async <T,>(lezing: Promise<T>, ms: number): Promise<T | null> => {
+  let klok: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([lezing, new Promise<null>((klaar) => { klok = setTimeout(() => klaar(null), ms); })]);
+  } finally {
+    clearTimeout(klok);
+  }
+};
 
 // Helper: haal de geüploade Excel uit de body (gzip of base64, met de
 // grenzen per soort, zie api/_lib/matrixUpload.ts) en parse de praktijk-tab.
@@ -924,6 +945,49 @@ export function mountPlanningRoutes(app: express.Express) {
       const replayConflicts = verlofConflicts.filter((c) => !matrixKeys.has(verlofConflictKey(c)));
       const ziekteDiensten = verlofConflictsIn(generatedPlanning.shifts, ziekteLeave, userName);
 
+      // Het verschil per chauffeur per dag (ronde 6, punt 18): wat de import
+      // voor wie verandert, vóór het schrijven. Geen tweede afleiding: `nieuw`
+      // is de set die de import zou wegschrijven (dezelfde opbouw en dezelfde
+      // replay als hierboven, ná de replay want die verlegt de rijen ter
+      // plaatse), `vorige` is de planning van nu binnen het bereik dat de
+      // import vervangt (zelfde uitsnede als zijn push-diff; alles daarbuiten
+      // blijft staan en kan dus niet veranderen). Zelfde vorm als de droge run
+      // van de heropbouw (bouwHeropbouwPlan). Bij een blokkade schrijft de
+      // import niets: dan is er geen plan. Lukt het rekenen niet (fout, of de
+      // planning komt niet binnen het budget), dan gaat het voorbeeld door met
+      // de tellingen en `plan: null`; het voorbeeld mag hier nooit op stranden.
+      // Ook geen plan als de dagen in het bestand niet oplopen: `startDate` en
+      // `endDate` zijn de eerste en de laatste rij, niet de vroegste en de
+      // laatste dag, en het scherm stuurt die twee als periode mee met de
+      // import. Het plan zou dan dagen tonen die de import niet meeneemt (of
+      // die hij weigert); liever geen plan dan een plan dat niet klopt.
+      let plan: HeropbouwPlan | null = null;
+      const importGeblokkeerd = generatedPlanning.summary.unknownCodes.length > 0
+        || generatedPlanning.summary.unmatchedDrivers.length > 0
+        || verlofConflicts.length > 0;
+      const dagenLopenOp = importedDates.every((dag, i) => i === 0 || String(importedDates[i - 1]) < String(dag));
+      if (!importGeblokkeerd && dagenLopenOp) {
+        try {
+          const planningVoor = await binnenBudget(getPlanningData(), importPlanBudgetMs());
+          if (planningVoor) {
+            const inPeriode = (planningVoor as any[]).filter((p) => startDate && endDate && String(p.date) >= startDate && String(p.date) <= endDate);
+            plan = bouwHeropbouwPlan({
+              vorige: inPeriode,
+              nieuw: generatedPlanning.shifts,
+              namen: new Map(users.map((u) => [String(u.id), String(u.name ?? "")] as const)),
+              dagenInMatrix: rows.length,
+              periode: { van: startDate, tot: endDate },
+              ruilen: { toegepast: reapplied.applied, nietToepasbaar: reapplied.skipped, lijst: reapplied.nietToepasbaar ?? [] },
+            });
+          } else {
+            console.warn("Import-voorbeeld: de planning kwam niet binnen het budget, het voorbeeld gaat door zonder het verschil per chauffeur.");
+          }
+        } catch (planErr) {
+          console.error("Import-voorbeeld: het verschil per chauffeur berekenen is mislukt, het voorbeeld gaat door met de tellingen.", planErr);
+          plan = null;
+        }
+      }
+
       // perDriver komt uit buildPlanningFromMatrix en is dus van vóór de replay:
       // de chauffeur die een dienst wegruilde stond er nog mét, de ontvanger
       // zonder. Het aantal rijen hertellen op het eindbeeld, zodat de preview
@@ -1020,6 +1084,9 @@ export function mountPlanningRoutes(app: express.Express) {
         // De gemiste ruilen bij naam, met bij wie de dienst in de Excel wél
         // staat: de waarschuwing vóór het bevestigen (06-11, dienst 2101).
         ruilenNietToepasbaar: reapplied.nietToepasbaar ?? [],
+        // Per chauffeur de dagen die deze import verandert (alleen die dagen),
+        // of null: geblokkeerd, de dagen lopen niet op, of niet te berekenen.
+        plan,
         parserWaarschuwingen,
         chauffeursNieuw,
         chauffeursVerdwenen,
