@@ -349,7 +349,7 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(mem.planning.find((p: any) => p.date === '2026-07-01' && String(p.line) === '12')).toMatchObject({ driverId: '3', startTime: '08:30' });
   });
 
-  it('de knop meldt alleen wie iets ziet veranderen, met de dagen erbij (09-10)', async () => {
+  it('de knop meldt alleen wie iets ziet veranderen, met de dagen en wat er nu staat (09-10, ronde 6)', async () => {
     // Dienst 12 (chauffeur A, 01/07 en 08/07) krijgt een andere starttijd;
     // dienst 14 (chauffeur B) blijft gelijk.
     mem.services = metDienst12({ startTime: '08:45' });
@@ -358,7 +358,7 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(res.json.notifiedDrivers).toBe(1);
     expect(roosterPushes()).toHaveLength(1);
     expect(roosterPushes()[0].userIds).toEqual(['3']);
-    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd op 01/07/2026 en 08/07/2026. Bekijk je diensten.');
+    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd: wo 01/07 dienst 12, wo 08/07 dienst 12. Bekijk je rooster.');
     // Niets gewijzigd = niemand een melding.
     mem.pushesSent = [];
     await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
@@ -394,8 +394,8 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(rijp.json).toMatchObject({ status: 'verstuurd', ontvangers: 1 });
     expect(roosterPushes()).toHaveLength(1);
     expect(roosterPushes()[0].userIds).toEqual(['3']);
-    // Met de dagen erbij (09-10): chauffeur A rijdt dienst 12 op 01/07 en 08/07.
-    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd op 01/07/2026 en 08/07/2026. Bekijk je diensten.');
+    // Met de dagen en de dienst erbij (09-10, ronde 6): chauffeur A rijdt dienst 12 op 01/07 en 08/07.
+    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd: wo 01/07 dienst 12, wo 08/07 dienst 12. Bekijk je rooster.');
     // Wachtrij leeg: een volgende beurt verstuurt niets meer.
     const daarna = await api('GET', '/api/cron/rooster-meldingen', CRON);
     expect(daarna.json).toMatchObject({ status: 'leeg' });
@@ -2560,7 +2560,561 @@ describe('matrix-import: de melding noemt de dagen en gaat alleen naar wie iets 
     const pushes = await importeer([KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', '15', 2]]);
     expect(pushes).toHaveLength(1);
     expect(pushes[0].userIds).toEqual(['4']);
-    expect(pushes[0].payload.body).toBe('Je rooster is gewijzigd op 04/08/2030. Bekijk je diensten.');
+    expect(pushes[0].payload.body).toBe('Je rooster is gewijzigd op zo 04/08: dienst 15, 11:00–19:00.');
+  });
+});
+
+describe('roostermelding: wie welke melding krijgt, per weg (ronde 6, punt 11 stap 2)', () => {
+  // Vastgelegd VÓÓR de tekst van de melding de nieuwe stand ging noemen: wie
+  // een melding krijgt, met welke titel, soort en url, en in hoeveel
+  // verzendingen. Bewust zonder de tekst zelf; die mag wijzigen, de rest niet.
+  // De gevallen zijn zo gekozen dat het aantal verzendingen niet van de tekst
+  // afhangt: één chauffeur, of chauffeurs die hoe dan ook dezelfde tekst lezen
+  // (een verse maand, meer dan drie dagen, een wachtrij zonder dagen).
+  // Daaronder, per weg, "wat de tekst zegt": de stand op het moment van
+  // verzenden, uit de rijen die de weg op dat moment in handen heeft.
+  const WACHTRIJ = 'rooster_melding_wachtrij';
+  const CRON = { headers: { Authorization: 'Bearer test-cron-secret' } };
+  const verzonden = () => mem.pushesSent.map((p: any) => ({ naar: [...p.userIds].sort(), titel: p.payload.title, soort: p.payload.soort, url: p.payload.url }));
+  const naar = (ids: string[], titel = 'Rooster bijgewerkt') => ({ naar: ids, titel, soort: 'planning', url: '/?view=rooster' });
+  const meldingRijen = () => mem.meldingen.map((m: any) => `${m.userId}|${m.titel}|${m.soort}|${m.doel}`).sort();
+  /** Elke tekst is een gewone zin: geen rauwe ISO-datum en geen em dash. */
+  const tekstenZijnZinnen = () => {
+    for (const p of mem.pushesSent as any[]) {
+      expect(typeof p.payload.body).toBe('string');
+      expect(p.payload.body.length).toBeGreaterThan(10);
+      expect(p.payload.body).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+      expect(p.payload.body).not.toContain('—');
+    }
+  };
+  const metDienst = (nummer: string, patch: Record<string, unknown>, bron: any[] = mem.services) =>
+    bron.map((s: any) => (s.serviceNumber === nummer ? { ...s, ...patch } : s));
+  const maakWachtrijRijp = () => {
+    const w: any = mem.appSettings[WACHTRIJ];
+    mem.appSettings[WACHTRIJ] = { ...w, laatsteWijziging: new Date(Date.now() - 11 * 60 * 1000).toISOString() };
+  };
+
+  describe('de knop en de wachtrij met de cron', () => {
+    // Vier dagen waarop A dienst 12 rijdt en B dienst 14: wijzigen beide
+    // diensten, dan zien beide chauffeurs dezelfde vier dagen veranderen.
+    const VIER_DAGEN = ['2026-07-01', '2026-07-02', '2026-07-03', '2026-07-06'];
+    const vierDagenMatrix = () => VIER_DAGEN.map((dag, i) => ({ id: `m-v${i}`, source_date: dag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' }));
+    const opbouwen = async () => {
+      const opbouw = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+      expect(opbouw.status).toBe(200);
+      mem.activity = [];
+      mem.pushesSent = [];
+      mem.meldingen = [];
+      mem.appSettings = {};
+    };
+
+    // Uitgangspunt: een planning die klopt met matrix en dienstoverzicht.
+    // 01/07: A rijdt 12, B rijdt 14. 08/07: A rijdt 12, B heeft bv.
+    beforeEach(async () => {
+      mem.planningCodes = [
+        { code: 'bv', category: 'absence', description: 'Betaald verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: false },
+        { code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true },
+      ];
+      mem.swaps = [];
+      await opbouwen();
+    });
+
+    it('de knop, één chauffeur ziet iets veranderen: één verzending naar hem alleen', async () => {
+      mem.services = metDienst('12', { startTime: '08:45' });
+      const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+      expect(res.status).toBe(200);
+      expect(res.json.notifiedDrivers).toBe(1);
+      expect(verzonden()).toEqual([naar(['3'])]);
+      expect(meldingRijen()).toEqual(['3|Rooster bijgewerkt|planning|rooster']);
+      tekstenZijnZinnen();
+    });
+
+    it('de knop, twee chauffeurs met dezelfde vier dagen: samen in één verzending', async () => {
+      mem.planningMatrix = vierDagenMatrix();
+      await opbouwen();
+      mem.services = metDienst('14', { endTime: '18:30' }, metDienst('12', { startTime: '08:45' }));
+      const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+      expect(res.status).toBe(200);
+      expect(res.json.notifiedDrivers).toBe(2);
+      expect(verzonden()).toEqual([naar(['3', '4'])]);
+      expect(meldingRijen()).toEqual(['3|Rooster bijgewerkt|planning|rooster', '4|Rooster bijgewerkt|planning|rooster']);
+      tekstenZijnZinnen();
+    });
+
+    it('de knop zonder verschil: niemand een melding', async () => {
+      const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+      expect(res.status).toBe(200);
+      expect(res.json.notifiedDrivers).toBe(0);
+      expect(verzonden()).toEqual([]);
+    });
+
+    it('de knop neemt wie in de wachtrij stond mee: één verzending, daarna is de wachtrij leeg', async () => {
+      await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+      expect(verzonden()).toEqual([]);
+      const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+      expect(res.json.notifiedDrivers).toBe(1);
+      expect(verzonden()).toEqual([naar(['3'])]);
+      expect(mem.appSettings[WACHTRIJ]).toEqual({ laatsteWijziging: null, basis: {} });
+      expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'leeg' });
+      expect(verzonden()).toHaveLength(1);
+      tekstenZijnZinnen();
+    });
+
+    it('de cron, één chauffeur: niets vóór de rust, daarna één verzending naar hem alleen', async () => {
+      const save = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+      expect(save.json.planning).toMatchObject({ status: 'bijgewerkt', gewijzigdeChauffeurs: 1, meldingUitgesteld: true });
+      expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'wacht', ontvangers: 0 });
+      expect(verzonden()).toEqual([]);
+      maakWachtrijRijp();
+      expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'verstuurd', ontvangers: 1 });
+      expect(verzonden()).toEqual([naar(['3'])]);
+      expect(meldingRijen()).toEqual(['3|Rooster bijgewerkt|planning|rooster']);
+      expect(mem.appSettings[WACHTRIJ]).toEqual({ laatsteWijziging: null, basis: {} });
+      expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'leeg' });
+      expect(verzonden()).toHaveLength(1);
+      tekstenZijnZinnen();
+    });
+
+    it('de cron, twee chauffeurs met dezelfde vier dagen: samen in één verzending', async () => {
+      mem.planningMatrix = vierDagenMatrix();
+      await opbouwen();
+      const save = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('14', { endTime: '18:30' }, metDienst('12', { startTime: '08:30' })) });
+      expect(save.json.planning).toMatchObject({ status: 'bijgewerkt', gewijzigdeChauffeurs: 2, meldingUitgesteld: true });
+      // De wachtrij bewaart alleen afdrukken per dag, geen rijen.
+      const basis = (mem.appSettings[WACHTRIJ] as any).basis;
+      expect(Object.keys(basis).sort()).toEqual(['3', '4']);
+      for (const id of ['3', '4']) {
+        expect(Object.keys(basis[id]).sort()).toEqual(VIER_DAGEN);
+        for (const afdruk of Object.values(basis[id])) expect(afdruk).toMatch(/^[0-9a-f]{16}$/);
+      }
+      maakWachtrijRijp();
+      expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'verstuurd', ontvangers: 2 });
+      expect(verzonden()).toEqual([naar(['3', '4'])]);
+      tekstenZijnZinnen();
+    });
+
+    it('de cron, een wachtrij van vóór 09-10 (één afdruk per chauffeur): één verzending naar beiden', async () => {
+      mem.appSettings[WACHTRIJ] = { laatsteWijziging: new Date(Date.now() - 11 * 60 * 1000).toISOString(), basis: { '3': 'afdruk-van-vroeger', '4': 'ook-oud' } };
+      expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'verstuurd', ontvangers: 2 });
+      expect(verzonden()).toEqual([naar(['3', '4'])]);
+      tekstenZijnZinnen();
+    });
+
+    it('een rijpe wachtrij die de cron nog niet verstuurde gaat de deur uit bij de volgende automatische heropbouw', async () => {
+      await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+      maakWachtrijRijp();
+      // Een nieuwe reeks: nu wijzigt dienst 14 van chauffeur B.
+      const save = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('14', { endTime: '18:30' }) });
+      expect(save.json.planning).toMatchObject({ status: 'bijgewerkt', gewijzigdeChauffeurs: 1, meldingUitgesteld: true });
+      // Chauffeur A hoort over de vorige reeks; B wacht in de nieuwe wachtrij.
+      expect(verzonden()).toEqual([naar(['3'])]);
+      expect(Object.keys((mem.appSettings[WACHTRIJ] as any).basis)).toEqual(['4']);
+      tekstenZijnZinnen();
+    });
+
+    it('is de wachtrij niet te bewaren, dan gaat de melding meteen uit, één verzending', async () => {
+      // app_settings weigert de wachtrij te schrijven; lezen blijft werken.
+      mem.appSettings = new Proxy({} as Record<string, unknown>, {
+        set: (doel, sleutel, waarde) => {
+          if (sleutel === WACHTRIJ) throw new Error('app_settings: connection failure');
+          doel[String(sleutel)] = waarde;
+          return true;
+        },
+      });
+      const stil = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const save = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+        expect(save.status).toBe(200);
+        expect(save.json.planning).toMatchObject({ status: 'bijgewerkt', gewijzigdeChauffeurs: 1, meldingUitgesteld: false });
+      } finally {
+        stil.mockRestore();
+      }
+      expect(verzonden()).toEqual([naar(['3'])]);
+      tekstenZijnZinnen();
+    });
+
+    describe('veertig chauffeurs, één gewijzigde dag, elk een andere dienst (na de tegenlezing)', () => {
+      // Het geval waarin het aantal verzendingen WEL wijzigde: tot ronde 6
+      // lazen veertig chauffeurs met dezelfde gewijzigde dag dezelfde zin en
+      // gingen ze samen in één verzending. Nu noemt de zin de eigen dienst, dus
+      // zijn het veertig verzendingen. Ze vertrekken samen (hoogstens
+      // ROOSTER_GELIJKTIJDIG tegelijk), niet na elkaar: zie ook
+      // src/roosterMelding.test.ts voor de grens zelf.
+      const N = 40;
+      const twee = (n: number) => String(n).padStart(2, '0');
+      const VEEL = Array.from({ length: N }, (_, i) => ({ id: String(101 + i), naam: `Chauffeur ${101 + i}`, dienst: String(2101 + i), start: `06:${twee(i)}`, einde: `14:${twee(i)}` }));
+      const veelIds = VEEL.map((c) => c.id);
+      const elkEen = veelIds.map((id) => `${id}|Rooster bijgewerkt|planning|rooster`);
+      /** 01/07: chauffeur i rijdt de dienst van chauffeur i + verschuiving. */
+      const matrix = (verschuiving: number) => [{
+        id: 'm-veel', source_date: '2026-07-01', day_type: 'week', raw_row: '',
+        assignments: Object.fromEntries(VEEL.map((c, i) => [c.naam, VEEL[(i + verschuiving) % N]!.dienst])),
+      }];
+      /** Elke dienst van de veertig begint een uur later: elke chauffeur één gewijzigde dag. */
+      const alleDienstenLater = () => mem.services.map((s: any) => (String(s.serviceNumber).startsWith('21') ? { ...s, startTime: String(s.startTime).replace(/^06/, '07') } : s));
+      const bodyVan = () => Object.fromEntries((mem.pushesSent as any[]).map((p) => [p.userIds.join('+'), p.payload.body]));
+      const wachtrijIds = () => Object.keys((mem.appSettings[WACHTRIJ] as any)?.basis ?? {}).sort();
+
+      beforeEach(async () => {
+        mem.users = [...mem.users, ...VEEL.map((c) => ({ id: c.id, name: c.naam, email: `c${c.id}@vhb.be`, role: 'chauffeur', isActive: true }))];
+        mem.services = [...mem.services, ...VEEL.map((c) => ({ id: `d-${c.dienst}`, serviceNumber: c.dienst, startTime: c.start, endTime: c.einde }))];
+        mem.planningMatrix = matrix(0);
+        await opbouwen();
+      });
+
+      it('de knop: iedereen precies één melding met zijn eigen dienst, het aantal klopt', async () => {
+        mem.planningMatrix = matrix(1);
+        const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(res.status).toBe(200);
+        expect(res.json.notifiedDrivers).toBe(N);
+        // Veertig verzendingen, elk naar één chauffeur (vóór ronde 6: één naar alle veertig).
+        expect(verzonden()).toHaveLength(N);
+        expect(verzonden().map((v) => v.naar)).toEqual(veelIds.map((id) => [id]));
+        expect(verzonden().every((v) => v.titel === 'Rooster bijgewerkt' && v.soort === 'planning' && v.url === '/?view=rooster')).toBe(true);
+        expect(meldingRijen()).toEqual(elkEen);
+        const body = bodyVan();
+        for (const [i, c] of VEEL.entries()) {
+          const nu = VEEL[(i + 1) % N]!;
+          expect(body[c.id]).toBe(`Je rooster is gewijzigd op wo 01/07: dienst ${nu.dienst}, ${nu.start}–${nu.einde}.`);
+        }
+        tekstenZijnZinnen();
+      });
+
+      it('de knop neemt een wachtrij van veertig mee: iedereen één melding, daarna is de wachtrij leeg', async () => {
+        const save = await api('POST', '/api/services', { token: 'tok-planner', body: alleDienstenLater() });
+        expect(save.json.planning).toMatchObject({ status: 'bijgewerkt', gewijzigdeChauffeurs: N, meldingUitgesteld: true });
+        expect(wachtrijIds()).toEqual(veelIds);
+        expect(verzonden()).toEqual([]);
+        const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(res.json.notifiedDrivers).toBe(N);
+        expect(verzonden().map((v) => v.naar)).toEqual(veelIds.map((id) => [id]));
+        expect(meldingRijen()).toEqual(elkEen);
+        expect(mem.appSettings[WACHTRIJ]).toEqual({ laatsteWijziging: null, basis: {} });
+        expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'leeg' });
+        expect(verzonden()).toHaveLength(N);
+      });
+
+      it('de cron: iedereen precies één melding met zijn eigen dienst, het aantal klopt, daarna is de wachtrij leeg', async () => {
+        await api('POST', '/api/services', { token: 'tok-planner', body: alleDienstenLater() });
+        maakWachtrijRijp();
+        expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'verstuurd', ontvangers: N });
+        // Vóór ronde 6: één verzending naar alle veertig (dezelfde dag, dezelfde zin).
+        expect(verzonden().map((v) => v.naar)).toEqual(veelIds.map((id) => [id]));
+        expect(meldingRijen()).toEqual(elkEen);
+        const body = bodyVan();
+        for (const c of VEEL) expect(body[c.id]).toBe(`Je rooster is gewijzigd op wo 01/07: dienst ${c.dienst}, ${c.start.replace(/^06/, '07')}–${c.einde}.`);
+        expect(mem.appSettings[WACHTRIJ]).toEqual({ laatsteWijziging: null, basis: {} });
+        expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'leeg' });
+        expect(verzonden()).toHaveLength(N);
+        tekstenZijnZinnen();
+      });
+
+      for (const weg of ['de knop', 'de cron'] as const) {
+        it(`${weg}: een verzending die blijft hangen houdt de andere negenendertig niet tegen`, async () => {
+          const push = await import('../../api/_lib/push.js');
+          const gewoon = push.sendPushToUsers;
+          let laatLos = () => {};
+          const hangt = new Promise<void>((los) => { laatLos = los; });
+          // De eerste chauffeur van de lijst: na elkaar verstuurd zou niemand na hem iets krijgen.
+          const spion = vi.spyOn(push, 'sendPushToUsers').mockImplementation(async (userIds: string[], payload: any) => {
+            if (userIds.includes(veelIds[0]!)) await hangt;
+            return gewoon(userIds, payload);
+          });
+          try {
+            if (weg === 'de knop') mem.planningMatrix = matrix(1);
+            else {
+              await api('POST', '/api/services', { token: 'tok-planner', body: alleDienstenLater() });
+              maakWachtrijRijp();
+            }
+            let klaar = false;
+            const bezig = (weg === 'de knop'
+              ? api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' })
+              : api('GET', '/api/cron/rooster-meldingen', CRON)).then((res) => { klaar = true; return res; });
+            // De andere negenendertig hebben hun melding terwijl de eerste nog hangt.
+            await vi.waitFor(() => expect(mem.meldingen).toHaveLength(N - 1));
+            expect(mem.meldingen.map((m: any) => m.userId).sort()).toEqual(veelIds.slice(1));
+            expect(klaar).toBe(false);
+            laatLos();
+            const res = await bezig;
+            expect(res.status).toBe(200);
+            expect(weg === 'de knop' ? res.json.notifiedDrivers : res.json.ontvangers).toBe(N);
+            expect(meldingRijen()).toEqual(elkEen);
+          } finally {
+            laatLos();
+            spion.mockRestore();
+          }
+        });
+      }
+
+      it('de cron, een verzending mislukt: de cron meldt een fout, de wachtrij blijft staan en de volgende beurt probeert het opnieuw', async () => {
+        await api('POST', '/api/services', { token: 'tok-planner', body: alleDienstenLater() });
+        maakWachtrijRijp();
+        const wachtrijVoor = JSON.parse(JSON.stringify(mem.appSettings[WACHTRIJ]));
+        const push = await import('../../api/_lib/push.js');
+        const gewoon = push.sendPushToUsers;
+        const spion = vi.spyOn(push, 'sendPushToUsers').mockImplementation(async (userIds: string[], payload: any) => {
+          if (userIds.includes(veelIds[2]!)) throw new Error('pushdienst onbereikbaar');
+          return gewoon(userIds, payload);
+        });
+        const stil = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+          expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).status).toBe(500);
+        } finally {
+          spion.mockRestore();
+          stil.mockRestore();
+        }
+        // Na de fout start er geen nieuwe verzending meer; wat al onderweg was
+        // is aangekomen. De wachtrij is niet aangeraakt.
+        const eersteBeurt = mem.meldingen.map((m: any) => m.userId);
+        expect(eersteBeurt).not.toContain(veelIds[2]);
+        expect(eersteBeurt.length).toBeGreaterThan(0);
+        expect(eersteBeurt.length).toBeLessThan(N);
+        expect(mem.appSettings[WACHTRIJ]).toEqual(wachtrijVoor);
+        // De volgende beurt begint opnieuw van voren, zoals vroeger: iedereen
+        // krijgt zijn melding, wie ze al had krijgt ze een tweede keer.
+        expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'verstuurd', ontvangers: N });
+        const perChauffeur = new Map<string, number>();
+        for (const m of mem.meldingen as any[]) perChauffeur.set(m.userId, (perChauffeur.get(m.userId) ?? 0) + 1);
+        expect([...perChauffeur.keys()].sort()).toEqual(veelIds);
+        for (const id of veelIds) expect(perChauffeur.get(id)).toBe(eersteBeurt.includes(id) ? 2 : 1);
+        expect(mem.appSettings[WACHTRIJ]).toEqual({ laatsteWijziging: null, basis: {} });
+      });
+    });
+
+    describe('wat de tekst zegt', () => {
+      const teksten = () => mem.pushesSent.map((p: any) => [[...p.userIds].sort(), p.payload.body]);
+      const matrixDag = (id: string, cellen: Record<string, string>) => { mem.planningMatrix = mem.planningMatrix.map((r: any) => (r.id === id ? { ...r, assignments: cellen } : r)); };
+      /** Alleen 01/07 in de matrix: chauffeur A rijdt dienst 12 op één dag. */
+      const eenDag = async () => {
+        mem.planningMatrix = mem.planningMatrix.filter((r: any) => r.id === 'm-2');
+        await opbouwen();
+      };
+
+      it('de knop, één dag met een andere dienst: de dag, de dienst en de uren die nu in de planning staan', async () => {
+        matrixDag('m-1', { 'Chauffeur A': '13', 'Chauffeur B': 'bv' });
+        const voor = mem.planningMaandFilters.length;
+        const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(res.status).toBe(200);
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 08/07: dienst 13, 09:00–17:00.']]);
+        expect(mem.planning.filter((p: any) => p.driverId === '3' && p.date === '2026-07-08')).toMatchObject([{ line: '13', startTime: '09:00', endTime: '17:00' }]);
+        // Eén lezing van de planning (de stand van vóór), geen extra voor de tekst.
+        expect(mem.planningMaandFilters.length - voor).toBe(1);
+      });
+
+      it('de knop, een gesplitste dienst: alle delen', async () => {
+        await eenDag();
+        mem.services = metDienst('12', { startTime: '06:45', endTime: '10:00', startTime2: '15:45', endTime2: '19:35' });
+        await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 01/07: dienst 12, 06:45–10:00 en 15:45–19:35.']]);
+      });
+
+      it('de knop, een dag die leeg wordt: geen dienst meer in de planning, nooit "vrij"', async () => {
+        matrixDag('m-1', { 'Chauffeur A': 'vrij', 'Chauffeur B': 'bv' });
+        await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 08/07: je hebt die dag geen dienst meer in de planning. Bekijk je rooster.']]);
+        expect(mem.planning.filter((p: any) => p.driverId === '3' && p.date === '2026-07-08')).toEqual([]);
+      });
+
+      it('de knop, twee chauffeurs op dezelfde dag: elk zijn eigen stand, dus elk een eigen verzending', async () => {
+        // Tot ronde 6 lazen beiden dezelfde zin (alleen de dag) en gingen ze
+        // samen in één verzending. De regel is dezelfde, zelfde tekst = samen;
+        // alleen is de tekst nu per chauffeur anders.
+        matrixDag('m-2', { 'Chauffeur A': '13', 'Chauffeur B': '15' });
+        const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(res.json.notifiedDrivers).toBe(2);
+        expect(verzonden()).toEqual([naar(['3']), naar(['4'])]);
+        expect(teksten()).toEqual([
+          [['3'], 'Je rooster is gewijzigd op wo 01/07: dienst 13, 09:00–17:00.'],
+          [['4'], 'Je rooster is gewijzigd op wo 01/07: dienst 15, 11:00–19:00.'],
+        ]);
+        expect(meldingRijen()).toEqual(['3|Rooster bijgewerkt|planning|rooster', '4|Rooster bijgewerkt|planning|rooster']);
+      });
+
+      it('de knop, meer dan drie dagen: het aantal met de eerste en de laatste dag', async () => {
+        mem.planningMatrix = vierDagenMatrix();
+        await opbouwen();
+        mem.services = metDienst('14', { endTime: '18:30' }, metDienst('12', { startTime: '08:45' }));
+        await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(teksten()).toEqual([[['3', '4'], 'Je rooster is gewijzigd op 4 dagen tussen wo 01/07 en ma 06/07. Bekijk je diensten.']]);
+      });
+
+      it('de knop neemt de wachtrij mee: de tekst noemt wat de knop net schreef', async () => {
+        await eenDag();
+        await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+        // Nog een wijziging, nu rechtstreeks in het dienstoverzicht en zonder
+        // automatische heropbouw: de knop bouwt ze in.
+        mem.services = metDienst('12', { startTime: '08:50' });
+        await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 01/07: dienst 12, 08:50–16:00.']]);
+      });
+
+      it('de cron noemt de eindtoestand, niet een tussenstand, en leest de planning één keer', async () => {
+        await eenDag();
+        for (const startTime of ['08:10', '08:20', '08:30']) {
+          await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime }) });
+        }
+        maakWachtrijRijp();
+        const voor = mem.planningMaandFilters.length;
+        expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'verstuurd', ontvangers: 1 });
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 01/07: dienst 12, 08:30–16:00.']]);
+        expect(mem.planningMaandFilters.length - voor).toBe(1);
+      });
+
+      it('de cron noemt de planning van het moment van verzenden, ook als die sinds de wachtrij nog wijzigde', async () => {
+        await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+        // Tijdens de rust gaat dienst 12 van 01/07 naar chauffeur B (een
+        // doorgevoerde ruil verplaatst de rij). B staat niet in de wachtrij en
+        // krijgt van deze weg niets, zoals altijd; A leest de stand van nu.
+        mem.planning = mem.planning.map((p: any) => (p.date === '2026-07-01' && String(p.line) === '12' ? { ...p, driverId: '4' } : p));
+        maakWachtrijRijp();
+        expect((await api('GET', '/api/cron/rooster-meldingen', CRON)).json).toMatchObject({ status: 'verstuurd', ontvangers: 1 });
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd: wo 01/07 geen dienst meer, wo 08/07 dienst 12. Bekijk je rooster.']]);
+      });
+
+      it('een wachtrij van vóór 09-10 houdt de algemene tekst', async () => {
+        mem.appSettings[WACHTRIJ] = { laatsteWijziging: new Date(Date.now() - 11 * 60 * 1000).toISOString(), basis: { '3': 'afdruk-van-vroeger' } };
+        await api('GET', '/api/cron/rooster-meldingen', CRON);
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd, bekijk je diensten.']]);
+      });
+
+      it('een rijpe wachtrij bij de volgende heropbouw noemt alleen de dagen: de stand van toen is niet meer waar', async () => {
+        await eenDag();
+        await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+        maakWachtrijRijp();
+        // De volgende reeks wijzigt dezelfde dienst opnieuw. De melding over de
+        // vorige reeks vertrekt nu, maar 08:30 staat al niet meer in de planning.
+        await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:50' }) });
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 01/07. Bekijk je diensten.']]);
+        // De nieuwe reeks meldt de stand zodra het weer stil is.
+        mem.pushesSent = [];
+        maakWachtrijRijp();
+        await api('GET', '/api/cron/rooster-meldingen', CRON);
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 01/07: dienst 12, 08:50–16:00.']]);
+      });
+
+      it('is de wachtrij niet te bewaren, dan noemt de melding die meteen vertrekt de net geschreven planning', async () => {
+        await eenDag();
+        mem.appSettings = new Proxy({} as Record<string, unknown>, {
+          set: (doel, sleutel, waarde) => {
+            if (sleutel === WACHTRIJ) throw new Error('app_settings: connection failure');
+            doel[String(sleutel)] = waarde;
+            return true;
+          },
+        });
+        const stil = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+          await api('POST', '/api/services', { token: 'tok-planner', body: metDienst('12', { startTime: '08:30' }) });
+        } finally {
+          stil.mockRestore();
+        }
+        expect(teksten()).toEqual([[['3'], 'Je rooster is gewijzigd op wo 01/07: dienst 12, 08:30–16:00.']]);
+      });
+    });
+  });
+
+  describe('de matrix-import', () => {
+    const bouwXlsx = async (aoa: unknown[][]) => {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'praktijk');
+      return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+    };
+    const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+    const importeer = async (aoa: unknown[][]) => {
+      mem.pushesSent = [];
+      mem.meldingen = [];
+      const res = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: await bouwXlsx(aoa) } });
+      expect(res.status).toBe(200);
+    };
+    const KOP = ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'aantal'];
+    const BASIS = [KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', '14', 2]];
+
+    beforeEach(() => {
+      mem.leave = [];
+      mem.swaps = [];
+      mem.planning = [];
+      mem.planningMatrix = [];
+    });
+
+    it('een verse periode: beide chauffeurs samen in één verzending "Planning bijgewerkt"', async () => {
+      await importeer(BASIS);
+      expect(verzonden()).toEqual([naar(['3', '4'], 'Planning bijgewerkt')]);
+      expect(meldingRijen()).toEqual(['3|Planning bijgewerkt|planning|rooster', '4|Planning bijgewerkt|planning|rooster']);
+      tekstenZijnZinnen();
+    });
+
+    it('dezelfde Excel nog eens: niemand een melding', async () => {
+      await importeer(BASIS);
+      await importeer(BASIS);
+      expect(verzonden()).toEqual([]);
+    });
+
+    it('één gewijzigde dag bij één chauffeur: één verzending naar hem alleen', async () => {
+      await importeer(BASIS);
+      // Chauffeur B rijdt op 04/08 voortaan dienst 15; A verandert niet.
+      await importeer([KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', '15', 2]]);
+      expect(verzonden()).toEqual([naar(['4'], 'Planning bijgewerkt')]);
+      expect(meldingRijen()).toEqual(['4|Planning bijgewerkt|planning|rooster']);
+      tekstenZijnZinnen();
+    });
+
+    describe('wat de tekst zegt', () => {
+      const teksten = () => mem.pushesSent.map((p: any) => [[...p.userIds].sort(), p.payload.body]);
+
+      it('een verse periode: de planning staat klaar, ongewijzigd', async () => {
+        await importeer(BASIS);
+        expect(teksten()).toEqual([[['3', '4'], 'Je planning van 03/08/2030 t/m 04/08/2030 staat klaar. Bekijk je rooster.']]);
+      });
+
+      it('één dag met een gesplitste dienst: de dag, de dienst en alle delen zoals ze net geschreven zijn', async () => {
+        mem.services = [...mem.services, { id: 'd7', serviceNumber: '2116', startTime: '06:45', endTime: '10:00', startTime2: '15:45', endTime2: '19:35' }];
+        await importeer(BASIS);
+        const voor = mem.planningMaandFilters.length;
+        await importeer([KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', '2116', 2]]);
+        expect(teksten()).toEqual([[['4'], 'Je rooster is gewijzigd op zo 04/08: dienst 2116, 06:45–10:00 en 15:45–19:35.']]);
+        expect(mem.planning.filter((p: any) => p.driverId === '4' && p.date === '2030-08-04').map((p: any) => `${p.line} ${p.startTime}-${p.endTime}`).sort())
+          .toEqual(['2116 06:45-10:00', '2116 15:45-19:35']);
+        // Eén lezing van de planning (de stand van vóór de import), geen extra voor de tekst.
+        expect(mem.planningMaandFilters.length - voor).toBe(1);
+      });
+
+      it('twee gewijzigde dagen bij één chauffeur: per dag het dienstnummer', async () => {
+        await importeer(BASIS);
+        await importeer([KOP, [serial('2030-08-03'), 'W', '12', '15', 2], [serial('2030-08-04'), 'W', '12', '13', 2]]);
+        expect(teksten()).toEqual([[['4'], 'Je rooster is gewijzigd: za 03/08 dienst 15, zo 04/08 dienst 13. Bekijk je rooster.']]);
+      });
+
+      it('een dag die leeg wordt: geen dienst meer in de planning', async () => {
+        mem.planningCodes = [{ code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true }];
+        await importeer(BASIS);
+        await importeer([KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', 'vrij', 1]]);
+        expect(teksten()).toEqual([[['4'], 'Je rooster is gewijzigd op zo 04/08: je hebt die dag geen dienst meer in de planning. Bekijk je rooster.']]);
+      });
+
+      it('twee chauffeurs op dezelfde dag: elk zijn eigen stand, dus elk een eigen verzending', async () => {
+        await importeer(BASIS);
+        await importeer([KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '13', '15', 2]]);
+        expect(verzonden()).toEqual([naar(['3'], 'Planning bijgewerkt'), naar(['4'], 'Planning bijgewerkt')]);
+        expect(teksten()).toEqual([
+          [['3'], 'Je rooster is gewijzigd op zo 04/08: dienst 13, 09:00–17:00.'],
+          [['4'], 'Je rooster is gewijzigd op zo 04/08: dienst 15, 11:00–19:00.'],
+        ]);
+      });
+
+      it('een goedgekeurde ruil die de import opnieuw doorvoert: de tekst noemt de stand ná de ruil', async () => {
+        await importeer(BASIS);
+        // Overname: dienst 14 van 03/08 gaat van B naar A. Dezelfde Excel
+        // opnieuw: de import voert de ruil opnieuw door, A rijdt die dag twee
+        // diensten en B geen meer.
+        mem.swaps = [{ id: 's-ov', shiftId: 'x', requesterId: '4', targetDriverId: '3', status: 'approved', reason: '', createdAt: '2030-07-20T08:00:00Z', decidedAt: '2030-07-21T08:00:00Z', swapType: 'overname', shiftDate: '2030-08-03', shiftLine: '14' }];
+        await importeer(BASIS);
+        expect(teksten()).toEqual([
+          [['3'], 'Je rooster is gewijzigd op za 03/08: dienst 12, 08:00–16:00 en dienst 14, 10:00–18:00.'],
+          [['4'], 'Je rooster is gewijzigd op za 03/08: je hebt die dag geen dienst meer in de planning. Bekijk je rooster.'],
+        ]);
+        expect(mem.planning.filter((p: any) => p.date === '2030-08-03').map((p: any) => `${p.driverId}:${p.line}`).sort()).toEqual(['3:12', '3:14']);
+      });
+    });
   });
 });
 

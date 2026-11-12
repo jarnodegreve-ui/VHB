@@ -96,7 +96,7 @@ export const dagKort = (iso: unknown): string | null => {
 
 /** Tekst uit een veld van onbekende vorm: getrimd en begrensd, leeg als er
  *  niets bruikbaars staat (ook geen object of lijst als "[object Object]"). */
-const schoon = (waarde: unknown, max = 40): string =>
+export const schoon = (waarde: unknown, max = 40): string =>
   typeof waarde === "string" || typeof waarde === "number" ? String(waarde).trim().slice(0, max) : "";
 
 const naamOf = (naam: unknown, anders: string): string => schoon(naam, 80) || anders;
@@ -104,8 +104,23 @@ const naamOf = (naam: unknown, anders: string): string => schoon(naam, 80) || an
 const op = (dag: string | null): string => (dag ? ` op ${dag}` : "");
 
 /** "a", "a en b", "a, b en c". */
-const opsomming = (delen: readonly string[]): string =>
+export const opsomming = (delen: readonly string[]): string =>
   delen.length <= 1 ? delen.join("") : `${delen.slice(0, -1).join(", ")} en ${delen[delen.length - 1]}`;
+
+/**
+ * De uren van de delen van een dienst als tijdvakken ("06:45–10:00", en-dash
+ * zonder spaties), in de gegeven volgorde. Null zonder delen of zodra één deel
+ * geen leesbaar tijdvak is: een halve lijst leest als de hele dienst. Gedeeld
+ * door "Dienst toegewezen" en "Rooster bijgewerkt" (roosterMelding.ts).
+ */
+export const tijdvakken = (delen: ReadonlyArray<{ startTime?: unknown; endTime?: unknown }>): string[] | null => {
+  const vakken = delen.map((deel) => {
+    const van = normaliseerTijd(deel?.startTime);
+    const tot = normaliseerTijd(deel?.endTime);
+    return van && tot ? `${van}–${tot}` : null;
+  });
+  return vakken.length > 0 && vakken.every((v): v is string => v !== null) ? vakken : null;
+};
 
 type Partij = "aanvrager" | "collega";
 
@@ -190,7 +205,7 @@ const noem = (r: Gelezen, lidwoordEnWoord: string, voorzetsel: "van" | "voor" = 
 
 /** Vangnet rond een bouwer: een fout in de tekst mag een geschreven
  *  beslissing nooit doen mislukken. */
-const veilig = <T>(wat: string, bouw: () => T, terugval: T): T => {
+export const veilig = <T>(wat: string, bouw: () => T, terugval: T): T => {
   try {
     return bouw();
   } catch (err) {
@@ -440,12 +455,8 @@ export const dienstToegewezenTekst = (toewijzing: {
   veilig("dienst toegewezen", () => {
     const dienst = schoon(toewijzing.dienst);
     const dag = dagKort(toewijzing.datum);
-    const vakken = (Array.isArray(toewijzing.delen) ? toewijzing.delen : []).map((deel) => {
-      const van = normaliseerTijd(deel?.startTime);
-      const tot = normaliseerTijd(deel?.endTime);
-      return van && tot ? `${van}–${tot}` : null;
-    });
-    const uren = vakken.length > 0 && vakken.every((v): v is string => v !== null) ? opsomming(vakken) : "";
+    const vakken = tijdvakken(Array.isArray(toewijzing.delen) ? toewijzing.delen : []);
+    const uren = vakken ? opsomming(vakken) : "";
     const wat = `Je rijdt ${dienst ? `dienst ${dienst}` : "een dienst"}${op(dag)}`;
     return uren ? `${wat}: ${uren}.` : `${wat}. Bekijk je rooster.`;
   }, "Je kreeg een dienst toegewezen. Bekijk je rooster.");

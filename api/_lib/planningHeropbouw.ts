@@ -277,7 +277,11 @@ const teMeldenUitWachtrij = (wachtrij: Wachtrij, stand: Stand): Map<string, stri
  * Automatische weg, ná het vervangen: de geraakte chauffeurs in de wachtrij
  * zetten. Een wachtrij die al rijp was (de cron liep nog niet, of draait niet
  * in deze omgeving) hoort bij de VORIGE reeks: die gaat eerst de deur uit,
- * tegen de stand van vóór deze heropbouw.
+ * tegen de stand van vóór deze heropbouw. Die melding noemt alleen de dagen,
+ * niet wat er nu staat: de dagen zijn geteld tegen `oud`, maar de planning is
+ * op dit moment al door deze heropbouw vervangen, dus `oud.rijen` is niet meer
+ * waar. Wie door deze heropbouw opnieuw wijzigt, leest de stand in de melding
+ * van de nieuwe reeks.
  */
 const zetInWachtrij = async (gewijzigd: readonly string[], oud: Stand, nu: number) => {
   let wachtrij = await leesWachtrij();
@@ -302,7 +306,8 @@ export const verstuurRoosterMeldingen = async (nu = Date.now()): Promise<{ statu
   if (!isRijp(wachtrij, nu)) return { status: "wacht", ontvangers: 0 };
   const rijen = await getPlanningData() as PlanningRij[];
   const huidig: Stand = { dagen: roosterDagAfdrukken(rijen), rijen };
-  const ontvangers = await verstuurRoosterPushes(teMeldenUitWachtrij(wachtrij, huidig));
+  // De tekst noemt de stand van dit moment: dezelfde lezing als de vergelijking.
+  const ontvangers = await verstuurRoosterPushes(teMeldenUitWachtrij(wachtrij, huidig), { rijen });
   const later = await leesWachtrij();
   if (later && later.laatsteWijziging !== wachtrij.laatsteWijziging) {
     const basis: Record<string, Basis> = { ...later.basis };
@@ -458,7 +463,7 @@ export const heropbouwPlanning = async (
         } catch (err) {
           console.error("Meldingswachtrij bijwerken mislukt, de melding gaat nu meteen uit.", err);
           uitgesteld = false;
-          try { await verstuurRoosterPushes(gewijzigdDagen); } catch (pushErr) { console.error("Rooster-melding versturen mislukt.", pushErr); }
+          try { await verstuurRoosterPushes(gewijzigdDagen, { rijen: shifts }); } catch (pushErr) { console.error("Rooster-melding versturen mislukt.", pushErr); }
         }
       }
       return {
@@ -490,7 +495,9 @@ export const heropbouwPlanning = async (
     } catch (err) {
       console.error("Meldingswachtrij lezen mislukt, de knop meldt alleen zijn eigen wijzigingen.", err);
     }
-    const gemeld = await verstuurRoosterPushes(ontvangers);
+    // De tekst noemt wat er nu staat: de planning die hierboven geschreven is,
+    // ook voor wie uit de wachtrij meekomt (die is tegen `nieuw` vergeleken).
+    const gemeld = await verstuurRoosterPushes(ontvangers, { rijen: shifts });
     return { status: "bijgewerkt", summary, reapplied, gewijzigdeChauffeurs: gewijzigd.length, gemeld, meldingUitgesteld: false };
   }
 
