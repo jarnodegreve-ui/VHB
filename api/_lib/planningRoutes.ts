@@ -802,12 +802,15 @@ export function mountPlanningRoutes(app: express.Express) {
       // Alleen chauffeurs van wie het rooster in de geïmporteerde periode
       // écht verschilt krijgen een seintje, met de dagen erbij (09-10, keuze
       // Jarno: "Planning bijgewerkt" naar iedereen riep vragen op). Wie in die
-      // periode nog niets had, hoort dat zijn planning klaarstaat.
+      // periode nog niets had, hoort dat zijn planning klaarstaat. De tekst
+      // noemt wat er op een gewijzigde dag nu staat: de rijen die hierboven
+      // voor de periode geschreven zijn (ronde 6, punt 11).
       const inPeriode = (planningVoor as any[]).filter((p) => startDate && endDate && String(p.date) >= startDate && String(p.date) <= endDate);
       const oudDagen = roosterDagAfdrukken(inPeriode);
       await verstuurRoosterPushes(gewijzigdeDagenPerChauffeur(oudDagen, roosterDagAfdrukken(generatedPlanning.shifts)), {
         titel: "Planning bijgewerkt",
-        tekst: (id, dagen) => importPushTekst({ hadDiensten: oudDagen.has(id), dagen, van: startDate, tot: endDate }),
+        rijen: generatedPlanning.shifts,
+        tekst: (id, dagen, rijen) => importPushTekst({ hadDiensten: oudDagen.has(id), dagen, van: startDate, tot: endDate, rijen }),
       });
 
       res.json({
