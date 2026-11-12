@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { HeropbouwPlanModal } from './HeropbouwPlanModal';
+import { HeropbouwPlanChauffeurs, HeropbouwPlanModal } from './HeropbouwPlanModal';
 import type { HeropbouwPlan } from '../../shared/heropbouwPlan';
 
 /**
@@ -55,5 +55,35 @@ describe('HeropbouwPlanModal', () => {
     expect(screen.getByText('Opnieuw opbouwen kan nu niet')).toBeTruthy();
     expect(screen.getByText(/Onbekende codes: XYZ/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Opnieuw opbouwen' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('HeropbouwPlanChauffeurs (gedeeld met het import-voorbeeld, ronde 6 punt 18)', () => {
+  it('zonder voet is het de lijst zoals ze in het venster stond: één lijst met het kader erop', () => {
+    const { container } = render(<HeropbouwPlanChauffeurs chauffeurs={PLAN.chauffeurs} />);
+    const lijst = container.firstElementChild as HTMLElement;
+    expect(lijst.tagName).toBe('UL');
+    expect(lijst.className).toBe('divide-y divide-hairline-subtle rounded-2xl ring-1 ring-hairline');
+    expect(lijst.children).toHaveLength(2);
+    expect(screen.getByText(/dienst 14, 06:00 tot 14:00/)).toBeTruthy();
+    expect(screen.getByText('weg')).toBeTruthy();
+  });
+
+  it('met een voet staat die als laatste regel in hetzelfde kader, buiten de lijst', () => {
+    const { container } = render(<HeropbouwPlanChauffeurs chauffeurs={PLAN.chauffeurs} voet={<div data-testid="voet">Toon 10 meer</div>} />);
+    const kader = container.firstElementChild as HTMLElement;
+    expect(kader.tagName).toBe('DIV');
+    expect(kader.className).toContain('ring-1 ring-hairline');
+    expect(kader.children).toHaveLength(2);
+    expect(kader.children[0].tagName).toBe('UL');
+    expect(kader.children[0].children).toHaveLength(2);
+    expect((kader.children[1] as HTMLElement).dataset.testid).toBe('voet');
+  });
+
+  it('hoogstens zes dagen per chauffeur voluit, de rest als één regel', () => {
+    const dagen = Array.from({ length: 9 }, (_, i) => ({ dag: `2026-10-0${i + 1}`, was: [], wordt: ['dienst 12, 06:00 tot 14:00'], soort: 'erbij' as const }));
+    render(<HeropbouwPlanChauffeurs chauffeurs={[{ id: '3', naam: 'Chauffeur A', dagen }]} />);
+    expect(screen.getAllByText('erbij')).toHaveLength(6);
+    expect(screen.getByText('+ 3 dagen meer')).toBeTruthy();
   });
 });
