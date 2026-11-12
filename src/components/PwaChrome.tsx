@@ -82,7 +82,11 @@ export function InstallPrompt() {
           transition={{ duration: DUR.slow, ease: EASE }}
           // Zelfde reden als de offline-pil hierboven: op 1rem overlapte deze
           // kaart de tab-knoppen bijna volledig.
-          className="fixed inset-x-0 z-toast flex justify-center px-4 pointer-events-none bottom-boven-dock md:bottom-[max(1rem,env(safe-area-inset-bottom))]"
+          // z-zwevend, niet z-toast (11-11, simulatorronde op Android): als
+          // toast lag de kaart boven elk venster en paneel, bij "Verlof
+          // aanvragen" over de datumvelden. Ze hoort bij de pagina: een venster
+          // of paneel (z-modal) ligt erover en ze is er weer als het sluit.
+          className="fixed inset-x-0 z-zwevend flex justify-center px-4 pointer-events-none bottom-boven-dock md:bottom-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-rim bg-overlay px-4 py-3 elev-3 max-w-sm">
             <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500 text-slate-950">

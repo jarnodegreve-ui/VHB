@@ -229,3 +229,42 @@ test.describe('focus terug na Escape', () => {
     await expect(knop).toBeFocused();
   });
 });
+
+test.describe('installatiekaart (Android/Chrome)', () => {
+  // Simulatorronde 11-11: de kaart "Voeg toe aan beginscherm" lag als toast
+  // boven elk venster, bij "Verlof aanvragen" over de datumvelden.
+  test('ligt onder een open venster en is er weer als het sluit', async ({ page }, info) => {
+    test.skip(info.project.name.includes('webkit'), 'beforeinstallprompt bestaat alleen in Chromium');
+    await seed(page, { user: ADMIN });
+    await page.goto('/verlof');
+    await expect(page.getByRole('heading', { name: 'Verlof', level: 1 })).toBeVisible({ timeout: 15_000 });
+    // Het echte event komt van de browser; de app leest alleen prompt() en userChoice.
+    await page.evaluate(() => {
+      const e = new Event('beforeinstallprompt') as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+      e.prompt = async () => {};
+      e.userChoice = new Promise(() => {});
+      window.dispatchEvent(e);
+    });
+    const kaart = page.getByText('Voeg toe aan beginscherm');
+    await expect(kaart).toBeVisible();
+    /** Ligt de kaart bovenaan op haar eigen plek? */
+    const bovenaan = () => kaart.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!top && (top === el || el.contains(top) || top.contains(el));
+    });
+    await expect.poll(bovenaan).toBe(true);
+    await page.getByRole('button', { name: 'Verlof registreren' }).click();
+    const venster = page.getByRole('dialog');
+    await expect(venster).toBeVisible();
+    // Het venster (met zijn scrim) ligt over de kaart: een tik op die plek raakt de kaart niet.
+    await expect.poll(() => kaart.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!top && !el.contains(top) && !!top.closest('[role="dialog"], [data-scrim], .glass-modal, [aria-modal="true"]') ;
+    })).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(venster).toHaveCount(0);
+    await expect.poll(bovenaan).toBe(true);
+  });
+});
