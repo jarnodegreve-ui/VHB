@@ -223,7 +223,13 @@ import zlib from 'node:zlib';
 // doorschakelen en het voorstel in stap 2; verlofdag +0,6; gemak +0,5). Geen
 // nieuwe dependency. Budget = de meting plus de ±0,5 kB van de runner en
 // ±1,5 kB marge.
-const BUDGET_KB = 755;
+// 13-11 (ronde 6, punt 12, uren en zoekveld in Dienstruil): 755 → 756.
+// Samengevoegd met main 60083e5c (na #807 en #808; het importvoorbeeld
+// woog +0,8 in zijn luie chunk) meet het totaal lokaal 754,58, en de runner
+// weegt het totaal ±0,7 kB zwaarder: ±755,3 in CI, op de afrondingsrand.
+// Geen nieuwe dependency; de groei (+0,87) zit in de chunk van Dienstruil.
+// Budget = de meting plus de meerweging van de runner en ±0,5 kB marge.
+const BUDGET_KB = 756;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -646,6 +652,14 @@ if (!kaartMatch) {
   // de Maandplanning); de chauffeur-set blijft 85,07 (budget 86, ongewijzigd).
   // Budget = de meting plus ±1 kB; de runner meet tot ±0,5 kB zwaarder.
   WARMUP_BUDGET_KB.staf = 158.5;
+  // 13-11 (ronde 6, punt 12, zie BUDGET_KB): chauffeur 86 → 86,5. Samengevoegd
+  // met main 60083e5c meet de chauffeur-set lokaal 85,89 (main 85,06): de uren
+  // in de voorstelkaart en in stap 3, het zoekveld en de volgorde op de
+  // telefoon, alles in de chunk van Dienstruil (geen nieuw bestand, 54). De
+  // runner weegt deze set +0,04 tot +0,12 kB zwaarder (CI op 10531fce en
+  // 60083e5c), dus ±86,0 in CI, zonder marge. Budget = de meting plus
+  // ±0,5 kB. Staf 157,93 blijft binnen 158,5.
+  WARMUP_BUDGET_KB.chauffeur = 86.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

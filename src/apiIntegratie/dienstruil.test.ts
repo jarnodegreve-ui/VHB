@@ -1,12 +1,14 @@
 // @vitest-environment node
 import {
   api,
+  baseUrl,
   invalidateOnderhoudCache,
   invalidateUsersCache,
   KLOK_ISO,
   mem,
 } from './harnas';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { dienstUrenOpBord } from '../lib/bordUren';
 
 describe('dienstruil: autorisatieregels', () => {
   it('weigert force-approve (pending → approved) door een planner, staat het toe voor admin', async () => {
@@ -2459,5 +2461,53 @@ describe('dienstruil: reden begrensd en createdAt van de server (05-11)', () => 
     const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...mem.swaps, nieuw()] });
     expect(res.status).toBe(200);
     expect(mem.swaps.find((s: any) => s.id === 's-nieuw')?.createdAt).toBe(KLOK_ISO);
+  });
+});
+
+describe('de uren in Dienstruil zijn die van het bord op die dag (ronde 6, punt 12)', () => {
+  // Het scherm toont bij een dienst van een collega wat GET /api/month-planning
+  // in diens cel zet, gelezen door dienstUrenOpBord (src/lib/bordUren.ts). Hier
+  // de hele weg: de echte route, gelezen als een chauffeur (de aangezochte
+  // collega, Chauffeur B), en de lezer van het scherm erover. Seed: Chauffeur A
+  // (id 3) rijdt dienst 12 (08:00 tot 16:00) op wo 01/07 en wo 08/07.
+  const urenVanA = async (dag: string) => {
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-b' });
+    expect(res.status).toBe(200);
+    return dienstUrenOpBord({ '2026-07': res.json.cells }, '3', dag, '12');
+  };
+
+  it('zonder afwijking: de gewone uren, op beide dagen', async () => {
+    expect(await urenVanA('2026-07-01')).toEqual(['08:00–16:00']);
+    expect(await urenVanA('2026-07-08')).toEqual(['08:00–16:00']);
+  });
+
+  it('een afwijking per dagtype: de dag met dat dagtype toont de afwijkende uren, de andere dag de gewone', async () => {
+    mem.services = mem.services.map((s: any) => (s.serviceNumber === '12'
+      ? { ...s, loopnr: '4500', varianten: [{ dagtypes: ['53'], startTime: '07:10', endTime: '08:40', loopnr: '4611', startTime2: '11:50', endTime2: '13:20', loopnr2: '4612' }] }
+      : s));
+    // 08/07 krijgt in de matrix het dagtype woensdag in juli en augustus (53);
+    // 01/07 houdt het dagtype van de seed (een gewone woensdag, 23).
+    mem.planningMatrix = mem.planningMatrix.map((r: any) => (r.source_date === '2026-07-08' ? { ...r, day_type: '53' } : r));
+    expect(await urenVanA('2026-07-08')).toEqual(['07:10–08:40', '11:50–13:20']);
+    expect(await urenVanA('2026-07-01')).toEqual(['08:00–16:00']);
+  });
+
+  it('een nieuwe dienstregelingversie: vanaf haar eerste dag de nieuwe uren, ervoor de oude', async () => {
+    const nieuw = (await api('POST', '/api/dienstregelingen', { token: 'tok-planner', body: { geldigVanaf: '2026-07-05' } })).json;
+    const kopie = (await api('GET', `/api/services?versie=${nieuw.id}`, { token: 'tok-planner' })).json;
+    const gewijzigd = kopie.map((s: any) => (s.serviceNumber === '12' ? { ...s, startTime: '09:00', endTime: '17:30', loopnr: '4700' } : s));
+    const vers = await fetch(`${baseUrl}/api/services?versie=${nieuw.id}`, { headers: { Authorization: 'Bearer tok-planner', 'X-Device-Token': 'dev-ok' } });
+    const bewaard = await api('POST', `/api/services?versie=${nieuw.id}`, { token: 'tok-planner', body: gewijzigd, headers: { 'x-collection-revision': vers.headers.get('x-collection-revision')! } });
+    expect(bewaard.status).toBe(200);
+    expect(await urenVanA('2026-07-01')).toEqual(['08:00–16:00']);
+    expect(await urenVanA('2026-07-08')).toEqual(['09:00–17:30']);
+  });
+
+  it('de dienst staat die dag niet in de cel van die persoon: geen uren', async () => {
+    const bord = (await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-b' })).json;
+    // Chauffeur B rijdt 14 op 01/07 en staat op bv op 08/07; dienst 12 is nooit van hem.
+    expect(dienstUrenOpBord({ '2026-07': bord.cells }, '4', '2026-07-01', '12')).toBeNull();
+    expect(dienstUrenOpBord({ '2026-07': bord.cells }, '4', '2026-07-08', '12')).toBeNull();
+    expect(dienstUrenOpBord({ '2026-07': bord.cells }, '4', '2026-07-01', '14')).toEqual(['10:00–18:00']);
   });
 });
