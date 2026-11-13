@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Phone, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
@@ -12,10 +12,10 @@ import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
 import { ToonMeer } from '../components/ToonMeer';
 import { useArchief, useToonMeerMetArchief } from '../lib/archief';
-import { apiJson } from '../lib/api';
+import { apiFetch, apiJson } from '../lib/api';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
-import { DateInput, Field, Select, Textarea } from '../components/Field';
+import { DateInput, Field, SearchField, Select, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { RuilVerloop } from '../components/RuilVerloop';
@@ -28,6 +28,10 @@ import { addDagen } from '../lib/datum';
 import { ruilOverzichtQuery, ruilPeriodeFout, standaardRuilPeriode, type RuilPeriode } from '../lib/ruilOverzicht';
 import { formatDateHuman, formatDatumDMJ, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
+import { dienstUrenOpBord, dienstUrenUitPlanning, type BordPerMaand } from '../lib/bordUren';
+import type { MonthPlanning } from '../lib/monthPlanning';
+import { normalizePlanningToken } from '../lib/planning';
+import { useMinWidth } from '../lib/useMinWidth';
 import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
@@ -105,6 +109,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // Stap 1 toont eerst de komende ~2 weken; bij een volle 8-wekenplanning
   // stonden er anders 30-40 kaarten in één modal.
   const [showAllShifts, setShowAllShifts] = useState(false);
+  // Stap 2: zoeken op naam in de lijst van collega's (ronde 6, punt 12). Hoort
+  // niet bij de invoer van de aanvraag: een zoekterm alleen vraagt bij het
+  // sluiten geen "Wijzigingen niet bewaren?".
+  const [collegaZoek, setCollegaZoek] = useState('');
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
   // Ruiloverzicht afdrukken (bewijsstuk voor het klassement, Jarno 18-09):
   // sinds 16-10 een vrije periode op de datum van de dienst, standaard de
@@ -253,6 +261,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [selectedTargetDriver, user.id]);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
+  // Op de telefoon staat voor een chauffeur eerst wat op zijn antwoord wacht,
+  // dan zijn eigen verzoeken (ronde 6, punt 12). Via de opbouw en niet via
+  // CSS-`order`, zodat lees- en tabvolgorde het beeld volgen (zoals
+  // `eigenEerst` in Verlof). Vanaf 768 px (twee kolommen) en voor staf blijft
+  // de volgorde zoals ze was. De hook meet in px en `md` in rem: met een
+  // vergrote letter staat er in een smalle strook boven 768 px nog één kolom
+  // in de oude volgorde, dat is alles.
+  const openEerst = !useMinWidth(768) && !isStaf(user.role);
   // Laadfout van de ruilen (chauffeur: uitgesteld geladen) is geen lege staat:
   // dan een Foutkaart met Opnieuw proberen, nooit "Nog geen ruilverzoeken".
   const laad = useCollectieStaat('swaps');
@@ -324,6 +340,48 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     const info = shiftInfoFor(swap);
     return { ...swap, shiftDate: info.date || undefined, shiftLine: info.line !== '--' ? info.line : undefined };
   };
+  // De uren van een dienst van een collega (ronde 6, punt 12) komen van het
+  // maandbord: de cel van die persoon op die dag, met het dagtype en de
+  // dienstregelingversie van die dag al verwerkt. Per maand hoogstens één
+  // verzoek per bezoek aan dit scherm, en alleen voor een maand waarin er echt
+  // een dienst getoond wordt: `bordUren` noteert tijdens het tekenen welke
+  // maand nodig is, het effect eronder vraagt na elke render wat nog niet
+  // gevraagd is. Een mislukt of onverwacht antwoord wordt niet herhaald en
+  // toont niets (dienstUrenOpBord geeft dan null): geen uren, geen placeholder,
+  // geen fout. Ook een antwoord uit de cache van de service worker telt als
+  // mislukt (`X-VHB-Bron: cache`, zonder bereik): dat is het bord van een
+  // vorige keer, en de uren kunnen intussen gewijzigd zijn (tegenlezing
+  // 12-11). Een laat antwoord vult alleen zijn eigen maand; na het verlaten
+  // van het scherm doet het niets meer. Het verzoek is dat van
+  // `fetchMonthPlanning` (src/lib/monthPlanning.ts), hier rechtstreeks: die
+  // module zit in een chunk van de planningsschermen, en haar importeren trok
+  // een extra bestand in de warmup van de chauffeur (gemeten 11-11).
+  const [bord, setBord] = useState<BordPerMaand>({});
+  const bordNodig = useRef(new Set<string>());
+  const bordGevraagd = useRef(new Set<string>());
+  useEffect(() => {
+    for (const maand of bordNodig.current) {
+      if (bordGevraagd.current.has(maand)) continue;
+      bordGevraagd.current.add(maand);
+      void apiFetch(`/api/month-planning?month=${maand}`)
+        .then((r) => (r.ok && r.headers.get('x-vhb-bron') !== 'cache' ? r.json() as Promise<MonthPlanning> : null))
+        .then((mp) => mp?.cells, () => null)
+        .then((cellen) => setBord((b) => ({ ...b, [maand]: cellen })));
+    }
+  });
+  const bordUren = (persoonId: string | undefined, datum: string, code: string) => {
+    if (persoonId && normalizePlanningToken(code) && /^\d{4}-\d{2}-\d{2}$/.test(datum)) bordNodig.current.add(datum.slice(0, 7));
+    return dienstUrenOpBord(bord, persoonId, datum, code);
+  };
+  /** Tijdvakken op één regel, "06:45–10:00 · 15:45–19:35": de regel mag tussen
+   *  twee tijdvakken omlopen, een tijdvak zelf breekt nooit, en een regel
+   *  begint nooit met het puntje (vaste spatie ervoor). De scheiding staat in
+   *  de gewone letter: in mono is ze drie tekens breed, en zo passen drie
+   *  delen ook op 360 px op één regel (gemeten in WebKit, tegenlezing 12-11).
+   *  `na` = achter andere tekst, dus ook vóór het eerste tijdvak een scheiding. */
+  const urenStukken = (uren: string[] | null, na = false) => uren?.map((u, i) => (
+    <Fragment key={i}>{(na || i > 0) && <span className="font-sans">{'\u00a0· '}</span>}<span className="whitespace-nowrap">{u}</span></Fragment>
+  ));
   // Gedeelde compacte dag-vorm ('vr 18 jul') — gelijk aan Dekking, i.p.v. de
   // eigen 'vr 18/07'-variant (datum-consolidatie).
   const fmtShort = formatShortDay;
@@ -341,6 +399,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       setSelectedTargetDriver('');
       setReturnPick('');
       setSwapType('ruil');
+      setCollegaZoek('');
       setWizardStep(2);
       wizardFouten.wis();
       setShowOfferModal(true);
@@ -401,8 +460,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // beschikbaarheid (laden mislukt) blijft het één lijst. Iedereen blijft
   // kiesbaar: de planner kan altijd overschrijven.
   const nietBeschikbaarOpShiftDate = (driverId: string) => !!freeForDate && !isAvailableOnShiftDate(driverId) && !linesForDate[driverId];
-  const kiesbareCollegas = eligibleTargetDrivers.filter((u) => !nietBeschikbaarOpShiftDate(u.id));
-  const nietBeschikbareCollegas = eligibleTargetDrivers.filter((u) => nietBeschikbaarOpShiftDate(u.id));
+  // Het zoekveld filtert beide lijsten op naam; hoofdletters en accenten tellen
+  // niet (dezelfde vergelijking als de planning). Volgorde en labels blijven.
+  const zoekTerm = normalizePlanningToken(collegaZoek);
+  const opNaam = (u: User) => !zoekTerm || normalizePlanningToken(u.name).includes(zoekTerm);
+  const kiesbareCollegas = eligibleTargetDrivers.filter((u) => !nietBeschikbaarOpShiftDate(u.id) && opNaam(u));
+  const nietBeschikbareCollegas = eligibleTargetDrivers.filter((u) => nietBeschikbaarOpShiftDate(u.id) && opNaam(u));
   const freeCount = freeForDate
     ? eligibleTargetDrivers.filter((u) => isAvailableOnShiftDate(u.id)).length
     : null;
@@ -501,7 +564,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   };
 
   const handleOfferShift = async () => {
-    if (isSubmitting) return;
+    // Alleen stap 3 verstuurt (tegenlezing 12-11): een impliciete submit
+    // vanuit het zoekveld van stap 2 (Enter, de zoektoets van een klavier)
+    // mag nooit een aanvraag laten vertrekken, ook niet als dienst, collega en
+    // tegenprestatie al gekozen waren. Tweede slot naast de onKeyDown daar.
+    if (isSubmitting || wizardStep !== 3) return;
     const isTakeover = swapType === 'overname';
     if (!selectedShift) {
       wizardFouten.zet({ dienst: 'Kies eerst de dienst die je wilt afgeven.' });
@@ -889,6 +956,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               setReturnPick('');
               setSwapType('ruil');
               setReason('');
+              setCollegaZoek('');
               setShowAllReturns(false);
               setShowAllShifts(false);
               wizardFouten.wis();
@@ -925,7 +993,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       )}
 
       <div className="grid md:grid-cols-2 gap-8">
-        <div className="space-y-4">
+        {/* Twee blokken met een sleutel: wisselt de volgorde (telefoon gedraaid),
+            dan verplaatst React ze en begint er niets opnieuw. De inhoud van de
+            blokken is in beide volgordes dezelfde. */}
+        {((blokken) => (openEerst ? blokken.reverse() : blokken))([
+        <div key="mijn" className="space-y-4">
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
           {laad.foutZonderData ? foutkaart : mijnLijst.getoond > 0 ? (
             /* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
@@ -1012,9 +1084,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               message="Kies “Dienstruil aanvragen”, je collega en de planner keuren daarna goed."
             />
           )}
-        </div>
+        </div>,
 
-        <div className="space-y-4">
+        <div key="open" className="space-y-4">
           <MicroLabel className="ml-1">Openstaande dienstruilen</MicroLabel>
           {laad.foutZonderData ? foutkaart : availableSwaps.length > 0 ? isPlanner ? (
             /* Staf ziet hier ELKE open ruil, ook die tussen twee collega's. Met
@@ -1077,6 +1149,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               // beeld: dat hoort de server één keer, en de aanvrager leest het
               // in het verloop. Weet de server het al, dan vuurt er niets.
               const nogTeMelden = canRespond && !swap.verloop?.some((st) => st.soort === 'bekeken');
+              // De uren van de dienst die hij zou krijgen: uit zijn eigen
+              // planning als ze daar staat (na de doorvoer; alle delen, niet
+              // alleen de rij van de ruil), anders van het bord, uit de cel van
+              // de aanvrager op die dag. Wat hij ervoor afgeeft staat in zijn
+              // eigen planning. Zonder zekerheid niets.
+              const krijgtUren = info.shift
+                ? dienstUrenUitPlanning(shifts, user.id, info.date, info.line)
+                : bordUren(swap.requesterId, info.date, info.line);
+              const geeft = swap.targetDriverId === user.id ? returnLabel(swap) : null;
+              const geeftUren = geeft ? dienstUrenUitPlanning(shifts, user.id, swap.returnDate, swap.returnCode) : null;
               return (
                 <RuilBekekenBaken key={swap.id} swapId={swap.id} actief={nogTeMelden}>
                 {/* data-record + tabIndex: een link naar deze ruil (`/dienstruil/<id>`) brengt de kaart in beeld met de focus erop. */}
@@ -1086,9 +1168,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     <div className="min-w-0">
                       <MicroLabel className="tabular-nums">Dienst {info.line}</MicroLabel>
                       <p className="font-bold text-slate-800 mt-1">{hoofdletter(formatDateHuman(info.date))}</p>
-                      {info.startTime && info.endTime && (
-                        <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{tijdvak(info.startTime, info.endTime)}</p>
-                      )}
                       {isTakeoverSwap(swap) && <div className="mt-1.5"><TakeoverBadge /></div>}
                     </div>
                     <span className="shrink-0">
@@ -1096,6 +1175,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
                     </span>
                   </div>
+                  {/* De uren over de volle breedte (naast de badge liepen ze op
+                      een smalle telefoon over twee of drie regels) en altijd één
+                      regel hoog, ook zolang het bord laadt of als het niets
+                      geeft: de kaart verandert zo niet meer van hoogte na de
+                      eerste weergave. Anders schoof een kaart die groeide alles
+                      eronder mee, en landde een tik net op dat moment op
+                      Begrepen (schrijft meteen) van de kaart eronder
+                      (tegenlezing 12-11). Leeg is de regel alleen witruimte. */}
+                  <p className="-mt-4 min-h-4 text-xs font-mono font-medium text-slate-500 tabular-nums">{urenStukken(krijgtUren)}</p>
+                  {/* Over de volle breedte van de kaart: naast de badge brak de regel midden in de dag. */}
+                  {geeftUren && (
+                    <p className="-mt-2 text-xs font-medium text-slate-500">Jij geeft {geeft}<span className="font-mono tabular-nums">{urenStukken(geeftUren, true)}</span></p>
+                  )}
                   {swap.reason && <p className="text-xs text-slate-500 italic">{citaat(swap.reason)}</p>}
                   {/* Wie vraagt, wie geeft wat en wie nog moet antwoorden. */}
                   <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
@@ -1117,7 +1209,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               message="Stelt een collega jou een ruil voor, dan verschijnt die hier en krijg je een melding."
             />
           )}
-        </div>
+        </div>,
+        ])}
       </div>
 
       <ConfirmationModal
@@ -1513,7 +1606,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           key={s.id}
                           type="button"
                           disabled={bezet}
-                          onClick={() => { setSelectedShift(s.id); setSelectedTargetDriver(''); setReturnPick(''); wizardFouten.wis(); setWizardStep(2); }}
+                          onClick={() => { setSelectedShift(s.id); setSelectedTargetDriver(''); setReturnPick(''); setCollegaZoek(''); wizardFouten.wis(); setWizardStep(2); }}
                           className={`${cnCard(selectedShift === s.id)} disabled:cursor-not-allowed disabled:opacity-60`}
                         >
                           <span className="min-w-0">
@@ -1548,6 +1641,21 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <p className="text-sm font-medium text-slate-500 py-6 text-center">Beschikbaarheid laden…</p>
                     ) : (
                       <>
+                        {/* Enter (de zoektoets van de iPhone) mag het formulier
+                            niet indienen: dit is het enige veld van de stap, en
+                            wie van stap 3 terugkwam heeft al een collega en een
+                            tegenprestatie gekozen. De toets sluit het klavier. */}
+                        <SearchField
+                          value={collegaZoek}
+                          onChange={setCollegaZoek}
+                          label="Zoek een collega"
+                          placeholder="Zoek op naam…"
+                          enterKeyHint="search"
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+                        />
+                        {zoekTerm && kiesbareCollegas.length + nietBeschikbareCollegas.length === 0 && (
+                          <p role="status" className="text-xs font-medium text-slate-500">Geen collega gevonden met die naam.</p>
+                        )}
                         <div className="space-y-2" data-fout={wizardFouten.fouten.collega ? '' : undefined}>
                           {wizardFouten.fouten.collega && <p role="alert" className="text-xs font-medium text-red-700">{wizardFouten.fouten.collega}</p>}
                           {kiesbareCollegas.map((u) => {
@@ -1686,7 +1794,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                 >
                                   <span className="min-w-0">
                                     <span className="block text-sm font-bold text-slate-800">{hoofdletter(formatDateHuman(o.date))}</span>
-                                    <span className="block text-xs font-medium text-slate-500">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`}</span>
+                                    <span className="block text-xs font-medium text-slate-500 tabular-nums">{o.isFree ? 'Vrije dag van de collega' : <>Dienst {o.code}{urenStukken(bordUren(selectedTargetDriver, o.date, o.code), true)}</>}</span>
                                   </span>
                                   {selected ? <Check size={16} className="shrink-0 text-slate-900" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
                                 </button>
@@ -1705,7 +1813,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                 <Card key={`${o.date}|${o.code}`} tone="muted" padding="none" className="flex items-center justify-between gap-3 px-4 py-3 opacity-60">
                                   <span className="min-w-0">
                                     <span className="block text-sm font-semibold text-slate-500">{hoofdletter(formatDateHuman(o.date))}</span>
-                                    <span className="block text-xs font-medium text-slate-500">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`}, {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
+                                    <span className="block text-xs font-medium text-slate-500 tabular-nums">{o.isFree ? "Vrije dag van de collega" : <>Dienst {o.code}{urenStukken(bordUren(selectedTargetDriver, o.date, o.code), true)}</>}, {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
                                   </span>
                                 </Card>
                               ))}

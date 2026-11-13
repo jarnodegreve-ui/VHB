@@ -958,3 +958,449 @@ test.describe('beheerlijst op de telefoon bleef zoals ze was', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });
+
+// ── Ronde 6, punt 12: de uren bij elke dienst, een zoekveld in stap 2, en op
+//    de telefoon eerst wat op jouw antwoord wacht ──
+
+/** Dag `dag` van de maand `maandenVerder` maanden na deze: vast in één
+ *  kalendermaand en altijd in de toekomst, wat vandaagIso(n) niet belooft. */
+const dagInMaand = (maandenVerder: number, dag: number) => {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() + maandenVerder, dag).toLocaleDateString('sv-SE');
+};
+const dienstCel = (code: string, segments: string[]) => ({ code, kind: 'service', label: `Dienst ${code}`, segments });
+const UREN = /\d{2}:\d{2}–\d{2}:\d{2}/;
+/** Een loopnummer zoals het bord het bij de tijden zet; "Verloop" telt niet. */
+const LOOPNUMMER = /\(loop|4500|4611|4700/;
+const ALEX_ID = '43';
+
+/** De server van Dienstruil voor de testchauffeur (42): zijn ruilen, zijn
+ *  planning, de beschikbaarheid en het maandbord per maand. Telt de verzoeken
+ *  naar het bord per maand en bewaart wat de wizard verstuurt. */
+function urenServer(opties: { ruilen?: unknown[]; planning?: unknown[]; availability?: unknown; users?: unknown[]; bord?: Record<string, unknown> }) {
+  const bordVerzoeken: Record<string, number> = {};
+  const verstuurd: any[] = [];
+  const extra: Extra = (p, request) => {
+    if (p.endsWith('/api/swaps')) {
+      if (request.method() === 'GET') return opties.ruilen ?? [];
+      verstuurd.push(JSON.parse(request.postData() ?? 'null'));
+      return {};
+    }
+    if (p.endsWith('/api/planning')) return opties.planning ?? [];
+    if (p.endsWith('/api/availability')) return opties.availability ?? { days: [] };
+    if (p.endsWith('/api/users') && opties.users) return opties.users;
+    if (p.endsWith('/api/month-planning')) {
+      const maand = new URL(request.url()).searchParams.get('month') ?? '';
+      bordVerzoeken[maand] = (bordVerzoeken[maand] ?? 0) + 1;
+      return opties.bord?.[maand] ?? { month: maand, dates: [], drivers: [], cells: {} };
+    }
+    return undefined;
+  };
+  return { extra, bordVerzoeken, verstuurd };
+}
+
+test.describe('uren bij elke dienst in Dienstruil (ronde 6, punt 12)', () => {
+  test('de aangezochte collega ziet in het voorstel de uren van het bord; het bord wordt per maand één keer gevraagd', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const M1 = dagInMaand(1, 5).slice(0, 7);
+    const M2 = dagInMaand(2, 3).slice(0, 7);
+    const voorstel = (id: string, shiftDate: string, shiftLine: string, terug: { returnDate: string; returnCode: string }) => ({
+      id, shiftId: `sh-${id}`, requesterId: ALEX_ID, targetDriverId: CHAUFFEUR.id, status: 'pending', reason: '', createdAt: nu, shiftDate, shiftLine, ...terug,
+    });
+    const { extra, bordVerzoeken } = urenServer({
+      ruilen: [
+        // Gesplitste dienst van de collega; ik geef er mijn (ook gesplitste) dienst 2202 voor af.
+        voorstel('v1', dagInMaand(1, 5), '2323', { returnDate: dagInMaand(1, 12), returnCode: '2202' }),
+        // Zelfde maand: geen tweede verzoek. Zijn cel draagt die dag een andere dienst.
+        voorstel('v2', dagInMaand(1, 19), '4101', { returnDate: dagInMaand(1, 20), returnCode: 'vrij' }),
+        // Dezelfde dienst 2323 in een andere maand, op een dag met andere uren.
+        voorstel('v3', dagInMaand(2, 3), '2323', { returnDate: dagInMaand(2, 4), returnCode: 'vrij' }),
+      ],
+      // Mijn eigen planning: dienst 2202 in twee delen, niet in chronologische volgorde.
+      planning: [
+        { id: 'e2', date: dagInMaand(1, 12), startTime: '15:00', endTime: '19:00', line: '2202', busNumber: '', loopnr: '4611', driverId: CHAUFFEUR.id },
+        { id: 'e1', date: dagInMaand(1, 12), startTime: '05:00', endTime: '09:00', line: '2202', busNumber: '', loopnr: '4500', driverId: CHAUFFEUR.id },
+      ],
+      bord: {
+        [M1]: { month: M1, dates: [], drivers: [], cells: { [ALEX_ID]: {
+          [dagInMaand(1, 5)]: dienstCel('2323', ['06:45–10:00 (loop 4500)', '15:45–19:35 (loop 4611)']),
+          [dagInMaand(1, 19)]: dienstCel('2101', ['08:00–16:00']),
+        } } },
+        [M2]: { month: M2, dates: [], drivers: [], cells: { [ALEX_ID]: { [dagInMaand(2, 3)]: dienstCel('2323', ['07:02–15:10 (loop 4700)']) } } },
+      },
+    });
+    await seed(page, { user: CHAUFFEUR, extra });
+    await page.goto('/dienstruil');
+    const kaart = (id: string) => page.locator(`[data-record="${id}"]`);
+    await expect(kaart('v1')).toBeVisible();
+
+    // De dienst die ik zou krijgen: alle delen op één regel, zonder loopnummers.
+    await expect(kaart('v1')).toContainText('06:45–10:00 · 15:45–19:35');
+    await expect(kaart('v1')).not.toContainText(LOOPNUMMER);
+    // Wat ik ervoor afgeef komt uit mijn eigen planning, vroegste deel eerst.
+    await expect(kaart('v1')).toContainText('Jij geeft dienst 2202');
+    await expect(kaart('v1')).toContainText('05:00–09:00 · 15:00–19:00');
+    // Dezelfde dienst op een andere dag: de uren van díe dag.
+    await expect(kaart('v3')).toContainText('07:02–15:10');
+    await expect(kaart('v3')).not.toContainText('06:45');
+    // De cel van de collega draagt die dag een andere dienst: geen uren, geen
+    // placeholder, en de ruil blijft te beantwoorden.
+    await expect(kaart('v2')).not.toContainText(UREN);
+    await expect(kaart('v2').getByRole('button', { name: 'Accepteren' })).toBeEnabled();
+
+    // Een tijdvak breekt nooit halverwege: elk stuk staat op één regel.
+    const regels = await kaart('v1').locator('span.whitespace-nowrap').evaluateAll((els) => els.map((e) => e.getClientRects().length));
+    expect(regels).toEqual([1, 1, 1, 1]);
+
+    // Eén verzoek per maand, niet per ruil; ook niet opnieuw na een bevestiging
+    // die open en dicht ging of na het openen van de wizard.
+    expect(bordVerzoeken).toEqual({ [M1]: 1, [M2]: 1 });
+    await kaart('v1').getByRole('button', { name: 'Weigeren' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Annuleren' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Dienstruil aanvragen' }).click();
+    await expect(page.getByText('Stap 1 van 3')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('Stap 1 van 3')).toBeHidden();
+    await page.waitForTimeout(400);
+    expect(bordVerzoeken).toEqual({ [M1]: 1, [M2]: 1 });
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+
+  for (const geval of ['een fout van de server', 'een antwoord in een onverwachte vorm', 'geen antwoord'] as const) {
+    test(`zonder bord (${geval}): geen uren, geen fout, de ruil blijft bruikbaar`, async ({ page }) => {
+      const pageErrors: string[] = [];
+      page.on('pageerror', (err) => pageErrors.push(err.message));
+      const { extra } = urenServer({
+        ruilen: [{
+          id: 'w1', shiftId: 'r1', requesterId: ALEX_ID, targetDriverId: CHAUFFEUR.id, status: 'pending', reason: '', createdAt: nu,
+          shiftDate: dagInMaand(1, 5), shiftLine: '2323', returnDate: dagInMaand(1, 12), returnCode: 'vrij',
+        }],
+      });
+      await seed(page, { user: CHAUFFEUR, extra });
+      // Later geregistreerd, dus vóór de fixtures: het bord faalt op drie manieren.
+      let gevraagd = 0;
+      await page.route('**/api/month-planning**', (route) => {
+        gevraagd += 1;
+        if (geval === 'een fout van de server') return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Maandplanning kon niet berekend worden' }) });
+        if (geval === 'geen antwoord') return route.abort('failed');
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cells: [{ code: '2323', segments: ['06:45–10:00'] }], uren: '06:45–10:00' }) });
+      });
+      await page.goto('/dienstruil');
+      const kaart = page.locator('[data-record="w1"]');
+      await expect(kaart).toBeVisible();
+      await expect.poll(() => gevraagd).toBeGreaterThan(0);
+      // Ruim voorbij de stille herkansing van een mislukte GET (600 ms).
+      await page.waitForTimeout(1500);
+
+      await expect(kaart).toContainText('Dienst 2323');
+      await expect(kaart).not.toContainText(UREN);
+      // Geen foutmelding, nergens: geen toast, geen foutkaart, geen alert.
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      await expect(page.getByText(/kon niet|mislukt|Er ging iets mis|Opnieuw proberen|Geen bereik|verbinding/i)).toHaveCount(0);
+      // Een mislukt bord wordt dit bezoek niet opnieuw gevraagd (de ene stille herkansing van elke GET niet meegeteld).
+      const na = gevraagd;
+      await kaart.getByRole('button', { name: 'Accepteren' }).click();
+      // De ruil is te beantwoorden zoals vandaag.
+      await expect(page.getByText('De planner beoordeelt ze daarna nog')).toBeVisible();
+      await page.waitForTimeout(800);
+      expect(gevraagd).toBe(na);
+      expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+    });
+  }
+
+  test('stap 3 toont de uren bij elke dienst van de collega; twee maanden in beeld zijn twee verzoeken, elk één keer', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const M1 = dagInMaand(1, 20).slice(0, 7);
+    const M2 = dagInMaand(2, 2).slice(0, 7);
+    // Alex is vrij op de dag van mijn dienst, rijdt 2202 op het einde van die
+    // maand en 2303 (gesplitst) aan het begin van de volgende, en is daarna vrij.
+    const { extra, bordVerzoeken, verstuurd } = urenServer({
+      planning: [{ id: 'p1', date: dagInMaand(1, 20), startTime: '08:00', endTime: '16:00', line: '2101', busNumber: '', loopnr: '', driverId: CHAUFFEUR.id }],
+      availability: { days: [
+        { date: dagInMaand(1, 20), working: [CHAUFFEUR.id], leave: [], free: [ALEX_ID], lines: { [CHAUFFEUR.id]: '2101' } },
+        { date: dagInMaand(1, 28), working: [ALEX_ID], leave: [], free: [], lines: { [ALEX_ID]: '2202' } },
+        { date: dagInMaand(2, 2), working: [ALEX_ID], leave: [], free: [], lines: { [ALEX_ID]: '2303' } },
+        { date: dagInMaand(2, 4), working: [], leave: [], free: [ALEX_ID], lines: {} },
+      ] },
+      bord: {
+        [M1]: { month: M1, dates: [], drivers: [], cells: { [ALEX_ID]: { [dagInMaand(1, 28)]: dienstCel('2202', ['06:12–14:30 (loop 4500)']) } } },
+        [M2]: { month: M2, dates: [], drivers: [], cells: { [ALEX_ID]: { [dagInMaand(2, 2)]: dienstCel('2303', ['05:10–09:00 (loop 4500)', '16:00–19:30 (loop 4611)']) } } },
+      },
+    });
+    await seed(page, { user: CHAUFFEUR, extra });
+    await page.goto('/dienstruil');
+    await page.getByRole('button', { name: 'Dienstruil aanvragen' }).click();
+    const wizard = page.getByRole('dialog');
+    await wizard.getByRole('button', { name: /Dienst 2101/ }).click();
+    await expect(page.getByText('Stap 2 van 3')).toBeVisible();
+    await expect(wizard.getByRole('button', { name: new RegExp(ALEX) })).toBeVisible();
+    // Tot hier valt er geen dienst van een collega te tonen: het bord is niet gevraagd.
+    expect(bordVerzoeken).toEqual({});
+
+    await wizard.getByRole('button', { name: new RegExp(ALEX) }).click();
+    await expect(page.getByText('Stap 3 van 3')).toBeVisible();
+    // Elke dienst van de collega met de uren van die dag, op één regel en zonder loopnummers.
+    await expect(wizard.getByRole('button', { name: /Dienst 2202/ })).toContainText('Dienst 2202 · 06:12–14:30');
+    await expect(wizard.getByRole('button', { name: /Dienst 2303/ })).toContainText('Dienst 2303 · 05:10–09:00 · 16:00–19:30');
+    await expect(wizard).not.toContainText(LOOPNUMMER);
+    // Een vrije dag heeft geen uren.
+    const vrijeDagen = wizard.getByRole('button', { name: /Vrije dag van de collega/ });
+    await expect(vrijeDagen).toHaveCount(2);
+    for (const knop of await vrijeDagen.all()) await expect(knop).not.toContainText(UREN);
+    expect(bordVerzoeken).toEqual({ [M1]: 1, [M2]: 1 });
+
+    // Terug en opnieuw dezelfde collega: geen nieuw verzoek, de uren staan er meteen.
+    await wizard.getByRole('button', { name: 'Vorige stap' }).click();
+    await wizard.getByRole('button', { name: new RegExp(ALEX) }).click();
+    await expect(wizard.getByRole('button', { name: /Dienst 2202/ })).toContainText('06:12–14:30');
+    await page.waitForTimeout(400);
+    expect(bordVerzoeken).toEqual({ [M1]: 1, [M2]: 1 });
+
+    // Wat de wizard verstuurt is niet veranderd: dag en code van de gekozen dienst, geen uren.
+    await wizard.getByRole('button', { name: /Dienst 2303/ }).click();
+    await wizard.getByRole('button', { name: 'Ruilverzoek versturen' }).click();
+    await expect(page.getByText('Stap 3 van 3')).toBeHidden();
+    const nieuw = verstuurd.at(-1)?.at(-1);
+    expect(nieuw).toMatchObject({ shiftId: 'p1', requesterId: CHAUFFEUR.id, targetDriverId: ALEX_ID, status: 'pending', swapType: 'ruil', reason: '', returnDate: dagInMaand(2, 2), returnCode: '2303' });
+    expect(JSON.stringify(nieuw)).not.toMatch(UREN);
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+
+  test('stap 2: het zoekveld filtert op naam zonder de volgorde of de labels te wijzigen; Enter dient niets in', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const collega = (id: string, name: string) => ({ id, name, role: 'chauffeur', employeeId: `VHB-0000${id}`, email: `${id}@vhb.be`, isActive: true });
+    const ZOE = collega('81', 'Zoë Verhaeghe');
+    const ANNA = collega('82', 'Anna Baert');
+    const BERT = collega('83', 'Bert Claeys');
+    const CARL = collega('84', 'Carl Dhondt');
+    const dienstdag = dagInMaand(1, 10);
+    const { extra, verstuurd } = urenServer({
+      users: [CHAUFFEUR, ZOE, CARL, BERT, ANNA],
+      planning: [{ id: 'p1', date: dienstdag, startTime: '08:00', endTime: '16:00', line: '2101', busNumber: '', loopnr: '', driverId: CHAUFFEUR.id }],
+      availability: { days: [
+        {
+          date: dienstdag, working: [CHAUFFEUR.id, BERT.id], leave: [CARL.id], free: [ZOE.id],
+          lines: { [CHAUFFEUR.id]: '2101', [BERT.id]: '2303' }, takeover: { [ANNA.id]: 'bv' }, reden: { [CARL.id]: 'Verlof' },
+        },
+        { date: dagInMaand(1, 17), working: [ZOE.id], leave: [], free: [], lines: { [ZOE.id]: '2202' } },
+      ] },
+    });
+    await seed(page, { user: CHAUFFEUR, extra });
+    await page.goto('/dienstruil');
+    await page.getByRole('button', { name: 'Dienstruil aanvragen' }).click();
+    const wizard = page.getByRole('dialog');
+    await wizard.getByRole('button', { name: /Dienst 2101/ }).click();
+    await expect(page.getByText('Stap 2 van 3')).toBeVisible();
+
+    const opties = wizard.getByRole('button', { name: /Verhaeghe|Baert|Claeys|Dhondt/ });
+    const zoek = wizard.getByRole('searchbox', { name: 'Zoek een collega' });
+    const alles = [/^Anna Baert\s*BV$/, /^Bert Claeys\s*Dienst 2303$/, /^Zoë Verhaeghe\s*Vrij$/, /^Carl Dhondt\s*Verlof$/];
+    await expect(opties).toHaveText(alles);
+    // Het veld staat boven de lijst en krijgt de focus niet vanzelf (het klavier zou de lijst bedekken).
+    const veldVak = (await zoek.boundingBox())!;
+    const eersteVak = (await opties.first().boundingBox())!;
+    expect(veldVak.y + veldVak.height).toBeLessThanOrEqual(eersteVak.y);
+    await expect(zoek).not.toBeFocused();
+
+    // Hoofdletters en accenten tellen niet; het label onder de naam blijft.
+    await zoek.fill('zoe');
+    await expect(opties).toHaveText([/^Zoë Verhaeghe\s*Vrij$/]);
+    await expect(wizard.getByText(/^Niet beschikbaar op /)).toHaveCount(0);
+    await zoek.fill('  VERHAEGHE ');
+    await expect(opties).toHaveText([/^Zoë Verhaeghe\s*Vrij$/]);
+    // Een letter die in elke naam zit, over de twee lijsten heen: volgorde en reden blijven.
+    await zoek.fill('a');
+    await expect(opties).toHaveText(alles);
+    await zoek.fill('dhon');
+    await expect(opties).toHaveText([/^Carl Dhondt\s*Verlof$/]);
+    await expect(wizard.getByText(/^Niet beschikbaar op /)).toBeVisible();
+
+    // Geen treffer: één stille regel, geen fout.
+    await zoek.fill('xyz');
+    await expect(opties).toHaveCount(0);
+    await expect(wizard.getByText('Geen collega gevonden met die naam.')).toBeVisible();
+    await expect(wizard.getByRole('alert')).toHaveCount(0);
+
+    // Enter (de zoektoets van de telefoon) dient het formulier niet in.
+    await zoek.press('Enter');
+    await expect(page.getByText('Stap 2 van 3')).toBeVisible();
+    await expect(wizard.getByRole('alert')).toHaveCount(0);
+
+    // Wissen geeft de hele lijst terug.
+    await wizard.getByRole('button', { name: 'Zoekopdracht wissen' }).click();
+    await expect(opties).toHaveText(alles);
+    await expect(wizard.getByText('Geen collega gevonden met die naam.')).toHaveCount(0);
+
+    // Het gevaarlijke geval: collega en tegenprestatie zijn al gekozen, terug
+    // naar stap 2, zoeken en Enter. Er vertrekt geen aanvraag.
+    await zoek.fill('zoë');
+    await opties.first().click();
+    await expect(page.getByText('Stap 3 van 3')).toBeVisible();
+    await wizard.getByRole('button', { name: /Dienst 2202/ }).click();
+    await expect(wizard.getByRole('button', { name: 'Ruilverzoek versturen' })).toBeEnabled();
+    await wizard.getByRole('button', { name: 'Vorige stap' }).click();
+    await expect(page.getByText('Stap 2 van 3')).toBeVisible();
+    // De zoekterm staat er nog: je ziet waarom de lijst kort is.
+    await expect(zoek).toHaveValue('zoë');
+    await zoek.fill('verh');
+    await zoek.press('Enter');
+    await page.waitForTimeout(500);
+    expect(verstuurd, 'Enter in het zoekveld verstuurde een ruilaanvraag').toEqual([]);
+    await expect(page.getByText('Stap 2 van 3')).toBeVisible();
+    await expect(wizard.getByRole('alert')).toHaveCount(0);
+
+    // Een dienst opnieuw kiezen in stap 1 begint met een leeg zoekveld.
+    await wizard.getByRole('button', { name: 'Vorige stap' }).click();
+    await wizard.getByRole('button', { name: /Dienst 2101/ }).click();
+    await expect(zoek).toHaveValue('');
+    await expect(opties).toHaveText(alles);
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+
+  test('volgorde: op de telefoon eerst wat op jouw antwoord wacht, op desktop en voor staf zoals het was', async ({ page }) => {
+    const telefoon = (page.viewportSize()?.width ?? 0) < 768;
+    const ruilen = [
+      { id: 'mv-lopend', shiftId: 'm2', requesterId: CHAUFFEUR.id, targetDriverId: ALEX_ID, status: 'pending', reason: '', createdAt: nu, shiftDate: vandaagIso(12), shiftLine: '2202', returnDate: vandaagIso(13), returnCode: 'vrij' },
+      { id: 'os-antwoord', shiftId: 'o2', requesterId: ALEX_ID, targetDriverId: CHAUFFEUR.id, status: 'pending', reason: '', createdAt: nu, shiftDate: vandaagIso(9), shiftLine: '2404', returnDate: vandaagIso(11), returnCode: 'vrij' },
+    ];
+    const volgorde = () => page.locator('[data-record]').evaluateAll((els) => els.map((e) => e.getAttribute('data-record')));
+    const kopY = async (tekst: string) => (await page.getByText(tekst, { exact: true }).boundingBox())!;
+
+    await seed(page, { user: CHAUFFEUR, extra: urenServer({ ruilen }).extra });
+    await page.goto('/dienstruil');
+    await expect(page.locator('[data-record="os-antwoord"]')).toBeVisible();
+    // De opbouw zelf wisselt, niet alleen het beeld: lees- en tabvolgorde volgen mee.
+    await expect.poll(volgorde).toEqual(telefoon ? ['os-antwoord', 'mv-lopend'] : ['mv-lopend', 'os-antwoord']);
+    const open = await kopY('Openstaande dienstruilen');
+    const mijn = await kopY('Mijn verzoeken');
+    if (telefoon) expect(open.y).toBeLessThan(mijn.y);
+    else {
+      // Twee kolommen naast elkaar, Mijn verzoeken links: ongewijzigd.
+      expect(open.y).toBe(mijn.y);
+      expect(mijn.x).toBeLessThan(open.x);
+    }
+    // De inhoud van de blokken is dezelfde: het voorstel met zijn knoppen, het eigen verzoek als rij.
+    await expect(page.locator('[data-record="os-antwoord"]').getByRole('button', { name: /^(Weigeren|Accepteren)$/ })).toHaveText(['Weigeren', 'Accepteren']);
+    await expect(page.getByRole('list', { name: 'Mijn verzoeken' }).getByRole('button', { name: /Dienst 2202/ })).toBeVisible();
+  });
+
+  test('volgorde voor staf: Mijn verzoeken blijft eerst, ook op de telefoon', async ({ page }) => {
+    const ruilen = [
+      { id: 'st-eigen', shiftId: 'm2', requesterId: ADMIN.id, targetDriverId: ALEX_ID, status: 'pending', reason: '', createdAt: nu, shiftDate: vandaagIso(12), shiftLine: '2202', returnDate: vandaagIso(13), returnCode: 'vrij' },
+      { id: 'st-open', shiftId: 'o2', requesterId: ALEX_ID, targetDriverId: '44', status: 'pending', reason: '', createdAt: nu, shiftDate: vandaagIso(9), shiftLine: '2404', returnDate: vandaagIso(11), returnCode: 'vrij' },
+    ];
+    await seed(page, { user: ADMIN, extra: urenServer({ ruilen }).extra });
+    await page.goto('/dienstruil');
+    const mijn = page.getByText('Mijn verzoeken', { exact: true });
+    const open = page.getByText('Openstaande dienstruilen', { exact: true });
+    await expect(page.getByRole('list', { name: 'Openstaande dienstruilen' })).toBeVisible();
+    const [m, o] = [(await mijn.boundingBox())!, (await open.boundingBox())!];
+    if ((page.viewportSize()?.width ?? 0) < 768) expect(m.y).toBeLessThan(o.y);
+    else { expect(m.y).toBe(o.y); expect(m.x).toBeLessThan(o.x); }
+    // Staf leest het bord hier nergens voor: geen uren van het bord in de staflijst.
+    expect(await page.evaluate(() => performance.getEntriesByType('resource').filter((r) => r.name.includes('/api/month-planning')).length)).toBe(0);
+  });
+});
+
+// ── Tegenlezing 12-11: komen de uren van het bord later binnen, dan verschuift
+//    er niets. Begrepen schrijft meteen (geen bevestiging): een kaart erboven
+//    die groeit, schoof hem anders onder een tik die voor de kaart eronder was. ──
+test.describe('de uren van het bord komen later binnen: de kaarten verschuiven niet', () => {
+  // Safari op iOS kent geen scroll anchoring (overflow-anchor): groeit een kaart
+  // boven het beeld, dan schuift alles eronder mee. Hier uitgezet, zodat
+  // Chromium en de WebKit van Playwright dat nabootsen.
+  const ZONDER_ANKER = '*, *::before, *::after { overflow-anchor: none !important; }';
+  for (const breedte of [360, 375]) {
+    for (const uitkomst of ['het bord geeft de uren', 'het bord geeft niets'] as const) {
+      test(`${breedte} px, ${uitkomst}: Begrepen blijft staan en een tik op de kaart eronder bevestigt niets`, async ({ page }, testInfo) => {
+        test.skip(testInfo.project.name.startsWith('Desktop'), 'een telefoonscenario: op desktop staan de blokken naast elkaar');
+        const pageErrors: string[] = [];
+        page.on('pageerror', (err) => pageErrors.push(err.message));
+        await page.setViewportSize({ width: breedte, height: 640 });
+        const M1 = dagInMaand(1, 3).slice(0, 7);
+        const voorstel = (id: string, dag: number, shiftLine: string) => ({
+          id, shiftId: `sh-${id}`, requesterId: ALEX_ID, targetDriverId: CHAUFFEUR.id, status: 'pending', reason: '', createdAt: nu,
+          shiftDate: dagInMaand(1, dag), shiftLine, returnDate: dagInMaand(1, 20), returnCode: 'vrij',
+        });
+        // Twee voorstellen met een vroegere dag (drie en twee delen) boven een
+        // doorgevoerde wissel die ik nog moet bevestigen, en een voorstel eronder.
+        const ruilen = [
+          voorstel('v1', 3, '2323'),
+          voorstel('v2', 4, '2202'),
+          { id: 'a1', shiftId: 'g1', requesterId: ALEX_ID, targetDriverId: CHAUFFEUR.id, status: 'approved', reason: '', createdAt: nu, decidedAt: nu, shiftDate: dagInMaand(1, 6), shiftLine: '2404', returnDate: dagInMaand(1, 21), returnCode: 'vrij' },
+          voorstel('v4', 9, '2101'),
+        ];
+        // Na de doorvoer staat de bevestigde dienst in mijn eigen planning, in twee delen.
+        const planning = [
+          { id: 'g1', date: dagInMaand(1, 6), startTime: '06:00', endTime: '10:00', line: '2404', busNumber: '', loopnr: '', driverId: CHAUFFEUR.id },
+          { id: 'g2', date: dagInMaand(1, 6), startTime: '15:00', endTime: '19:00', line: '2404', busNumber: '', loopnr: '', driverId: CHAUFFEUR.id },
+        ];
+        const bord = uitkomst === 'het bord geeft niets'
+          ? { month: M1, dates: [], drivers: [], cells: {} }
+          : { month: M1, dates: [], drivers: [], cells: { [ALEX_ID]: {
+            [dagInMaand(1, 3)]: dienstCel('2323', ['06:45–10:00', '13:10–15:05', '18:40–22:15']),
+            [dagInMaand(1, 4)]: dienstCel('2202', ['05:30–09:10', '15:45–19:35']),
+            [dagInMaand(1, 9)]: dienstCel('2101', ['08:00–16:00']),
+          } } };
+        await seed(page, { user: CHAUFFEUR, extra: urenServer({ ruilen, planning }).extra });
+        // Het bord blijft hangen tot alles gemeten is (later geregistreerd, dus vóór de fixtures).
+        let laatLos!: () => void;
+        const losgelaten = new Promise<void>((r) => { laatLos = r; });
+        let bordGevraagd = 0;
+        await page.route('**/api/month-planning**', async (route) => {
+          bordGevraagd += 1;
+          await losgelaten;
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bord) });
+        });
+        const gezien: string[] = [];
+        page.on('request', (r) => { if (r.method() === 'POST' && r.url().includes('/gezien')) gezien.push(r.url()); });
+
+        await page.goto('/dienstruil');
+        const kaart = (id: string) => page.locator(`[data-record="${id}"]`);
+        await expect(kaart('v4')).toBeVisible();
+        await expect.poll(() => page.locator('[data-record]').evaluateAll((els) => els.map((e) => e.getAttribute('data-record')))).toEqual(['v1', 'v2', 'a1', 'v4']);
+        await expect.poll(() => bordGevraagd).toBe(1);
+        await page.addStyleTag({ content: ZONDER_ANKER });
+        const begrepen = kaart('a1').getByRole('button', { name: 'Begrepen, ik rijd deze dienst' });
+        await begrepen.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(150);
+        const hoogte = async (id: string) => (await kaart(id).boundingBox())!.height;
+        const voor = { begrepen: (await begrepen.boundingBox())!, v1: await hoogte('v1'), v2: await hoogte('v2'), v4: await hoogte('v4') };
+        // De plek van de tik: de kop van de kaart onder Begrepen, boven de onderbalk.
+        const eronder = (await kaart('v4').boundingBox())!;
+        const tik = { x: voor.begrepen.x + voor.begrepen.width / 2, y: eronder.y + 26 };
+        expect(tik.y).toBeLessThan(640 - 100);
+
+        const antwoord = page.waitForResponse((r) => r.url().includes('/api/month-planning'));
+        laatLos();
+        await antwoord;
+        if (uitkomst === 'het bord geeft de uren') {
+          await expect(kaart('v1')).toContainText('06:45–10:00 · 13:10–15:05 · 18:40–22:15');
+          await expect(kaart('v2')).toContainText('05:30–09:10 · 15:45–19:35');
+        } else {
+          await page.waitForTimeout(300);
+          await expect(kaart('v1')).not.toContainText(UREN);
+        }
+        // Net na het binnenkomen tikt de chauffeur op de kaart eronder.
+        await page.touchscreen.tap(tik.x, tik.y);
+        await page.waitForTimeout(600);
+        expect(gezien, 'de tik op de kaart eronder landde op Begrepen').toEqual([]);
+        // Geen kaart veranderde van hoogte, dus Begrepen staat waar hij stond.
+        expect((await begrepen.boundingBox())!.y).toBeCloseTo(voor.begrepen.y, 0);
+        expect(await hoogte('v1')).toBeCloseTo(voor.v1, 0);
+        expect(await hoogte('v2')).toBeCloseTo(voor.v2, 0);
+        expect(await hoogte('v4')).toBeCloseTo(voor.v4, 0);
+        if (uitkomst === 'het bord geeft de uren') {
+          // Alle delen op één regel, ook drie delen op deze breedte.
+          const regels = await kaart('v1').locator('p', { hasText: '13:10–15:05' }).evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+          expect(regels).toBe(1);
+        }
+        expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+      });
+    }
+  }
+});

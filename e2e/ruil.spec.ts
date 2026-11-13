@@ -754,9 +754,14 @@ test('chauffeur: wat op zijn antwoord wacht bovenaan, lopende verzoeken boven af
 
   await page.goto('/');
   await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
-  // Mijn verzoeken staat eerst op de pagina, dan de ruilen die aan hem gericht zijn.
+  // Op de telefoon staat eerst wat op zijn antwoord wacht, dan zijn eigen
+  // verzoeken (ronde 6, punt 12; tot dan stond Mijn verzoeken eerst). Deze spec
+  // draait alleen op de telefoon; de volgorde op desktop (ongewijzigd) en in
+  // WebKit staat in e2e/deeplinks-ruil.spec.ts.
   await expect.poll(() => page.locator('[data-record]').evaluateAll((els) => els.map((e) => e.getAttribute('data-record'))))
-    .toEqual(['mv-lopend', 'mv-klaar', 'os-antwoord', 'os-planner']);
+    .toEqual(['os-antwoord', 'os-planner', 'mv-lopend', 'mv-klaar']);
+  // De inhoud van de blokken is dezelfde gebleven.
+  await expect(page.getByRole('list', { name: 'Mijn verzoeken' }).getByRole('listitem')).toHaveCount(2);
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });

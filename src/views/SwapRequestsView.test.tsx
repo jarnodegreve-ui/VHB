@@ -18,6 +18,7 @@ vi.mock('../app/AppDataContext', () => ({
 }));
 
 import { SwapRequestsView } from './SwapRequestsView';
+import { apiFetch } from '../lib/api';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
@@ -671,5 +672,94 @@ describe('Dienstruil: beheertabel op desktop', () => {
         expect(onDecide).toHaveBeenCalledWith('r1', 'rejected', 'accepted');
       });
     });
+  });
+});
+
+// Tegenlezing 12-11 (ronde 6, punt 12): de uren van het bord tellen alleen als
+// ze vers van de server kwamen, na de doorvoer komen ze uit de eigen planning
+// (alle delen), en alleen stap 3 verstuurt de aanvraag.
+describe('Dienstruil: uren van een dienst en wat de wizard verstuurt (tegenlezing 12-11)', () => {
+  const ALEX = { id: 'c2', name: 'Alex Collega', employeeId: 'C2', role: 'chauffeur', isActive: true } as User;
+  const UREN = /\d{2}:\d{2}–\d{2}:\d{2}/;
+  const voorstel = (extra: Partial<SwapRequest> = {}): SwapRequest => ({
+    id: 'v1', shiftId: 'x1', requesterId: ALEX.id, targetDriverId: CHAUFFEUR.id, status: 'pending',
+    createdAt: '2026-11-04T08:00:00.000Z', shiftDate: '2026-12-05', shiftLine: '2323', returnDate: '2026-12-12', returnCode: 'vrij', ...extra,
+  });
+  const BORD = { month: '2026-12', dates: [], drivers: [], cells: { [ALEX.id]: { '2026-12-05': { code: '2323', kind: 'service', label: 'Dienst 2323', segments: ['06:45–10:00 (loop 4500)', '15:45–19:35'] } } } };
+  /** apiFetch zoals de app hem ziet: het bord met de gegeven koppen, de rest leeg. */
+  const bordAntwoord = (koppen: Record<string, string> = {}) => vi.mocked(apiFetch).mockImplementation(async (url) => (
+    String(url).startsWith('/api/month-planning')
+      ? new Response(JSON.stringify(BORD), { status: 200, headers: { 'content-type': 'application/json', ...koppen } })
+      : new Response('{}', { status: 200 })
+  ));
+  const bordVerzoeken = () => vi.mocked(apiFetch).mock.calls.filter(([url]) => String(url).startsWith('/api/month-planning'));
+  const kaart = (id: string) => document.querySelector<HTMLElement>(`[data-record="${id}"]`)!;
+  const zetStandaard = () => { vi.mocked(apiFetch).mockReset(); vi.mocked(apiFetch).mockImplementation(async () => new Response('{}', { status: 200 })); };
+  // jsdom kent scrollTo op een element niet; de wizard scrolt bij elke stapwissel naar boven.
+  if (!Element.prototype.scrollTo) Element.prototype.scrollTo = () => {};
+  beforeEach(zetStandaard);
+  afterEach(zetStandaard);
+
+  it('een bord uit de cache van de service worker (zonder bereik) toont geen uren; een vers antwoord wel', async () => {
+    bordAntwoord({ 'X-VHB-Bron': 'cache' });
+    const eerste = toon([CHAUFFEUR, ALEX], [voorstel()]);
+    await waitFor(() => expect(bordVerzoeken()).toHaveLength(1));
+    expect(bordVerzoeken()[0][0]).toBe('/api/month-planning?month=2026-12');
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(kaart('v1').textContent).toContain('Dienst 2323');
+    expect(kaart('v1').textContent).not.toMatch(UREN);
+    eerste.unmount();
+
+    bordAntwoord();
+    toon([CHAUFFEUR, ALEX], [voorstel()]);
+    await waitFor(() => expect(kaart('v1').textContent).toMatch(/06:45–10:00\s·\s15:45–19:35/));
+  });
+
+  it('na de doorvoer: de uren van alle delen uit de eigen planning, en het bord wordt er niet voor gevraagd', async () => {
+    const shifts = [
+      { id: 'g1', date: '2026-12-06', startTime: '06:00', endTime: '10:00', line: '2404', busNumber: '', loopnr: '', driverId: CHAUFFEUR.id },
+      { id: 'g2', date: '2026-12-06', startTime: '15:00', endTime: '19:00', line: '2404', busNumber: '', loopnr: '', driverId: CHAUFFEUR.id },
+    ];
+    render(<SwapRequestsView user={CHAUFFEUR} swaps={[voorstel({ id: 'a1', shiftId: 'g1', status: 'approved', shiftDate: '2026-12-06', shiftLine: '2404' })]} shifts={shifts} users={[CHAUFFEUR, ALEX]} onSave={vi.fn().mockResolvedValue(true)} onConfirmSeen={vi.fn()} />);
+    expect(within(kaart('a1')).getByRole('button', { name: 'Begrepen, ik rijd deze dienst' })).toBeTruthy();
+    // Vroeger alleen het eerste deel (de rij van de ruil): "06:00–10:00".
+    expect(kaart('a1').textContent).toMatch(/06:00–10:00\s·\s15:00–19:00/);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(bordVerzoeken()).toHaveLength(0);
+  });
+
+  it('alleen stap 3 verstuurt: een submit vanuit stap 2 (Enter in het zoekveld) laat niets vertrekken, ook niet met alles al gekozen', async () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    apiJsonMock.mockImplementation(async (url: string) => {
+      // De dag van mijn dienst (met takeover), daarna de komende weken van de collega.
+      if (url.includes('takeover=1')) return { days: [{ date: '2026-11-20', working: [CHAUFFEUR.id, ALEX.id], leave: [], free: [], lines: { [CHAUFFEUR.id]: '2101', [ALEX.id]: '2303' } }] };
+      if (url.startsWith('/api/availability')) return { days: [{ date: '2026-11-25', working: [ALEX.id], leave: [], free: [], lines: { [ALEX.id]: '2202' } }] };
+      return { ruilen: [], totaal: 0 };
+    });
+    const mijnDienst = { id: 's1', date: '2026-11-20', startTime: '08:00', endTime: '16:00', line: '2101', busNumber: '', loopnr: '', driverId: CHAUFFEUR.id };
+    render(<SwapRequestsView user={CHAUFFEUR} swaps={[]} shifts={[mijnDienst]} users={[CHAUFFEUR, ALEX]} onSave={onSave} />);
+    const klik = async (el: HTMLElement) => { await act(async () => { fireEvent.click(el); }); };
+    await klik(screen.getByRole('button', { name: 'Dienstruil aanvragen' }));
+    const wizard = await screen.findByRole('dialog');
+    await klik(within(wizard).getByRole('button', { name: /Dienst 2101/ }));
+    await klik(await within(wizard).findByRole('button', { name: /Alex Collega/ }));
+    await klik(await within(wizard).findByRole('button', { name: /Dienst 2202/ }));
+    expect(within(wizard).getByRole('button', { name: 'Ruilverzoek versturen' })).toHaveProperty('disabled', false);
+
+    // Terug naar stap 2: dienst, collega en tegenprestatie zijn gekozen. Een
+    // submit van het formulier (zoals Enter in het zoekveld) doet niets.
+    await klik(within(wizard).getByRole('button', { name: 'Vorige stap' }));
+    expect(within(wizard).getByText('Stap 2 van 3')).toBeTruthy();
+    await act(async () => { fireEvent.submit(wizard.querySelector('form')!); });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(wizard).getByText('Stap 2 van 3')).toBeTruthy();
+    expect(within(wizard).queryByRole('alert')).toBeNull();
+
+    // In stap 3 verstuurt dezelfde submit gewoon, zoals vroeger.
+    await klik(within(wizard).getByRole('button', { name: /Alex Collega/ }));
+    await klik(await within(wizard).findByRole('button', { name: /Dienst 2202/ }));
+    await act(async () => { fireEvent.submit(wizard.querySelector('form')!); });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].at(-1)).toMatchObject({ shiftId: 's1', targetDriverId: ALEX.id, returnDate: '2026-11-25', returnCode: '2202', status: 'pending' });
   });
 });
