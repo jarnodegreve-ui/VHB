@@ -378,9 +378,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
    *  begint nooit met het puntje (vaste spatie ervoor). De scheiding staat in
    *  de gewone letter: in mono is ze drie tekens breed, en zo passen drie
    *  delen ook op 360 px op één regel (gemeten in WebKit, tegenlezing 12-11).
+   *  Ze draagt `leading-none`: twee lettertypes op één regel maakten de regel
+   *  anders 1 px hoger dan de lege regel (WebKit op Linux, CI 13-11), en dan
+   *  verschoof de kaart toch nog als de uren binnenkwamen.
    *  `na` = achter andere tekst, dus ook vóór het eerste tijdvak een scheiding. */
   const urenStukken = (uren: string[] | null, na = false) => uren?.map((u, i) => (
-    <Fragment key={i}>{(na || i > 0) && <span className="font-sans">{'\u00a0· '}</span>}<span className="whitespace-nowrap">{u}</span></Fragment>
+    <Fragment key={i}>{(na || i > 0) && <span className="font-sans leading-none">{'\u00a0· '}</span>}<span className="whitespace-nowrap">{u}</span></Fragment>
   ));
   // Gedeelde compacte dag-vorm ('vr 18 jul') — gelijk aan Dekking, i.p.v. de
   // eigen 'vr 18/07'-variant (datum-consolidatie).
