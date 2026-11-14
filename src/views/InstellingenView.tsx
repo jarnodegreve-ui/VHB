@@ -14,7 +14,7 @@ import { ROUTES } from '../app/routes';
 import { apiJson } from '../lib/api';
 import { BUILD_INFO } from '../lib/appVersion';
 import { bewaarVoorkeurDeel, spiegelStartscherm } from '../lib/dashboardVoorkeuren';
-import { formatRelatief } from '../lib/format';
+import { formatRelatief, formatTijdstip } from '../lib/format';
 import { isGedeeldToestel, zetGedeeldToestel } from '../lib/inactiviteit';
 import { STARTSCHERMEN, onthoudStartschermLokaal, type Startscherm } from '../lib/startscherm';
 import { supabase } from '../lib/supabase';
@@ -545,7 +545,7 @@ export function InstellingenView({
           <Rij
             icoon={<Info size={16} />}
             titel={`Versie ${BUILD_INFO.version}`}
-            uitleg={`Build ${BUILD_INFO.sha || 'lokaal'} · gebouwd op ${new Date(BUILD_INFO.builtAt).toLocaleString('nl-BE', { dateStyle: 'medium', timeStyle: 'short' })}.`}
+            uitleg={`Build ${BUILD_INFO.sha || 'lokaal'} · gebouwd op ${formatTijdstip(BUILD_INFO.builtAt)}.`}
             rechts={<Chip>{BUILD_INFO.sha || 'lokaal'}</Chip>}
           />
           <Rij

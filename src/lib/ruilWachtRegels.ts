@@ -1,5 +1,5 @@
 import type { User } from '../types';
-import { formatShortDayPadded } from './format';
+import { formatShortDay } from './format';
 import type { RuilWachtOpMij } from './ruilWachtOpMij';
 
 /**
@@ -9,7 +9,7 @@ import type { RuilWachtOpMij } from './ruilWachtOpMij';
 export function ruilWachtRegels(item: RuilWachtOpMij, users: ReadonlyArray<Pick<User, 'id' | 'name'>>): { primary: string; secondary: string } {
   const { ruil, soort } = item;
   const naam = users.find((u) => u.id === ruil.requesterId)?.name ?? 'Een collega';
-  const dienst = [ruil.shiftDate ? formatShortDayPadded(ruil.shiftDate) : null, ruil.shiftLine ? `dienst ${ruil.shiftLine}` : null].filter(Boolean).join(' · ');
+  const dienst = [ruil.shiftDate ? formatShortDay(ruil.shiftDate) : null, ruil.shiftLine ? `dienst ${ruil.shiftLine}` : null].filter(Boolean).join(' · ');
   if (soort === 'bevestiging') {
     return { primary: `Je rijdt de dienst van ${naam}`, secondary: dienst ? `${dienst} · goedgekeurd, bevestig dat je het zag` : 'Goedgekeurd, bevestig dat je het zag' };
   }
@@ -20,8 +20,8 @@ export function ruilWachtRegels(item: RuilWachtOpMij, users: ReadonlyArray<Pick<
   const tegen = isOvername
     ? null
     : ruil.returnCode!.toLowerCase() === 'vrij'
-      ? `in ruil voor jouw vrije ${formatShortDayPadded(ruil.returnDate!)}`
-      : `in ruil voor jouw dienst ${ruil.returnCode} (${formatShortDayPadded(ruil.returnDate!)})`;
+      ? `in ruil voor jouw vrije ${formatShortDay(ruil.returnDate!)}`
+      : `in ruil voor jouw dienst ${ruil.returnCode} (${formatShortDay(ruil.returnDate!)})`;
   return {
     primary: isOvername ? `${naam} vraagt een overname` : `${naam} wil ruilen`,
     secondary: [dienst, tegen].filter(Boolean).join(' · ') || 'Wacht op jouw antwoord',
