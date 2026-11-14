@@ -670,7 +670,12 @@ test.describe('verlof beslissen: de knoppen blijven in beeld (desktop)', () => {
     await expect.poll(async () => (await p.boundingBox())!.height).toBeLessThan(hoog);
 
     await page.setViewportSize(MATEN[0]);
-    await expect.poll(async () => (await p.boundingBox())!.height).toBe(hoog);
+    // Op een halve pixel: sinds Verwissel cross-fadet (ronde 6, punt 3) kan het
+    // paneel opkomen in de laatste milliseconden van de inloop van het scherm
+    // (translateY van 4 px naar 0), en de eerste meting van het paneel neemt
+    // die rest mee (gemeten 0,02 tot 0,06 px). Na het vergroten is de inloop
+    // voorbij.
+    await expect.poll(async () => (await p.boundingBox())!.height).toBeCloseTo(hoog, 0);
     await expect(page.getByRole('button', { name: 'Goedkeuren' })).toBeInViewport({ ratio: 1 });
   });
 
