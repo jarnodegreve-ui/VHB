@@ -55,9 +55,12 @@ const nu = () => Math.round(performance.now());
 export const startOnderbroken = (): void => { meting = null; };
 
 // `js`: deze module loopt mee met de startbundel. Een tabblad dat verborgen
-// opent (achtergrond), het printblad en een uitnodiging meten niet.
+// opent (achtergrond), het printblad en een uitnodiging meten niet. Het
+// printblad bewust ruimer dan `PRINT_PARAM` (src/app/Voorschermen.tsx): elke
+// `print-…` en `ruiloverzicht-…`, zodat een nieuwe printparameter hier niet
+// uit de pas loopt; een gewoon scherm draagt die nooit.
 try {
-  if (!document.hidden && !/[?&]print-/.test(location.search) && !location.hash.startsWith(UITNODIGING_HASH)) {
+  if (!document.hidden && !/[?&](print|ruiloverzicht)-/.test(location.search) && !location.hash.startsWith(UITNODIGING_HASH)) {
     meting = { js: nu() };
     document.addEventListener('visibilitychange', () => { if (document.hidden) meting = null; });
   }
@@ -65,12 +68,18 @@ try {
   meting = null;
 }
 
-/** Eén fase zetten: alleen na `vorige` en alleen de eerste keer. */
+/** Eén fase zetten: alleen na `vorige` en alleen de eerste keer. Gooit nooit:
+ *  de aanroepers staan in de init en vlak vóór `setIsInitialLoad(false)`. */
 const stap = (fase: Fase, vorige: Fase, extra?: Partial<StartMeting>): StartMeting | null => {
   const m = meting;
   if (!m || m[fase] !== undefined || m[vorige] === undefined) return null;
-  m[fase] = nu();
-  return Object.assign(m, extra);
+  try {
+    m[fase] = nu();
+    return Object.assign(m, extra);
+  } catch {
+    meting = null;
+    return null;
+  }
 };
 
 /** De meting op het toestel zetten, met de context; daarna is ze dicht. */
@@ -129,13 +138,18 @@ export function markeerBeeld(el: Element | null): void {
  *  `wis` na een 2xx: alleen als er nog exact die tekst staat, zodat de
  *  meting van deze start (intussen bewaard) blijft staan; een fout daarin
  *  vangt de `.catch` van de ping. Ouder dan 7 dagen = weg zonder meesturen.
- *  Een onleesbare waarde reist niet mee en wordt door de volgende meting
- *  overschreven; wat er wel meereist, keurt de server nog veld per veld. */
+ *  Een onleesbare of te lange waarde reist niet mee en wordt door de volgende
+ *  meting overschreven; wat er wel meereist, keurt de server nog veld per
+ *  veld. De lengtegrens: een meting is ±200 tekens; iets diep genests of
+ *  groots (met de hand of door vreemde code gezet) zou JSON.stringify van de
+ *  ping laten gooien, en dus de start, of de ping een 413 geven en nooit
+ *  gewist worden. */
 export function vorigeStart(): { start: StartMeting; wis: () => void } | undefined {
   try {
-    // Geen sleutel: JSON.parse(null) is null en het uitpakken valt in de catch.
+    // Geen sleutel: `tekst!.length` gooit; te lang: JSON.parse('') gooit; in
+    // beide gevallen valt het in de catch.
     const tekst = localStorage.getItem(SLEUTEL);
-    const { t, m } = JSON.parse(tekst!);
+    const { t, m } = JSON.parse(tekst!.length < 2e3 ? tekst! : '');
     if (Date.now() - t < MAX_LEEFTIJD_MS && m) {
       return { start: m, wis: () => { if (localStorage.getItem(SLEUTEL) === tekst) localStorage.removeItem(SLEUTEL); } };
     }

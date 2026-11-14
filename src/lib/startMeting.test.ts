@@ -227,6 +227,17 @@ describe('onderbroken starts bewaren niets', () => {
     expect(bewaard()).toBeNull();
   });
 
+  it('het printblad Ruiloverzicht (periode en oude week) meet ook niet', async () => {
+    for (const pad of ['/?ruiloverzicht-van=2026-11-01&ruiloverzicht-tot=2026-11-07', '/?ruiloverzicht-week=2026-11-04']) {
+      window.history.replaceState(null, '', pad);
+      const m = await laad();
+      totGegevens(m, 'dashboard');
+      m.markeerBeeld(document.createElement('h1'));
+      draaiFrames();
+      expect(bewaard(), pad).toBeNull();
+    }
+  });
+
   it('fasen buiten volgorde zetten niets (geen geraden waarde)', async () => {
     const m = await laad();
     m.markeerProfiel('chauffeur'); // zonder sessie
@@ -259,6 +270,17 @@ describe('de meting breekt nooit een start', () => {
       m.markeerBeeld(document.createElement('h1'));
     }).not.toThrow();
     vi.unstubAllGlobals();
+    expect(bewaard()).toBeNull();
+  });
+
+  it('een klok die na het laden gooit: geen fout in de start, niets bewaard', async () => {
+    const m = await laad();
+    vi.spyOn(performance, 'now').mockImplementation(() => { throw new Error('kapot'); });
+    expect(() => {
+      totGegevens(m);
+      m.markeerBeeld(document.createElement('h1'));
+      draaiFrames();
+    }).not.toThrow();
     expect(bewaard()).toBeNull();
   });
 
@@ -313,6 +335,23 @@ describe('meesturen met de aanwezigheidsping', () => {
     }
     totGegevens(m, 'rooster');
     expect(bewaard()?.m).toMatchObject({ gegevens: 1130 });
+  });
+
+  it('een te diepe of te lange waarde (vreemde code, met de hand gezet) reist niet mee', async () => {
+    const m = await laad();
+    // Diep genest en met een tijd in de toekomst: zou de 7 dagen ontlopen en
+    // JSON.stringify van de ping laten gooien.
+    const diep = `{"t":${Date.now() + 365 * 864e5},"m":${'['.repeat(200_000)}${']'.repeat(200_000)}}`;
+    // Plat maar groot: zou de ping een 413 geven en dus nooit gewist worden.
+    const lang = JSON.stringify({ t: Date.now(), m: { gegevens: 4, rol: 'x'.repeat(5000) } });
+    for (const waarde of [diep, lang]) {
+      zet(waarde);
+      expect(m.vorigeStart()).toBeUndefined();
+    }
+    // De eigen meting van deze start overschrijft de sleutel.
+    totGegevens(m, 'rooster');
+    expect(bewaard()?.m).toMatchObject({ gegevens: 1130 });
+    expect(window.localStorage.getItem(SLEUTEL)!.length).toBeLessThan(2000);
   });
 
   it('niets bewaard: niets mee', async () => {

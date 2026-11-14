@@ -108,6 +108,24 @@ const vertraag = (page: Page, pad: string, ms: number) =>
 
 const isResumePing = (v: Verzoek) => v.methode === 'POST' && v.pad === '/api/auth/session';
 
+/** Ruis van de e2e-omgeving die ook op main in de console staat: de previewserver
+ *  heeft geen Vercel-script en geen realtime-server. Al de rest telt als fout. */
+const OMGEVINGSRUIS = [
+  /^Failed to load resource: .* @ \S*\/_vercel\/speed-insights\/script\.js$/,
+  /^WebSocket connection to '\S*\/realtime\/v1\/websocket\?/,
+];
+
+/** Paginafouten en console-fouten van deze pagina, voor "een gewone start zonder fout". */
+function vangFouten(page: Page): string[] {
+  const fouten: string[] = [];
+  page.on('pageerror', (e) => fouten.push(e.message));
+  page.on('console', (m) => {
+    const regel = `${m.text()} @ ${m.location().url}`;
+    if (m.type() === 'error' && !OMGEVINGSRUIS.some((ruis) => ruis.test(regel))) fouten.push(regel);
+  });
+  return fouten;
+}
+
 test.describe('startmeting', () => {
   test('toetssteen 1: twee warme starten vragen dezelfde verzoeken, alleen de resume-ping draagt de meting, en de nieuwe meting blijft staan', async ({ page }, info) => {
     const wie = wieVoor(info);
@@ -358,12 +376,41 @@ test.describe('startmeting', () => {
         return lees.call(this, sleutel);
       };
     }, SLEUTEL);
-    const fouten: string[] = [];
-    page.on('pageerror', (e) => fouten.push(e.message));
+    const fouten = vangFouten(page);
     await page.goto('/mijn-dag');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(DAGKOP, { timeout: 15_000 });
     await page.waitForTimeout(800);
     await expect(page.getByText(/niet laden|Er ging iets mis/)).toHaveCount(0);
+    expect(fouten).toEqual([]);
+  });
+
+  test('toetssteen 6: een geknoeide sleutel (diep genest, tijd in de toekomst) breekt de start niet en herstelt zich', async ({ page }, info) => {
+    test.skip(desktop(info), 'mobiel: iPhone 13 (chromium) en (webkit)');
+    const log = await opzet(page, CHAUFFEUR_MIJN_DAG);
+    // Met de hand of door vreemde code gezet: geen pad van de app schrijft dit.
+    // Alleen bij de eerste laadbeurt, zodat de test ook het herstel ziet.
+    await page.addInitScript((k) => {
+      if (sessionStorage.getItem('__gezaaid')) return;
+      sessionStorage.setItem('__gezaaid', '1');
+      const diep = 200_000;
+      localStorage.setItem(k, `{"t":${Date.now() + 365 * 864e5},"m":${'['.repeat(diep)}${']'.repeat(diep)}}`);
+    }, SLEUTEL);
+    const fouten = vangFouten(page);
+    await page.goto('/mijn-dag');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(DAGKOP, { timeout: 15_000 });
+    await expect(page.getByText(/niet laden|Er ging iets mis/)).toHaveCount(0);
+    // De ping vertrok, zonder de geknoeide waarde.
+    await expect.poll(() => log.verzoeken.filter(isResumePing).length, { timeout: 10_000 }).toBe(1);
+    expect(JSON.parse(log.verzoeken.find(isResumePing)!.body!)).toEqual({ action: 'resume' });
+    // De eigen meting van deze start overschrijft de sleutel (alleen de lengte
+    // lezen: de geknoeide waarde is 400 kB).
+    await expect.poll(() => page.evaluate((k) => {
+      const n = localStorage.getItem(k)?.length ?? 0;
+      return n > 0 && n < 2000;
+    }, SLEUTEL), { timeout: 15_000, message: 'een gewone meting staat in de plaats van de geknoeide' }).toBe(true);
+    const herstel = await leesMeting(page);
+    expect(typeof herstel?.m.beeld).toBe('number');
+    inVolgorde(herstel!.m);
     expect(fouten).toEqual([]);
   });
 });
