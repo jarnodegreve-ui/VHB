@@ -450,13 +450,13 @@ test('de collega opent het ruilscherm, de aanvrager ziet daarna "Bekeken" in het
   await page.waitForTimeout(1500);
   expect(bekekenAanroepen).toHaveLength(1);
 
-  // 3. Terug bij de aanvrager: bekeken, met het moment (dd/mm uu:mm, 24-uurs).
+  // 3. Terug bij de aanvrager: bekeken, met het tijdstip (korte dag, komma, uur, 24-uurs).
   wie = COLLEGA;
   await page.reload();
   await page.getByRole('button', { name: /Dienst 2323/ }).click();
   await expect(opCollegaRegel()).toContainText('Bekeken, nog geen antwoord');
-  // (formatMomentKort zet het jaartal erbij zodra het niet meer dit jaar is.)
-  await expect(opCollegaRegel()).toContainText(/05\/10(\/2026)? 09:40/);
+  // (formatTijdstip zet het jaartal na de maand zodra het niet meer dit jaar is.)
+  await expect(opCollegaRegel()).toContainText(/ma 5 okt( 2026)?, 09:40/);
   await expect(verloop).not.toContainText('Nog niet bekeken');
   // De planner wacht nog altijd op de collega: bekeken is geen antwoord.
   await expect(verloop.getByRole('listitem').nth(2)).toContainText('Wacht op collega');

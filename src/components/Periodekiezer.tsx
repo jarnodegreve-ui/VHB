@@ -1,5 +1,6 @@
 import { Field, Select, DateInput } from './Field';
 import { cn } from '../lib/ui';
+import { MAAND_KORT } from '../lib/format';
 import {
   eersteVanMaand, herkenPeriode, laatsteVanMaand, maandenInPeriode, periodeFout, periodeKeuzesVoor, periodeVoor,
   type Periode, type PeriodeKeuze, type PeriodeSnelkeuze,
@@ -24,7 +25,6 @@ import {
  * 1e en de laatste dag), zodat de URL, het blad en de server niets nieuws leren.
  */
 // Korte maandnamen: het veld is op de telefoon een halve regel breed, en "September 2026" werd er afgekapt.
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const maandLabel = (maand: string): string => `${MAAND_KORT[Number(maand.slice(5, 7)) - 1] ?? maand} ${maand.slice(0, 4)}`;
 
 /** De maanden in de keuzelijst: twee jaar terug tot een jaar vooruit, opgerekt tot wat er gekozen is. */

@@ -107,6 +107,7 @@ export function ManageUpdatesView({
     const updateToSave: Update = {
       id: editingId || Date.now().toString(),
       date: editingId
+        // opmaak: geen weergave maar de bewaarde datum van de update (vrije tekst, gelezen door lib/updateVolgorde.ts); de vorm blijft zoals hij is.
         ? (updates.find((update) => update.id === editingId)?.date || new Date().toLocaleDateString('nl-BE'))
         : new Date().toLocaleDateString('nl-BE'),
       title: updateForm.title,

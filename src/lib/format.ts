@@ -24,51 +24,41 @@ function kalenderDag(value: string): string {
 }
 
 /**
- * Datum + tijd in Belgische tijd ("vr 18 juli, 14:32"). Verwacht een
- * ISO-timestamp; oudere niet-ISO-waarden (bv. al opgeslagen nl-BE-strings)
- * worden ongewijzigd teruggegeven.
+ * Eén tijdstip voor het hele portaal: de korte dag, een komma en het uur
+ * ("do 8 okt, 14:02"); het jaar na de maand alleen buiten dit jaar ("do 8 okt
+ * 2025, 14:02"). Stond er in tien schrijfwijzen (ronde 6, punt 8).
+ * - een tijdstempel met zone (Z of offset, zo slaat de server ze op): de
+ *   Brusselse dag en het Brusselse uur;
+ * - datum en uur zonder zone: wandklok, zoals het er staat;
+ * - alleen een datum: de korte dag ("za 19 sep");
+ * - leeg: '';
+ * - wat niet als datum te lezen is (een oude nl-BE-tekst van lastLogin,
+ *   'gisteren'): ongewijzigd terug.
+ * Opgebouwd uit de cijfers en de vaste tabellen van dit bestand, niet uit
+ * Intl, zodat elke motor hetzelfde toont, zonder afkortingspunt.
  */
-export function formatDateTimeHuman(value: string | undefined | null): string {
+export function formatTijdstip(value: string | undefined | null, nu: Date = new Date()): string {
   if (!value) return '';
-  const s = String(value);
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return s;
-  try {
-    return d.toLocaleString('nl-BE', {
-      timeZone: 'Europe/Brussels',
-      weekday: 'short',
-      day: 'numeric',
-      month: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return s;
-  }
+  const d = momentDelen(value);
+  if (!d || !MAAND_KORT[+d.maand - 1]) return String(value);
+  const dag = kortDag(+d.jaar, +d.maand, +d.dag, +d.jaar !== nu.getFullYear());
+  return d.uur === undefined ? dag : `${dag}, ${d.uur}:${d.minuut}`;
 }
 
-/**
- * Kort moment voor een tijdlijn of verloop: "19/09 14:02", met jaartal als het
- * niet dit jaar is ("19/09/2025 14:02"). Een timestamp mét zone (Z of offset,
- * zo slaat de server ze op) wordt naar Belgische tijd omgerekend; een
- * zone-loze waarde is al wandkloktijd en blijft staan. Alleen een datum → dd/mm.
- */
-export function formatMomentKort(value: string | undefined | null, nu: Date = new Date()): string {
+/** Het uur ("14:02") van een tijdstempel, in Brusselse tijd (zonder zone: de
+ *  wandklok zoals ze er staat). Leeg, onleesbaar of alleen een datum: ''. Het
+ *  uur van nu of van een epoch is formatSyncedTime (klok van het toestel). */
+export function formatUur(value: string | undefined | null): string {
   const d = momentDelen(value);
-  if (!d) return '';
-  const datum = `${d.dag}/${d.maand}${Number(d.jaar) === nu.getFullYear() ? '' : `/${d.jaar}`}`;
-  return d.uur === undefined ? datum : `${datum} ${d.uur}:${d.minuut}`;
+  return d && d.uur ? `${d.uur}:${d.minuut}` : '';
 }
 
-/** Volledig moment voor logs en systeemschermen: "19/09/2026 14:02" (altijd
- *  met jaar), in Belgische tijd; alleen een datum → "19/09/2026". */
-export function formatMomentDMJ(value: string | undefined | null): string {
-  const d = momentDelen(value);
-  if (!d) return '';
-  const datum = `${d.dag}/${d.maand}/${d.jaar}`;
-  return d.uur === undefined ? datum : `${datum} ${d.uur}:${d.minuut}`;
-}
+/** Doorgevers: dezelfde functie onder de oude namen, zodat er vanaf ronde 6 één
+ *  tijdstip in beeld staat; deel 3 en 4 zetten hun aanroepers over, deel 4
+ *  schrapt de namen. */
+export const formatDateTimeHuman = formatTijdstip;
+export const formatMomentKort = formatTijdstip;
+export const formatMomentDMJ = formatTijdstip;
 
 function momentDelen(value: string | undefined | null): { jaar: string; maand: string; dag: string; uur?: string; minuut?: string } | null {
   if (!value) return null;
@@ -163,34 +153,56 @@ export function formatSyncedTime(ts: number | null | undefined): string {
   }
 }
 
-/** Compact dag-label 'vr 18 jul' (weekdag + dag + korte maand) uit een
- *  'YYYY-MM-DD'-string. Eén gedeelde vorm zodat lijsten die datums naast
- *  elkaar tonen (dienstruil, dekking) er niet uit elkaar lopen. */
-export function formatShortDay(iso: string | undefined | null): string {
+type DagVorm = (j: number, m: number, d: number, metJaar?: boolean) => string;
+
+/** Een vorm op de kalenderdag van een waarde ('YYYY-MM-DD'; bij een tijdstempel
+ *  de Brusselse dag): leeg geeft '', wat geen dag is komt ongewijzigd terug. */
+const opDag = (iso: string | undefined | null, vorm: DagVorm, metJaar?: boolean): string => {
   if (!iso) return '';
-  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(kalenderDag(String(iso)));
+  return m && MAAND_KORT[+m[2] - 1] ? vorm(+m[1], +m[2], +m[3], metJaar) : String(iso);
+};
+
+/** De weekdag uit de kalenderdag zelf, nooit uit een tijdstempel. */
+const weekdag: DagVorm = (j, m, d) => WEEKDAY_SHORT_SUN[new Date(j, m - 1, d).getDay()];
+const dagMaand: DagVorm = (j, m, d, metJaar) => `${d} ${MAAND_KORT[m - 1]}${metJaar ? ` ${j}` : ''}`;
+const kortDag: DagVorm = (j, m, d, metJaar) => `${weekdag(j, m, d)} ${dagMaand(j, m, d, metJaar)}`;
+
+/** Korte dag 'vr 18 jul' (weekdag + dag + korte maand, nooit een voorloopnul),
+ *  met jaar alleen op vraag: 'vr 18 jul 2025'. Eén gedeelde vorm zodat lijsten
+ *  die datums naast elkaar tonen (dashboard, rooster, dienstruil, dekking) er
+ *  niet uit elkaar lopen. */
+export const formatShortDay = (iso: string | undefined | null, metJaar?: boolean): string => opDag(iso, kortDag, metJaar);
+
+/** Dag en korte maand '8 okt', met jaar alleen op vraag: '8 okt 2026'. */
+export const formatDagMaand = (iso: string | undefined | null, metJaar?: boolean): string => opDag(iso, dagMaand, metJaar);
+
+/** Alleen de korte weekdag 'do', voor wie dag en datum apart zet (de
+ *  roosterkaart); de rest van de datum is formatDagMaand. */
+export const formatWeekdag = (iso: string | undefined | null): string => opDag(iso, weekdag);
+
+/** Volledig dag-label 'vrijdag 18 juli' — voor koppen en detailvensters, waar
+ *  de korte vorm te krap aanvoelt. Het jaar alleen op vraag ('vrijdag 18 juli
+ *  2027'), nooit vanzelf: de Planningsmatrix plakt het er zelf achter. Stond
+ *  vijf keer los uitgeschreven (maandplanning, beide dashboards,
+ *  activiteitenlog, rooster) terwijl dit bestand belooft de enige plek te zijn
+ *  die over datumweergave beslist. */
+export function formatDayLong(iso: string | undefined | null, metJaar?: boolean): string {
+  if (!iso) return '';
+  const d = new Date(`${kalenderDag(String(iso))}T00:00:00`);
   if (Number.isNaN(d.getTime())) return String(iso);
   try {
-    return d.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+    return d.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: metJaar ? 'numeric' : undefined });
   } catch {
     return String(iso);
   }
 }
 
-/** Volledig dag-label 'vrijdag 18 juli' uit een 'YYYY-MM-DD'-string — voor
- *  koppen en detailvensters, waar de korte vorm te krap aanvoelt. Stond vijf
- *  keer los uitgeschreven (maandplanning, beide dashboards, activiteitenlog,
- *  rooster) terwijl dit bestand belooft de enige plek te zijn die over
- *  datumweergave beslist. */
-export function formatDayLong(iso: string | undefined | null): string {
-  if (!iso) return '';
-  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  try {
-    return d.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
-  } catch {
-    return String(iso);
-  }
+/** Maand 'YYYY-MM' (of een dag) als 'oktober 2026'. */
+export function formatMaand(maand: string): string {
+  const m = /^(\d{4})-(\d{2})/.exec(maand);
+  const naam = m ? MONTH_NAMES[+m[2] - 1] : undefined;
+  return m && naam ? `${naam.toLowerCase()} ${m[1]}` : maand;
 }
 
 /** Weekdag-afkortingen, maandag eerst (index 0 = ma) — voor eigen
@@ -199,6 +211,11 @@ export const WEEKDAY_SHORT_MON = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 
 /** Weekdag-afkortingen in JS-volgorde (index = Date#getDay(), 0 = zo). */
 export const WEEKDAY_SHORT_SUN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+
+/** Korte maandnamen (index 0 = jan), zonder afkortingspunt: wat Node 22 voor
+ *  nl-BE geeft, maar vast, zodat elke motor hetzelfde toont. Eén tabel (stond
+ *  er drie keer: kalender, MaandInput, Periodekiezer). */
+export const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
 /** Eén letter per weekdag, maandag eerst — voor de smalste rasters
  *  (capaciteit, verlof-kalender). 'D' en 'Z' komen dubbel voor: nooit als
@@ -216,14 +233,9 @@ export function prettySize(bytes: number | null | undefined): string {
 }
 
 /** 'YYYY-MM-DD' → '4 mrt 2026' — de notatie voor updates/nieuws, gedeeld door
- *  de chauffeurs- en de beheerkant (stond er 2× woordelijk). */
-export function formatUpdateDate(iso: string | undefined | null): string {
-  if (!iso) return '';
-  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
-  return Number.isNaN(d.getTime())
-    ? String(iso)
-    : d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
-}
+ *  de chauffeurs- en de beheerkant: dag en korte maand, altijd met jaar. Een
+ *  waarde die geen dag is (de vrije tekst '8/10/2026') komt ongewijzigd terug. */
+export const formatUpdateDate = (iso: string | undefined | null): string => formatDagMaand(iso, true);
 
 /** Nederlandse maandnamen (index 0 = januari). Eén bron: stond eerder 4×
  *  woordelijk gedupliceerd in views. */
@@ -258,20 +270,6 @@ export const EXPIRY_SOORT_LABELS: Record<string, string> = {
  */
 export const serviceNumberOf = (shift: { line?: string } | undefined | null) =>
   String(shift?.line || '--').trim() || '--';
-
-/**
- * Zelfde vorm als formatShortDay maar met een nul-geprefixte dag ("vr 08 jul").
- * Rooster en dashboard gebruiken deze variant, de ruilwizard en Dekking de
- * niet-geprefixte — dat verschil is zichtbaar voor de chauffeur ("vr 8 jul"
- * tegenover "vr 08 jul") en dus een openstaande keuze, geen toeval. Het staat
- * nu tenminste op één plek in plaats van vier keer los uitgeschreven.
- */
-export function formatShortDayPadded(iso: string | undefined | null): string {
-  if (!iso) return '';
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' });
-}
 
 /** Getal in Belgische notatie met maximaal `max` cijfers na de komma:
  *  123,46 · 6 559 · 57 529,6 · 0,5 · 48. Voor kW/kWh op de laadpalenpagina

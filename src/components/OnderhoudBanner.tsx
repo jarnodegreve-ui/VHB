@@ -1,6 +1,7 @@
 import { Wrench } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '../lib/ui';
+import { formatUur } from '../lib/format';
 import { ONDERHOUD_STANDAARD_TEKST } from '../../shared/schemas/constanten';
 import type { OnderhoudPubliek } from '../../shared/schemas/onderhoud';
 
@@ -19,10 +20,9 @@ export function OnderhoudBanner({ onderhoud, tone = 'licht', tot, className }: {
 }) {
   if (!onderhoud.actief) return null;
   const tekst = onderhoud.tekst.trim() || ONDERHOUD_STANDAARD_TEKST;
-  const einde = tot ? new Date(tot) : null;
-  const totTekst = einde && Number.isFinite(einde.getTime())
-    ? ` Verwacht klaar rond ${einde.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}.`
-    : '';
+  // Het uur van het tijdstempel in Brusselse tijd, niet in de zone van het toestel.
+  const uur = formatUur(tot);
+  const totTekst = uur ? ` Verwacht klaar rond ${uur}.` : '';
   if (tone === 'donker') {
     return (
       <div role="status" className={cn('flex items-start gap-2.5 rounded-2xl border border-amber-500/25 bg-amber-500/12 px-4 py-3', className)}>

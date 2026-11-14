@@ -1,4 +1,4 @@
-import { MONTH_NAMES, WEEKDAY_SHORT_SUN } from './format';
+import { MAAND_KORT, MONTH_NAMES, WEEKDAY_SHORT_SUN } from './format';
 import { addDagen, isoDate, maandPlus } from './datum';
 
 /**
@@ -67,8 +67,6 @@ export const maandLabel = (maand: string): string => {
   const [j, m] = maand.split('-').map(Number);
   return `${MONTH_NAMES[m - 1]} ${j}`;
 };
-
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
 /** Waarde van de kiezer: 'di 8 sep 2026' — vast (geen Intl), zodat elke browser hetzelfde toont. */
 export const formatDatumKiezer = (iso: string): string => {
