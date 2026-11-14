@@ -131,20 +131,25 @@ async function meetWissel(page: Page, los: () => void, cfg: { skelet: string; ko
   return page.evaluate(() => (window as unknown as { __opname: () => Opname }).__opname());
 }
 
-/** Tijdens de overlap: wat toont de toegankelijkheidsboom? Elke ronde
- *  matcht Playwright de rol en leest in dezelfde evaluatie of de overlap er
- *  op dat moment was; alleen die rondes tellen. */
-async function rollenTijdensOverlap(zoek: () => Array<{ naam: string; locator: Locator }>) {
+/** Tijdens de overlap: wat toont de toegankelijkheidsboom? Eén locator (de
+ *  rollen samen via `.or()`) en één evaluatie per ronde: Playwright matcht
+ *  de rollen (wat aria-hidden is valt weg), en dezelfde evaluatie telt ze per
+ *  soort (role, anders de tag), telt de skeletten die wel in de DOM staan en
+ *  leest of de overlap er op dat moment was. Alleen rondes in de overlap
+ *  tellen; één ronde past ruim in de ±150 ms, ook op een trage runner. */
+async function rollenTijdensOverlap(locator: Locator, skeletSelector: string) {
   const gezien: Array<Record<string, number>> = [];
-  for (let i = 0; i < 80 && gezien.length < 3; i++) {
-    const ronde: Record<string, number> = {};
-    let inOverlap = true;
-    for (const { naam, locator } of zoek()) {
-      const r = await locator.evaluateAll((els) => ({ n: els.length, overlap: !!document.querySelector('.fade-uit[aria-hidden="true"]') }));
-      ronde[naam] = r.n;
-      inOverlap &&= r.overlap;
-    }
-    if (inOverlap) gezien.push(ronde);
+  for (let i = 0; i < 40 && gezien.length < 3; i++) {
+    const r = await locator.evaluateAll((els, sel) => {
+      const tel: Record<string, number> = { skeletInDom: document.querySelectorAll(sel).length };
+      for (const el of els) {
+        const soort = el.getAttribute('role') ?? el.tagName.toLowerCase();
+        tel[soort] = (tel[soort] ?? 0) + 1;
+      }
+      return { tel, overlap: !!document.querySelector('.fade-uit[aria-hidden="true"]') };
+    }, skeletSelector);
+    if (r.overlap) gezien.push(r.tel);
+    else if (gezien.length) break;
   }
   return gezien;
 }
@@ -172,13 +177,12 @@ test.describe('Mijn dag (telefoon)', () => {
       meetWissel(page, poort.laatLos, { skelet: '[aria-label="Mijn dag wordt geladen"]', kop: '#hoofdinhoud h1' }),
       (async () => {
         await page.waitForFunction(() => !!document.querySelector('.fade-uit[aria-hidden="true"]'), undefined, { polling: 'raf', timeout: 10_000 });
-        return rollenTijdensOverlap(() => [
-          { naam: 'status', locator: page.getByRole('status', { name: 'Mijn dag wordt geladen' }) },
-          // Het skelet zelf staat er op dat moment wel: in de DOM, verborgen.
-          { naam: 'skeletInDom', locator: page.locator('[aria-label="Mijn dag wordt geladen"]') },
-          { naam: 'kop', locator: page.getByRole('heading', { level: 1 }) },
-          { naam: 'dagkeuze', locator: page.getByRole('group', { name: 'Dag kiezen' }).getByRole('button', { name: 'Morgen' }) },
-        ]);
+        return rollenTijdensOverlap(
+          page.getByRole('status', { name: 'Mijn dag wordt geladen' })
+            .or(page.getByRole('heading', { level: 1 }))
+            .or(page.getByRole('group', { name: 'Dag kiezen' }).getByRole('button', { name: 'Morgen' })),
+          '[aria-label="Mijn dag wordt geladen"]',
+        );
       })(),
     ]);
     const { frames, lagen, shifts } = opnameUit;
@@ -228,7 +232,9 @@ test.describe('Mijn dag (telefoon)', () => {
 
     // Tijdens de overlap ziet een schermlezer alleen de inhoud.
     expect(rollen.length, 'de rollen zijn tijdens de overlap gelezen').toBeGreaterThan(0);
-    for (const r of rollen) expect(r).toEqual({ status: 0, skeletInDom: 1, kop: 1, dagkeuze: 1 });
+    // Geen laadstatus (het skelet staat wel in de DOM, verborgen), één kop en
+    // de dagkeuze van de inhoud.
+    for (const r of rollen) expect(r).toEqual({ skeletInDom: 1, h1: 1, button: 1 });
 
     // Geen verschuiving tijdens de overlap (WebKit kent layout-shift niet).
     if (browserName === 'chromium') {
@@ -299,13 +305,13 @@ test.describe('Desktop', () => {
       }),
       (async () => {
         await page.waitForFunction(() => !!document.querySelector('.fade-uit[aria-hidden="true"]'), undefined, { polling: 'raf', timeout: 10_000 });
-        return rollenTijdensOverlap(() => [
-          { naam: 'status', locator: page.getByRole('status', { name: /wordt geladen|worden geladen/ }) },
-          { naam: 'skeletInDom', locator: page.locator('[role="status"][aria-busy="true"]') },
-          { naam: 'lijsten', locator: page.getByRole('list', { name: 'Verzendlijsten' }) },
-          { naam: 'log', locator: page.getByRole('table', { name: 'Verzendlog' }) },
-          { naam: 'schakelaars', locator: page.getByRole('switch') },
-        ]);
+        return rollenTijdensOverlap(
+          page.getByRole('status', { name: /wordt geladen|worden geladen/ })
+            .or(page.getByRole('list', { name: 'Verzendlijsten' }))
+            .or(page.getByRole('table', { name: 'Verzendlog' }))
+            .or(page.getByRole('switch')),
+          '[role="status"][aria-busy="true"]',
+        );
       })(),
     ]);
     const { frames, lagen, shifts } = opnameUit;
@@ -342,7 +348,7 @@ test.describe('Desktop', () => {
     // Alleen de inhoud in de toegankelijkheidsboom: geen laadstatus, wel de lijst, de tabel en de schakelaars.
     expect(rollen.length).toBeGreaterThan(0);
     // De skeletten van verzendlijsten en verzendlog staan op dat moment wel in de DOM, verborgen.
-    for (const r of rollen) expect(r).toEqual({ status: 0, skeletInDom: 2, lijsten: 1, log: 1, schakelaars: 2 });
+    for (const r of rollen) expect(r).toEqual({ skeletInDom: 2, ul: 1, table: 1, switch: 2 });
     await expect(page.locator('.fade-uit')).toHaveCount(0);
   });
 

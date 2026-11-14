@@ -25,9 +25,8 @@ import { overgangActief } from '../lib/overgang';
  * knippen zit op de laag en niet op de wrapper, zodat schaduw en focusring
  * van de inhoud nooit even wegvallen, en het is een `clip-path`, geen
  * overflow: `overflow-hidden` maakt een scrollcontainer (dan plakt een
- * tabelkop niet meer), en met `overflow-clip` op de laag sprong de pagina in
- * Chromium soms naar boven als je tijdens de overlap een rij opende (Verlof,
- * gescrolde pagina, 5 van 18 runs; met clip-path 0 van 30).
+ * tabelkop niet meer), en een clip-path knipt alleen wat getekend wordt, dus
+ * geen overflow op wrapper of laag.
  * Een bovenmarge die in de flow door de wrapper heen viel, valt in de
  * absolute laag niet meer weg; de laag schuift dat verschil terug (gemeten
  * vóór de browser tekent), zodat het skelet niet verspringt. De inhoud staat
