@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  AFGEMELD, LAATSTE_AUTH_KEY, SCHIL_CACHE_PREFIX, WIS_PRIVE_BERICHT,
+  AFGEMELD, LAATSTE_AUTH_KEY, SCHIL_CACHE_PREFIX, WIS_PRIVE_BERICHT, WIS_PRIVE_GEBEURTENIS,
   bereikVanAfmelding, bevestigGebruiker, borgGebruiker, isAndereGebruiker, isPriveCache, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches,
 } from './afmelden';
 import { BIJLAGEN_CACHE } from './bijlageCache';
@@ -96,6 +96,34 @@ describe('wisPriveCaches', () => {
   it('een geblokkeerde Cache Storage houdt het afmelden niet tegen', async () => {
     vi.stubGlobal('caches', { keys: async () => { throw new Error('geblokkeerd'); } });
     await expect(wisPriveCaches()).resolves.toBeUndefined();
+  });
+
+  describe('de gebeurtenis voor het geheugen van de schermen', () => {
+    let gehoord: ReturnType<typeof vi.fn<(e: Event) => void>>;
+    beforeEach(() => {
+      gehoord = vi.fn<(e: Event) => void>();
+      window.addEventListener(WIS_PRIVE_GEBEURTENIS, gehoord);
+    });
+    afterEach(() => window.removeEventListener(WIS_PRIVE_GEBEURTENIS, gehoord));
+
+    it('gaat meteen weg, vóór er iets gewacht wordt', () => {
+      vi.stubGlobal('caches', nepCaches({ [SCHIL]: ['/'], 'vhb-ritbladen': ['/api/me'] }).api);
+      const bezig = wisPriveCaches();
+      expect(gehoord).toHaveBeenCalledTimes(1);
+      return bezig;
+    });
+
+    it('ook zonder Cache Storage (privévenster) en zonder service worker', async () => {
+      expect(typeof (globalThis as { caches?: unknown }).caches).toBe('undefined');
+      await wisPriveCaches();
+      expect(gehoord).toHaveBeenCalledTimes(1);
+    });
+
+    it('ook met een geblokkeerde Cache Storage', async () => {
+      vi.stubGlobal('caches', { keys: async () => { throw new Error('geblokkeerd'); } });
+      await wisPriveCaches();
+      expect(gehoord).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
