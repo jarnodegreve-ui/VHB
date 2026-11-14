@@ -90,8 +90,9 @@ describe('formatTijdstip (korte dag, komma, uur; 24-uurs, nooit een rauwe ISO)',
     expect(formatTijdstip('2025-12-31T09:15:00', nu)).toBe('wo 31 dec 2025, 09:15');
     expect(formatTijdstip('2026-01-05T00:07:30.123', nu)).toBe('ma 5 jan, 00:07');
   });
-  it('alleen een datum geeft de korte dag', () => {
+  it('alleen een datum geeft de korte dag, met het jaar erbij buiten dit jaar', () => {
     expect(formatTijdstip('2026-09-19', nu)).toBe('za 19 sep');
+    expect(formatTijdstip('2025-09-19', nu)).toBe('vr 19 sep 2025');
   });
   it('leeg geeft niets; wat niet als datum te lezen is komt ongewijzigd terug', () => {
     expect(formatTijdstip(null, nu)).toBe('');
