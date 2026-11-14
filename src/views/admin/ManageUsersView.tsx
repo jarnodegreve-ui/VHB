@@ -26,7 +26,7 @@ import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { meldSchrijffout } from '../../lib/fouten';
-import { UserHistoryModal } from './UserHistoryModal';
+import { Persoonskaart } from '../../components/Persoonskaart';
 import { UserDocumentsModal } from './UserDocumentsModal';
 import { BroadcastDocumentModal } from './BroadcastDocumentModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -1281,7 +1281,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
         password={credentialsModal?.password || ''}
       />
 
-      <UserHistoryModal
+      <Persoonskaart
         user={viewingHistoryUser}
         shifts={shifts}
         leaveRequests={leaveRequests}

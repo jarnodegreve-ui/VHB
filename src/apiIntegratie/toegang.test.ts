@@ -1917,3 +1917,84 @@ describe('aanmeldcontrole bij een databasefout (beveiligingstest 07-11, keuze 5)
     expect((await api('GET', '/api/me', { token: 'tok-a' })).status).toBe(200);
   });
 });
+
+// Wijzigingsgeschiedenis van één record (ronde 6, punt 19; keuze 7 van Jarno,
+// 11-11): die van een gebruiker (documenten met bestandsnaam, wachtwoord- en
+// 2FA-resets, uitnodigingen, Easypay-matricule) is alleen voor een admin. Elk
+// ander type blijft voor de planner open; chauffeur en technieker lezen geen
+// enkele geschiedenis (zoals vroeger). Elke 403 toetst ook de body: zo slaagt
+// een rij niet om een reden van authenticate (geen profiel, toestel, 2FA).
+describe('wijzigingsgeschiedenis per record (GET /api/activity/:type/:id)', () => {
+  const GEWEIGERD = { error: 'Onvoldoende rechten.' };
+  const ONBEKEND = { error: 'Onbekend entity-type.' };
+  // Per type een record (de meeste uit de gedeelde fixtures).
+  const RECORD = { user: '3', service: 'd1', diversion: 'o-1', update: 'u1', swap: 's-1', leave: 'l-a1', planning_code: 'BUR', shift: 'sh-a' } as const;
+  type Soort = keyof typeof RECORD;
+  const SOORTEN = Object.keys(RECORD) as Soort[];
+  const TOKEN = { admin: 'tok-admin', planner: 'tok-planner', chauffeur: 'tok-a', technieker: 'tok-tech' } as const;
+  type Rol = keyof typeof TOKEN;
+  const rij = (rol: Rol, type: string, status: 200 | 400 | 403) => ({
+    rol, type, status,
+    body: status === 200 ? 'lijst van getEntityHistory' : status === 400 ? ONBEKEND.error : GEWEIGERD.error,
+  });
+  const TABEL = [
+    ...SOORTEN.map((type) => rij('admin', type, 200)),
+    ...SOORTEN.map((type) => rij('planner', type, type === 'user' ? 403 : 200)),
+    ...SOORTEN.map((type) => rij('chauffeur', type, 403)),
+    ...SOORTEN.map((type) => rij('technieker', type, 403)),
+    rij('admin', 'document', 400),
+    rij('planner', 'document', 400),
+  ];
+  const lezer = async () => vi.mocked((await import('../../api/_lib/storage.js')).getEntityHistory);
+
+  beforeEach(async () => {
+    // De technieker zoals in "dienstoverzicht: technieker …" hierboven.
+    mem.users.push({ id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+    // Per record een oudere en een nieuwere regel, plus een regel van hetzelfde
+    // type op een ander id en een van een ander type op hetzelfde id: een lege
+    // lijst gaat zo nooit door voor "ongewijzigd doorgegeven", en de lezing
+    // geeft precies de twee regels van het record.
+    const regel = (id: string, createdAt: string, type: Soort, entityId: string) =>
+      ({ id, createdAt, actorName: 'Annelies Admin', actorRole: 'admin', category: 'system', action: 'Gewijzigd', details: id, entityType: type, entityId });
+    const anderType = (type: Soort): Soort => (type === 'user' ? 'swap' : 'user');
+    mem.activity = SOORTEN.flatMap((type) => [
+      regel(`${type}-oud`, '2026-06-01T08:00:00.000Z', type, RECORD[type]),
+      regel(`${type}-nieuw`, '2026-06-02T08:00:00.000Z', type, RECORD[type]),
+      regel(`${type}-ander-id`, '2026-06-03T08:00:00.000Z', type, `${RECORD[type]}-ander`),
+      regel(`${type}-ander-type`, '2026-06-03T08:00:00.000Z', anderType(type), RECORD[type]),
+    ]);
+    (await lezer()).mockClear();
+  });
+
+  it.each(TABEL)('$rol | $type | $status | $body', async ({ rol, type, status }) => {
+    const id = type in RECORD ? RECORD[type as Soort] : 'x-1';
+    const res = await api('GET', `/api/activity/${type}/${id}`, { token: TOKEN[rol] });
+    const geschiedenis = await lezer();
+    expect(res.status).toBe(status);
+    if (status === 200) {
+      expect(geschiedenis).toHaveBeenCalledTimes(1);
+      expect(geschiedenis).toHaveBeenCalledWith(type, id);
+      const gaf: Array<{ id: string }> = await geschiedenis.mock.results[0].value;
+      expect(gaf.map((a) => a.id)).toEqual([`${type}-nieuw`, `${type}-oud`]);
+      expect(res.json).toEqual(gaf);
+    } else {
+      expect(res.json).toEqual(status === 400 ? ONBEKEND : GEWEIGERD);
+      expect(geschiedenis).toHaveBeenCalledTimes(0);
+    }
+  });
+
+  // Regressie: een id dat niet bestaat en een gecodeerd type geven een planner
+  // dezelfde 403, zonder lezing. Het antwoord verraadt dus niet of de
+  // gebruiker bestaat, en %75 (de letter u) omzeilt de regel niet.
+  it.each([
+    ['een id dat niet bestaat', '/api/activity/user/bestaat-niet'],
+    ['een gecodeerd type', '/api/activity/%75ser/3'],
+  ])('planner | user via %s | 403 zonder lezing', async (_naam, pad) => {
+    const res = await api('GET', pad, { token: TOKEN.planner });
+    expect(res.status).toBe(403);
+    expect(res.json).toEqual(GEWEIGERD);
+    expect(await lezer()).toHaveBeenCalledTimes(0);
+  });
+});

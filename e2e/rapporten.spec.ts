@@ -669,3 +669,50 @@ for (const thema of ['light', 'dark'] as const) {
     });
   }
 }
+
+/**
+ * Kop en eerste kolom op één lijn (ronde 6, punt 10): het filterblok bovenaan
+ * het kader van een rapport begint vanaf md waar de eerste kolom begint, net
+ * als de kop van elk ander tabelkader. Gemeten op de inhoudsbox, ten opzichte
+ * van het kader (div.surface-table): koplijn = linkerrand van het filterblok
+ * + zijn padding-left; kolomlijn = de knop in de eerste kolomkop (SortTh, de
+ * th zelf heeft geen opvulling) + zijn padding-left.
+ */
+test('kop en eerste kolom op één lijn', async ({ browser, baseURL }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'eenmaal per run, in het desktopproject; de breedtes maakt de test zelf');
+  test.setTimeout(90_000);
+  const fouten: string[] = [];
+  let gemeten = 0;
+  for (const breedte of [768, 1024, 1280, 1440]) {
+    const context = await browser.newContext({ baseURL, viewport: { width: breedte, height: 900 }, hasTouch: breedte < 1024, serviceWorkers: 'block' });
+    try {
+      const page = await context.newPage();
+      await seed(page, { user: ADMIN, view: 'rapporten' });
+      await page.goto('/rapporten/verlof/verlofsaldo?jaar=2026');
+      await expect(page.getByRole('cell', { name: /Alex Du Priez/ })).toBeVisible({ timeout: 15_000 });
+      await page.evaluate(() => document.fonts.ready);
+      const m = await page.evaluate(() => {
+        const px = (v: string) => parseFloat(v) || 0;
+        const tabel = document.querySelector('div.surface-table table[aria-label="Verlofsaldo"]');
+        const kader = tabel?.closest('div.surface-table');
+        // TableShell zonder kop: het filterblok is het eerste kind van de strook.
+        const filterblok = kader?.firstElementChild?.firstElementChild;
+        const knop = tabel?.querySelector('thead tr:first-child > th button');
+        if (!tabel || !kader || !filterblok || filterblok.contains(tabel) || !knop) return null;
+        const links = kader.getBoundingClientRect().left;
+        return {
+          koplijn: filterblok.getBoundingClientRect().left + px(getComputedStyle(filterblok).paddingLeft) - links,
+          kolomlijn: knop.getBoundingClientRect().left + px(getComputedStyle(knop).paddingLeft) - links,
+        };
+      });
+      if (!m) { fouten.push(`${breedte}px: kader, filterblok of eerste kolomkop niet gevonden`); continue; }
+      gemeten += 1;
+      const verschil = m.koplijn - m.kolomlijn;
+      if (Math.abs(verschil) > 1) fouten.push(`${breedte}px: koplijn ${m.koplijn.toFixed(2)}, kolomlijn ${m.kolomlijn.toFixed(2)} (verschil ${verschil.toFixed(2)})`);
+    } finally {
+      await context.close();
+    }
+  }
+  expect(fouten, 'filterblok en eerste kolom niet op één lijn').toEqual([]);
+  expect(gemeten, 'op elke breedte gemeten').toBe(4);
+});

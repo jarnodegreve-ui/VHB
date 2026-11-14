@@ -207,7 +207,6 @@ export function MaandTab({ keuze, zetKeuze, onDag, onGeladen, onVersheid }: {
                   ariaLabel={`Verbruik per dag in ${label}: totaal ${tekstKwhHeel(t.kwh)}, gemiddeld ${tekstKwhHeel(t.gemPerLaaddag)} per laaddag${t.hoogsteDag ? `, hoogste ${dagKort(t.hoogsteDag.dag)} ${tekstKwhHeel(t.hoogsteDag.kwh)}` : ''}`}
                   gekozen={gekozenDagKwh}
                   onKies={setGekozenDagKwh}
-                  titelVan={(s) => { const d = dagenTotNu.find((x) => x.dag === s.key); return `${dagKort(s.key)} · ${tekstKwh(s.waarde)} · ${d?.laadbeurten ?? 0} laadsessie${d?.laadbeurten === 1 ? '' : 's'}`; }}
                   samenvatting={(s) => {
                     const d = s ? dagenTotNu.find((x) => x.dag === s.key) : null;
                     return d
@@ -237,7 +236,6 @@ export function MaandTab({ keuze, zetKeuze, onDag, onGeladen, onVersheid }: {
                   gekozen={gekozenDagPiek}
                   onKies={setGekozenDagPiek}
                   referentie={data.vorige.piekKw ? { waarde: data.vorige.piekKw, label: `vorige ${tekstKw(Math.round(data.vorige.piekKw))}` } : null}
-                  titelVan={(s) => { const d = dagenTotNu.find((x) => x.dag === s.key); return d?.piekKw !== null && d?.piekKw !== undefined ? `${dagKort(s.key)} · ${tekstKw(d.piekKw)} om ${uurLabel(d.piekTs)}` : `${dagKort(s.key)} · geen meting`; }}
                   samenvatting={(s) => {
                     const d = s ? dagenTotNu.find((x) => x.dag === s.key) : null;
                     if (d) {

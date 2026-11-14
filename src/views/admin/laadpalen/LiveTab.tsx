@@ -129,7 +129,6 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                 ariaLabel={`Vermogen laatste 24 uur: ${piek24.kw > 0 ? `piek ${tekstKw(piek24.kw)} om ${uurLabel(piek24.ts)}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${tekstKw(Math.round(maandpiek))}` : ''}`}
                 gekozen={gekozenSlot}
                 onKies={setGekozenSlot}
-                titelVan={(s) => `${uurLabel(s.ts)} · ${tekstKw(s.kw)} · ${s.charging} sessie${s.charging === 1 ? '' : 's'}`}
                 referentie={maandpiek > 0 ? { waarde: maandpiek, label: `maandpiek ${tekstKw(Math.round(maandpiek))}` } : null}
                 asLinks={uurLabel(slots24[0].ts)}
                 asRechts="nu"
@@ -145,7 +144,6 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
               ariaLabel={`Dagpiek per dag, laatste 7 dagen: ${piek7.kw > 0 ? `hoogste ${tekstKw(piek7.kw)} op ${dagKort(piek7.date)}` : 'nog geen meting'}`}
               gekozen={gekozenSlot}
               onKies={setGekozenSlot}
-              titelVan={(s) => { const d = dagen7.find((x) => x.date === s.key); return `${dagKort(s.key)} · ${tekstKw(s.waarde)}${d?.ts ? ` om ${uurLabel(d.ts)}` : ''}`; }}
               samenvatting={(s) => {
                 const d = s ? dagen7.find((x) => x.date === s.key) : null;
                 return d
@@ -170,7 +168,6 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
               ariaLabel={`Verbruik per dag: totaal ${tekstKwh(Math.round(grafiek.totaal))}, gemiddeld ${tekstKwh(grafiek.gemiddeld)} per laaddag, piek ${tekstKwh(Math.round(grafiek.piek))}`}
               gekozen={gekozenDag}
               onKies={setGekozenDag}
-              titelVan={(s) => { const d = grafiek.dagen.find((x) => x.date === s.key); return `${dagKort(s.key)} · ${tekstKwh(s.waarde)} · ${d?.sessions ?? 0} sessie${d?.sessions === 1 ? '' : 's'}`; }}
               samenvatting={(s) => {
                 const d = s ? grafiek.dagen.find((x) => x.date === s.key) : null;
                 return d

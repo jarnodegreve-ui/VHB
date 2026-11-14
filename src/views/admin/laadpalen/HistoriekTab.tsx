@@ -102,7 +102,6 @@ export function HistoriekTab({ onMaand, onGeladen, onVersheid }: { onMaand: (maa
             ariaLabel={`Verbruik per maand: ${hoogsteKwh ? `hoogste ${maandLabel(hoogsteKwh.maand)} met ${tekstKwhHeel(hoogsteKwh.kwh)}` : 'geen data'}`}
             gekozen={gekozenKwh}
             onKies={setGekozenKwh}
-            titelVan={(s) => `${maandLabel(s.key)} · ${tekstKwhHeel(s.waarde)}`}
             samenvatting={(s) => {
               const m = s ? chrono.find((x) => x.maand === s.key) : null;
               return m
@@ -125,7 +124,6 @@ export function HistoriekTab({ onMaand, onGeladen, onVersheid }: { onMaand: (maa
             ariaLabel={`Maandpiek per maand: ${hoogstePiek ? `hoogste ${tekstKw(hoogstePiek.piekKw ?? 0)} in ${maandLabel(hoogstePiek.maand)}` : 'geen meting'}`}
             gekozen={gekozenPiek}
             onKies={setGekozenPiek}
-            titelVan={(s) => { const m = chrono.find((x) => x.maand === s.key); return m?.piekKw !== null && m?.piekKw !== undefined ? `${maandLabel(s.key)} · ${tekstKw(m.piekKw)} op ${m.piekDag ? dagKort(m.piekDag) : '?'}` : `${maandLabel(s.key)} · geen meting`; }}
             samenvatting={(s) => {
               const m = s ? chrono.find((x) => x.maand === s.key) : null;
               if (m) return m.piekKw !== null ? `${maandLabel(m.maand)} · piek ${tekstKw(m.piekKw)} op ${m.piekDag ? dagKort(m.piekDag) : '?'} om ${uurLabel(m.piekTs)} · gem. dagpiek ${tekstKw(Math.round(m.gemDagpiekKw ?? 0))}` : `${maandLabel(m.maand)} · geen kwartiermeting`;
