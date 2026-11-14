@@ -1,22 +1,22 @@
 import { useMemo } from 'react';
 import { Calendar, Clock, RotateCcw } from 'lucide-react';
-import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
-import { Modal } from '../../components/Modal';
-import { ModalHeader } from '../../components/ui';
-import { microLabelClass, StatusBadge } from '../../components/primitives';
-import { RuilStatusBadge } from '../../components/RuilStatusBadge';
-import { Stat } from '../../components/Stat';
-import { Card } from '../../components/Card';
-import { isoDate } from '../../lib/availability';
-import { verlofBalans } from '../../lib/leaveBalance';
-import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
-import { formatDatumDMJ, formatLeaveType, formatPeriodeDMJ, formatShortDay, serviceNumberOf, tijdvak } from '../../lib/format';
-import { citaat } from '../../../shared/tekst';
-import { ToonMeer } from '../../components/ToonMeer';
-import { useArchief, useToonMeerMetArchief } from '../../lib/archief';
+import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
+import { Modal } from './Modal';
+import { ModalHeader } from './ui';
+import { microLabelClass, StatusBadge } from './primitives';
+import { RuilStatusBadge } from './RuilStatusBadge';
+import { Stat } from './Stat';
+import { Card } from './Card';
+import { isoDate } from '../lib/availability';
+import { verlofBalans } from '../lib/leaveBalance';
+import { LeaveBalanceCard } from './LeaveBalanceCard';
+import { formatDatumDMJ, formatLeaveType, formatPeriodeDMJ, formatShortDay, serviceNumberOf, tijdvak } from '../lib/format';
+import { citaat } from '../../shared/tekst';
+import { ToonMeer } from './ToonMeer';
+import { useArchief, useToonMeerMetArchief } from '../lib/archief';
 
 
-export function UserHistoryModal({
+export function Persoonskaart({
   user,
   shifts,
   leaveRequests,
