@@ -450,3 +450,93 @@ test('Werkprestaties: de tweede taak begint waar de eerste eindigde', async ({ p
   await expect(nieuw.getByLabel('Begin')).toHaveValue('');
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
+
+/**
+ * Kop en eerste kolom op één lijn (ronde 6, punt 10): vanaf md begint de kop
+ * van een tabelkader (zoekveld, filters, titel) waar de eerste kolom begint.
+ * Gemeten op de inhoudsbox, niet op de eerste letter (een rechts uitgelijnde
+ * kolom "#" begint niet met tekst), ten opzichte van het kader
+ * (div.surface-table):
+ * - koplijn = linkerrand van het kopblok + zijn padding-left;
+ * - kolomlijn = linkerrand van de eerste th + zijn padding-left, of bij een
+ *   th zonder opvulling (SortTh) de knop erin + zijn padding-left.
+ * Toont een kader op een breedte geen tabel (Werkprestaties: container query
+ * op 32 rem), dan slaat de toets die breedte over en zegt dat in een
+ * annotatie; elk kader moet op minstens één breedte gemeten zijn.
+ * Werkprestaties (lijst), Looncontrole (maand) en Dienstopbouw (imports)
+ * hebben geen tabelkader met een kop, en de dienstenlijst van Dienstopbouw
+ * (diensten) heeft een kop maar geen tabel: daar valt niets te meten.
+ */
+type KopEnKolom = { fout: string | null; getoond: boolean; koplijn: number; kolomlijn: number };
+async function kopEnKolom(page: Page, label: string): Promise<KopEnKolom> {
+  await expect(page.locator(`div.surface-table table[aria-label="${label}"]`).first()).toBeAttached();
+  return page.evaluate((label): KopEnKolom => {
+    const niets: KopEnKolom = { fout: null, getoond: false, koplijn: 0, kolomlijn: 0 };
+    const px = (v: string) => parseFloat(v) || 0;
+    const zichtbaar = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const tabellen = [...document.querySelectorAll('div.surface-table table')].filter((t) => t.getAttribute('aria-label') === label);
+    if (tabellen.length !== 1) return { ...niets, fout: `${tabellen.length} tabellen met dit label` };
+    const tabel = tabellen[0];
+    if (!zichtbaar(tabel)) return niets;
+    const kader = tabel.closest('div.surface-table')!;
+    const kop = kader.firstElementChild;
+    if (!kop || kop.contains(tabel)) return { ...niets, fout: 'kader zonder kop' };
+    const th = [...tabel.querySelectorAll('thead tr:first-child > th')].find(zichtbaar);
+    if (!th) return { ...niets, fout: 'geen zichtbare kolomkop' };
+    const links = kader.getBoundingClientRect().left;
+    const koplijn = kop.getBoundingClientRect().left + px(getComputedStyle(kop).paddingLeft) - links;
+    const thLinks = px(getComputedStyle(th).paddingLeft);
+    const knop = thLinks === 0 ? th.querySelector('button') : null;
+    const kolomlijn = knop
+      ? knop.getBoundingClientRect().left + px(getComputedStyle(knop).paddingLeft) - links
+      : th.getBoundingClientRect().left + thLinks - links;
+    return { fout: null, getoond: true, koplijn, kolomlijn };
+  }, label);
+}
+
+test('kop en eerste kolom op één lijn', async ({ browser, baseURL }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'eenmaal per run, in het desktopproject; de breedtes maakt de test zelf');
+  test.setTimeout(240_000);
+  // Het gele boek als technieker, zoals de visuele regressie (desktop-technieker-defecten).
+  const openGeleBoek = async (page: Page) => {
+    await seed(page, { user: TECHNIEKER, view: 'defecten' });
+    await page.goto('/techniek/defecten');
+    await expect(page.getByRole('heading', { name: 'Gele boek', level: 1 })).toBeVisible({ timeout: 15_000 });
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(400);
+  };
+  const schermen: Array<{ open: (page: Page) => Promise<void>; kaders: string[] }> = [
+    { open: (page) => open(page, SCHERMEN[0]), kaders: ['Voertuigen'] },
+    { open: (page) => open(page, SCHERMEN[2]), kaders: ['Per bus', 'Per technieker', 'Per werkcode'] },
+    { open: (page) => open(page, SCHERMEN[4]), kaders: ['Looncodes'] },
+    { open: (page) => open(page, SCHERMEN[5]), kaders: ['Medewerkers'] },
+    { open: (page) => open(page, SCHERMEN[8]), kaders: ['Ritdelen van dienst 2101', 'Ritblad van dienst 2101'] },
+    { open: (page) => open(page, SCHERMEN[9]), kaders: ['Dagtypes'] },
+    { open: openGeleBoek, kaders: ['Gele boek'] },
+  ];
+  const gemeten = new Map<string, number>();
+  const fouten: string[] = [];
+  for (const breedte of [768, 1024, 1280, 1440]) {
+    const context = await browser.newContext({ baseURL, viewport: { width: breedte, height: 900 }, hasTouch: breedte < 1024, serviceWorkers: 'block' });
+    try {
+      for (const scherm of schermen) {
+        const page = await context.newPage();
+        await scherm.open(page);
+        for (const label of scherm.kaders) {
+          const m = await kopEnKolom(page, label);
+          if (m.fout) { fouten.push(`${label} op ${breedte}px: ${m.fout}`); continue; }
+          if (!m.getoond) { info.annotations.push({ type: 'niet getoond', description: `${label} op ${breedte}px: geen tabel op deze breedte (container query)` }); continue; }
+          gemeten.set(label, (gemeten.get(label) ?? 0) + 1);
+          const verschil = m.koplijn - m.kolomlijn;
+          if (Math.abs(verschil) > 1) fouten.push(`${label} op ${breedte}px: koplijn ${m.koplijn.toFixed(2)}, kolomlijn ${m.kolomlijn.toFixed(2)} (verschil ${verschil.toFixed(2)})`);
+        }
+        await page.close();
+      }
+    } finally {
+      await context.close();
+    }
+  }
+  expect(fouten, 'kop en eerste kolom niet op één lijn').toEqual([]);
+  const nooit = schermen.flatMap((s) => s.kaders).filter((label) => !gemeten.get(label));
+  expect(nooit, 'kader op geen enkele breedte gemeten').toEqual([]);
+});
