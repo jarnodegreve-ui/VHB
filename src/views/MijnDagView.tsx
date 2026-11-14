@@ -29,6 +29,7 @@ import { MededelingStrook } from '../components/MededelingStrook';
 import { MijnWeek } from '../components/MijnWeek';
 import { MIJN_WEEK_DAGEN, bouwMijnWeek } from '../lib/mijnWeek';
 import { dagtypeWoord, useDagtypes } from '../lib/dagtypes';
+import { markeerBeeld } from '../lib/startMeting';
 
 // Defect melden (techniek, 13-09): pas laden bij de klik, de chunk van Mijn dag blijft licht.
 const LazyDefectMeldenModal = lazyWithRetry(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
@@ -246,7 +247,7 @@ export function MijnDagView({
               {nachtdienstLoopt && isVandaag ? 'Nog bezig · dienst van gisteren' : hoofdletter(dagWoord)}
               {dagtypeTekst && <span title={dagtypePeildag?.label}> · {dagtypeTekst}</span>}
             </p>
-            <h1 className="text-page-title mt-1">{hoofdletter(formatDayLong(peildag))}</h1>
+            <h1 ref={markeerBeeld} className="text-page-title mt-1">{hoofdletter(formatDayLong(peildag))}</h1>
             {/* Stil: een chip met amber-puntje, geen rood en geen banner —
                 offline is een toestand, geen alarm. */}
             {!online && (

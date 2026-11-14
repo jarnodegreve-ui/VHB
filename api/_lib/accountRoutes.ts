@@ -26,6 +26,7 @@ import { afwezigOp } from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getLatestAuthEventAt, getLeaveData, getPlanningData, getUsersData, logActivity, updateUserSessionMeta, bumpActiveSessions, getPlanningNotes, getMeldingen, telOngelezenMeldingen, markeerMeldingenGelezen, verwijderMeldingen, updateUserDashboardVoorkeuren, getRecentLogins } from "./storage.js";
 import { isPlainRecord } from "./collectie.js";
+import { startRegel } from "./startRegel.js";
 
 // === Agenda-abonnement (.ics-feed) =========================================
 // Chauffeurs abonneren hun diensten in Google/Apple Agenda via een
@@ -159,6 +160,14 @@ export function mountAccountRoutes(app: express.Express) {
       // Gebruikers, en zonder deze update bleef die dagen achter op wat
       // Activiteit toonde (15-09). Hooguit één schrijf per 5 minuten.
       if (action === "resume") {
+        // Startmeting (ronde 6, punt 21a): de vorige warme start van dit
+        // toestel reist mee als `start`. Eén regel in de log, pas ná de
+        // toestelcontrole; het antwoord blijft hetzelfde en een onbruikbare
+        // meting geeft geen regel, nooit een fout (api/_lib/startRegel.ts).
+        try {
+          const regel = startRegel(req.body?.start);
+          if (regel) console.info(regel);
+        } catch { /* de meting breekt nooit een hervatting */ }
         const nu = new Date().toISOString();
         // Tot 18-09 werd hier een 'Actief'-regel in het auditlogboek gezet,
         // gededupliceerd op de Brusselse kalenderdag. Dat was de enige bron voor
