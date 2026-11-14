@@ -918,6 +918,16 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
     return rows;
   },
     getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld' || a.action === 'Actief'),
+    // Wijzigingsgeschiedenis van één record (GET /api/activity/:type/:id). Een
+    // vi.fn, zodat een test kan nagaan of de route las en met wat
+    // (vi.mocked + mockClear in de test zelf). De logregels van dat type en
+    // id, nieuwste eerst; bij dezelfde tijd (vaste testklok) de laatst
+    // gelogde eerst. De filter op aanmeldingen zit in de echte functie.
+    getEntityHistory: vi.fn(async (entityType: string, entityId: string) =>
+      mem.activity
+        .filter((a: any) => a.entityType === entityType && String(a.entityId) === String(entityId))
+        .reverse()
+        .sort((x: any, y: any) => String(y.createdAt ?? y.gelogdOp).localeCompare(String(x.createdAt ?? x.gelogdOp)))),
     getLatestAuthEventAt: async () => mem.lastAuthEventAt,
     // Weekcijfers in de digest (25-09): uitgevoerde wissels uit het
     // activiteitenlog; de mock heeft geen activity_log-tabel.
