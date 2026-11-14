@@ -2,7 +2,7 @@ import { Suspense, useCallback, useMemo, useRef, useState, type ChangeEvent } fr
 import { Upload } from 'lucide-react';
 import { verdeelFilmnummers, zoekFilmnummers, type Filmnummer, type FilmnummerLijst } from '../../shared/filmnummers';
 import { haalFilmnummers, leesFilmnummersLokaal, noteerFilmnummerImport } from '../lib/filmnummers';
-import { aantal, formatMomentDMJ } from '../lib/format';
+import { aantal, formatDatumDMJ } from '../lib/format';
 import { lazyWithRetry } from '../lib/lazyRetry';
 import { notify } from '../lib/ui';
 import { useZelfLadend } from '../lib/zelfLadend';
@@ -206,7 +206,7 @@ export function FilmnummersView({ magBeheren }: { magBeheren: boolean }) {
 
                 {lijst?.bijgewerktOp && (
                   <p className="px-0.5 text-xs text-slate-500">
-                    Lijst van {formatMomentDMJ(lijst.bijgewerktOp).slice(0, 10)} · {aantal(items.length, 'nummer', 'nummers')}
+                    Lijst van {formatDatumDMJ(lijst.bijgewerktOp)} · {aantal(items.length, 'nummer', 'nummers')}
                   </p>
                 )}
               </>

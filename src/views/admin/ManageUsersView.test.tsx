@@ -236,7 +236,7 @@ describe('Gebruikers: uitnodigen', () => {
         ] })
       : new Response('[]', { status: 200 })));
     render(<ManageUsersView currentUser={ADMIN} />);
-    await waitFor(() => expect(screen.getAllByText(/^Uitgenodigd \d{2}\/\d{2}/)).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText(/^Uitgenodigd [1-9]\d? (jan|feb|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec)$/)).toHaveLength(2));
     expect(screen.getAllByText('Uitnodiging verlopen')).toHaveLength(2);
     expect(labels((await menusVoor(CHAUFFEUR.name)).desktop)).toContain('Uitnodiging opnieuw sturen');
   });

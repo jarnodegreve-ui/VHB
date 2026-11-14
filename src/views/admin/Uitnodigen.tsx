@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { MailBevestiging, type MailVoorbeeld } from '../../components/MailBevestiging';
 import { apiFetch, apiJson } from '../../lib/api';
 import { meldSchrijffout } from '../../lib/fouten';
-import { formatMomentKort } from '../../lib/format';
+import { formatDagMaand } from '../../lib/format';
 import type { MailUitkomst } from '../../lib/mailUitkomst';
 import { cn } from '../../lib/ui';
 import { UITNODIGING_GELDIG_DAGEN, beschrijfOvergeslagen, type UitnodigingBeletsel } from '../../../shared/uitnodiging';
@@ -84,8 +84,8 @@ export function useUitnodigen({ onVerstuurd }: { onVerstuurd: () => void }) {
 export function UitnodigingRegel({ uitnodiging }: { uitnodiging?: Uitnodiging }) {
   if (!uitnodiging) return null;
   const verlopen = !(Date.parse(uitnodiging.tot) > Date.now());
-  // Alleen de dag ("30/09"): de kaart op de telefoon is een halve breedte.
-  const dag = formatMomentKort(uitnodiging.op).split(' ')[0];
+  // Alleen de dag ("30 sep"): de kaart op de telefoon is een halve breedte.
+  const dag = formatDagMaand(uitnodiging.op);
   return (
     <span className={cn('block text-xs', verlopen ? 'font-medium text-amber-700' : 'font-normal text-slate-500')}>
       {verlopen ? 'Uitnodiging verlopen' : `Uitgenodigd ${dag}`}
