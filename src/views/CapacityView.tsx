@@ -31,6 +31,7 @@ import { DagWeergave } from '../components/maandplanning/DagWeergave';
 import { useCelDetail } from '../components/maandplanning/useCelDetail';
 import { useDienstwissel } from '../components/maandplanning/useDienstwissel';
 import { useImportGrenzen, useMaandLaden, useTweewekenVenster } from '../components/maandplanning/useTweewekenVenster';
+import { MD_QUERY, useMedia } from '../lib/useMinWidth';
 
 /**
  * Maandplanning — read-only weergave van de planning-matrix (chauffeur ×
@@ -289,6 +290,17 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // de bestaande notitie van die chauffeur en dag als concept (useCelDetail).
   const onCel = cel.open;
 
+  // Eén weergave per breedte (ronde 6, punt 22): het raster vanaf md, de
+  // dagweergave daaronder. Tot dan stonden ze er allebei en verborg CSS er
+  // één (`hidden md:block` / `md:hidden`), zodat de telefoon het hele raster
+  // (14 dagen × alle chauffeurs, een titel per cel) opbouwde en verborg, en
+  // desktop de dagweergave. De keuze valt op MD_QUERY, de query van md zoals
+  // de gebouwde CSS haar stelt (in rem): zo valt ze samen met de `md:`-klassen
+  // van de kop, ook bij een andere standaardletter, en volgt ze draaien en
+  // verbreden live. Alle toestand (gekozen dag, zoekterm, open cel) woont
+  // hier, dus een wissel van weergave verliest niets.
+  const md = useMedia(MD_QUERY);
+
   return (
     <PageShell breed>
       <PageHeader
@@ -383,27 +395,29 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         />
       ) : (
         <>
-          {/* Desktop: Excel-achtig maandgrid (chauffeur × dag), sinds 09-10 in
-              src/components/maandplanning/DesktopRaster.tsx. */}
-          <DesktopRaster
-            visibleDates={visibleDates}
-            todayIso={todayIso}
-            gridSecties={gridSecties}
-            showSections={showSections}
-            cells={cells}
-            ownId={ownId}
-            notes={cel.notes}
-            dagtypes={dagtypes}
-            onCel={onCel}
-          />
-
-          {/* Mobiel: dag-weergave (datumstrip + alle chauffeurs van één dag in
-              één kolom), sinds 09-10 in src/components/maandplanning/DagWeergave.tsx.
-              De cel-modal met details/notitie/dienstwissel blijft dezelfde. */}
-          <DagWeergave
-            dag={{ dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes: cel.notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht: aandachtDagen.length > 0, dagtypes }}
-            acties={{ kiesDag, springNaarAandacht, setViewMonth, setToonRust, onCel }}
-          />
+          {md ? (
+            /* Desktop: Excel-achtig maandgrid (chauffeur × dag), sinds 09-10 in
+               src/components/maandplanning/DesktopRaster.tsx. */
+            <DesktopRaster
+              visibleDates={visibleDates}
+              todayIso={todayIso}
+              gridSecties={gridSecties}
+              showSections={showSections}
+              cells={cells}
+              ownId={ownId}
+              notes={cel.notes}
+              dagtypes={dagtypes}
+              onCel={onCel}
+            />
+          ) : (
+            /* Mobiel: dag-weergave (datumstrip + alle chauffeurs van één dag in
+               één kolom), sinds 09-10 in src/components/maandplanning/DagWeergave.tsx.
+               De cel-modal met details/notitie/dienstwissel blijft dezelfde. */
+            <DagWeergave
+              dag={{ dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes: cel.notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht: aandachtDagen.length > 0, dagtypes }}
+              acties={{ kiesDag, springNaarAandacht, setViewMonth, setToonRust, onCel }}
+            />
+          )}
 
           {/* Legende: codes en markeringen van deze maand (src/components/maandplanning/Legende.tsx). */}
           <Legende legend={codeLegend} markeringen={dagtypeMarkeringen} />
