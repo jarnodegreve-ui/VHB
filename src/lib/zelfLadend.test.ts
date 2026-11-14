@@ -178,13 +178,24 @@ describe('useZelfLadend met gegevens uit het geheugen (onthoudenOm)', () => {
   });
 
   it('zolang de gegevens uit het geheugen komen, toont ook een latere stille verversing haar fout; Opnieuw herstelt', async () => {
-    const laad = vi.fn().mockRejectedValueOnce(new Error('500')).mockRejectedValueOnce(new Error('500')).mockResolvedValue(undefined);
+    // De eerste verversing blijft hangen; een tweede, stille (bv. bereik
+    // terug) neemt het over en mislukt: ook die fout staat er, want de
+    // gegevens zijn nog altijd niet van dit bezoek.
+    const hangt = uitgesteld();
+    const laad = vi.fn().mockReturnValueOnce(hangt.belofte).mockRejectedValueOnce(new Error('500')).mockResolvedValue(undefined);
     const { result } = renderHook(() => useZelfLadend(laad, { onthoudenOm: ONTHOUDEN, boodschap: 'Kapot.' }));
-    await flush();
+    expect(result.current.fout).toBeNull();
+    await act(async () => { await result.current.ververs(); });
+    expect(laad).toHaveBeenCalledTimes(2);
     expect(result.current.fout).toBe('Kapot.');
-    await act(async () => { await result.current.opnieuw(); });
+    expect(result.current.laden).toBe(false);
+    expect(result.current.laatstGeladen).toBe(ONTHOUDEN);
+    expect(versheidTekst(result.current.versheid)).toBe('Bijgewerkt om 14:29');
+    // Het antwoord van de eerste komt te laat: het raakt niets meer.
+    await hangt.los();
     expect(result.current.fout).toBe('Kapot.');
     expect(result.current.laatstGeladen).toBe(ONTHOUDEN);
+
     await act(async () => { await result.current.opnieuw(); });
     expect(result.current.fout).toBeNull();
     expect(result.current.laatstGeladen).toBe(Date.now());
