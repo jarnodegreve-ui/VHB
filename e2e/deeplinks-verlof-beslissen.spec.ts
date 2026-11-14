@@ -364,6 +364,7 @@ test.describe('verlof beslissen: door naar de volgende wachtende', () => {
     });
     await page.goto('/verlof/w1');
     await expect(paneelKop(page, ALEX)).toBeVisible({ timeout: 15_000 });
+    await volgStanden(page);
     await page.getByRole('button', { name: 'Goedkeuren' }).click();
     await expect(page.getByText('Deze aanvraag is intussen al behandeld.')).toBeVisible();
     await expect(paneel(page, ALEX)).toHaveCount(0);
@@ -371,6 +372,10 @@ test.describe('verlof beslissen: door naar de volgende wachtende', () => {
     await expect(page.getByText(/^Verlof goedgekeurd/)).toHaveCount(0);
     expect(geweigerd).toBe(1);
     await expect.poll(() => pad(page)).toBe('/verlof');
+    // Ronde 6, punt 1: geen vasthoudstand; de lijst toont wat de server gaf.
+    await page.waitForTimeout(BESLIST_MS + 200);
+    expect(await standen(page)).toEqual([]);
+    expect(await lijstIds(page)).toEqual(['w1', 'w2', 'w3']);
   });
 
   test('mislukt de beslissing met een serverfout (500), dan ook: paneel dicht, geen volgende', async ({ page }) => {
@@ -383,6 +388,7 @@ test.describe('verlof beslissen: door naar de volgende wachtende', () => {
     });
     await page.goto('/verlof/w1');
     await expect(paneelKop(page, ALEX)).toBeVisible({ timeout: 15_000 });
+    await volgStanden(page);
     await page.getByRole('button', { name: 'Goedkeuren' }).click();
     await expect(page.getByText(/^Beslissing opslaan/)).toBeVisible();
     await expect(paneel(page, ALEX)).toHaveCount(0);
@@ -390,6 +396,10 @@ test.describe('verlof beslissen: door naar de volgende wachtende', () => {
     await expect(page.getByText(/^Verlof goedgekeurd/)).toHaveCount(0);
     expect(pogingen).toBe(1);
     await expect.poll(() => pad(page)).toBe('/verlof');
+    // Ronde 6, punt 1: geen vasthoudstand; de lijst toont wat de server gaf.
+    await page.waitForTimeout(BESLIST_MS + 200);
+    expect(await standen(page)).toEqual([]);
+    expect(await lijstIds(page)).toEqual(['w1', 'w2', 'w3']);
   });
 
   test('terug na het doorschakelen: geen dode stap', async ({ page }) => {
@@ -696,6 +706,7 @@ test.describe('verlof beslissen: de knoppen blijven in beeld (desktop)', () => {
     await expect(page.getByText('Wachtend op goedkeuring')).toBeVisible();
     expect(pad(page)).toBe('/verlof');
 
+    await volgStanden(page);
     antwoord();
     await expect.poll(() => patches.length).toBe(1);
     // De beslissing is gelukt en gemeld, maar het paneel blijft dicht.
@@ -704,6 +715,9 @@ test.describe('verlof beslissen: de knoppen blijven in beeld (desktop)', () => {
     expect(pad(page)).toBe('/verlof');
     await expect(paneelKop(page, DIETHER)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Goedkeuren' })).toHaveCount(0);
+    // Ronde 6, punt 1: het scherm van de klik bestaat niet meer, dus ook geen vastgehouden rij in het nieuwe.
+    expect(await standen(page)).toEqual([]);
+    expect(await lijstIds(page)).toEqual(['w2', 'w3']);
   });
 
   test('een gescrolde pagina: het paneel van een andere rij komt in beeld, met zijn knoppen en zijn naam vrij onder de topbar, ook na het doorschakelen', async ({ page }) => {
@@ -979,4 +993,418 @@ test.describe('verlof beslissen: op de telefoon blijft de kop vrij', () => {
     await verwachtKopVrij(page, TEST, false);
     expect(patches).toHaveLength(2);
   });
+});
+
+/**
+ * Ronde 6, punt 1: na een beslissing blijft de rij in "Wachtend op
+ * goedkeuring" een halve tel (BESLIST_MS = 450 ms) op haar plaats staan met
+ * haar nieuwe status, inert en zonder keuzevakje of knop, en klapt dan dicht.
+ * Alleen na een geslaagde PATCH; de tijdlijn wordt in de pagina zelf gemeten,
+ * per animatieframe en met een MutationObserver (het element van de rij gaat
+ * tijdens de stand nooit uit de DOM).
+ */
+const BESLIST_MS = 450;
+type Frame = { t: number; in: boolean; eigen: boolean; inert: boolean; badge: string | null; top: number; hoog: number; dekking: number; knop: boolean };
+/** Volgt het element van de rij `id` per animatieframe, plus het moment waarop het uit de DOM gaat. */
+async function volgRij(page: Page, id: string) {
+  await page.evaluate((id) => {
+    const w = window as unknown as { __rij: { frames: Frame[]; weg?: number } };
+    const sel = `[data-vasthoud-vak="${id}"]`;
+    const node = document.querySelector<HTMLElement>(sel);
+    if (!node || !node.parentElement) throw new Error(`de rij ${id} staat er niet`);
+    const lijst = node.parentElement;
+    const t0 = performance.now();
+    const stand: { frames: Frame[]; weg?: number } = { frames: [] };
+    w.__rij = stand;
+    new MutationObserver((records) => {
+      for (const r of records) for (const n of r.removedNodes) if (n === node && stand.weg === undefined) stand.weg = performance.now() - t0;
+    }).observe(lijst, { childList: true });
+    const meet = () => {
+      const r = node.getBoundingClientRect();
+      stand.frames.push({
+        t: performance.now() - t0,
+        in: node.isConnected,
+        eigen: document.querySelector(sel) === node,
+        inert: node.hasAttribute('inert'),
+        badge: /Goedgekeurd|Afgewezen/.exec(node.textContent ?? '')?.[0] ?? null,
+        top: r.top - lijst.getBoundingClientRect().top,
+        hoog: r.height,
+        dekking: Number(getComputedStyle(node).opacity),
+        knop: !!node.querySelector('button, input'),
+      });
+      if (node.isConnected && performance.now() - t0 < 20_000) requestAnimationFrame(meet);
+    };
+    requestAnimationFrame(meet);
+  }, id);
+}
+const rijStand = (page: Page) => page.evaluate(() => (window as unknown as { __rij: { frames: Frame[]; weg?: number } }).__rij);
+/**
+ * De tijdlijn uit `volgRij`: vóór het antwoord ongewijzigd; daarna BESLIST_MS
+ * (± 60 ms) op haar plaats met `badge`, inert en zonder knop; dan binnen
+ * 300 ms uit de DOM, en nooit eerder.
+ */
+async function verwachtTijdlijn(page: Page, badge: 'Goedgekeurd' | 'Afgewezen') {
+  await expect.poll(async () => (await rijStand(page)).weg, { message: 'de rij gaat uit de DOM', timeout: 10_000 }).toBeDefined();
+  const { frames, weg } = await rijStand(page);
+  const eerste = frames[0];
+  const vast = frames.findIndex((f) => f.inert);
+  expect(vast, `een beeld met de vastgehouden rij: ${JSON.stringify(frames.slice(-5))}`).toBeGreaterThan(0);
+  const plaats = (f: Frame) => Math.abs(f.top - eerste.top) < 0.5 && Math.abs(f.hoog - eerste.hoog) < 0.5;
+  for (const f of frames.slice(0, vast)) {
+    expect({ ...f, plaats: plaats(f) }, 'vóór het antwoord verandert de rij niet').toMatchObject({ in: true, eigen: true, inert: false, badge: null, knop: true, dekking: 1, plaats: true });
+  }
+  const uit = frames.findIndex((f, i) => i > vast && (!f.in || f.dekking < 0.99 || !plaats(f)));
+  const tVast = frames[vast].t;
+  const gehouden = frames.slice(vast, uit >= 0 ? uit : undefined);
+  for (const f of gehouden) {
+    expect({ ...f, plaats: plaats(f) }, 'tijdens de stand: op haar plaats, met de nieuwe status, inert, zonder knop').toMatchObject({ in: true, eigen: true, inert: true, badge, knop: false, plaats: true });
+  }
+  // Het einde van de stand: het eerste beeld van de uitgang, of het moment
+  // waarop het element uit de DOM ging (zonder animatie valt dat tussen twee
+  // beelden). Elk beeld daarvoor toonde de rij, met hetzelfde element.
+  const tEinde = Math.min(uit >= 0 ? frames[uit].t : Infinity, weg!);
+  expect(tEinde - tVast, `de stand duurt ${BESLIST_MS} ms (± 60)`).toBeGreaterThanOrEqual(BESLIST_MS - 60);
+  expect(tEinde - tVast, `de stand duurt ${BESLIST_MS} ms (± 60)`).toBeLessThanOrEqual(BESLIST_MS + 60);
+  expect(weg!, 'het element ging niet uit de DOM tijdens de stand').toBeGreaterThanOrEqual(gehouden.at(-1)!.t);
+  expect(weg! - tEinde, 'na de stand binnen 300 ms uit de DOM').toBeLessThanOrEqual(300);
+}
+/** Elke rij die ooit vastgehouden werd (inert), met haar tekst op dat moment. */
+async function volgStanden(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __standen: Array<{ id: string; tekst: string }> };
+    w.__standen = [];
+    const gezien = new Set<Element>();
+    const kijk = () => {
+      for (const el of document.querySelectorAll('[data-vasthoud-vak][inert]')) {
+        if (gezien.has(el)) continue;
+        gezien.add(el);
+        w.__standen.push({ id: el.getAttribute('data-vasthoud-vak') ?? '', tekst: el.textContent ?? '' });
+      }
+    };
+    new MutationObserver(kijk).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['inert'] });
+  });
+}
+const standen = (page: Page) => page.evaluate(() => (window as unknown as { __standen: Array<{ id: string; tekst: string }> }).__standen);
+/** De rijen die nu in "Wachtend op goedkeuring" staan, in volgorde. */
+const lijstIds = (page: Page) => page.evaluate(() => [...document.querySelectorAll('[data-vasthoud-vak]')].map((el) => el.getAttribute('data-vasthoud-vak')));
+/** De server antwoordt op een PATCH pas als de test het zegt. */
+async function houdPatchVast(page: Page) {
+  let antwoord = () => {};
+  const wacht = new Promise<void>((klaar) => { antwoord = klaar; });
+  await page.route('**/api/leave/**', async (route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    await wacht;
+    return route.fallback();
+  });
+  return () => antwoord();
+}
+
+test.describe('verlof beslissen: de besliste rij blijft even staan (desktop, 1440 en 960)', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1024, 'de breedtes van een venster op desktop; de telefoon heeft zijn eigen tijdlijn hieronder');
+
+  test('1440 × 900: de middelste goedkeuren met een PATCH van 2 s; de rij wacht op de server, staat dan 450 ms met Goedgekeurd en klapt dicht; het paneel schakelt door en verschuift niet', async ({ page }) => {
+    const fouten: string[] = [];
+    page.on('pageerror', (e) => fouten.push(e.message));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const start = DRIE();
+    const { patches } = await verlofServer(page, start);
+    const antwoord = await houdPatchVast(page);
+    await page.goto('/verlof/w2');
+    await expect(paneelKop(page, DIETHER)).toBeVisible({ timeout: 15_000 });
+    await volgRij(page, 'w2');
+    await page.getByRole('button', { name: 'Goedkeuren' }).click();
+    // Server-bevestigd: 2 s lang staat de rij ongewijzigd en is de knop bezig.
+    await expect(page.locator('button[aria-busy="true"]')).toHaveText('Goedkeuren');
+    await page.waitForTimeout(2000);
+    expect((await rijStand(page)).frames.every((f) => !f.inert && f.knop), 'zonder antwoord geen stand').toBe(true);
+    antwoord();
+    await expect(paneelKop(page, TEST)).toBeVisible();
+    const knop = await page.getByRole('button', { name: 'Goedkeuren' }).boundingBox();
+    await verwachtTijdlijn(page, 'Goedgekeurd');
+    // De eindstand zoals vroeger: Diether is weg, het paneel toont de volgende op dezelfde plek.
+    expect(await lijstIds(page)).toEqual(['w1', 'w3']);
+    expect(pad(page)).toBe('/verlof/w3');
+    expect(verschil(await page.getByRole('button', { name: 'Goedkeuren' }).boundingBox(), knop!), 'het dichtklappen verschuift het paneel niet').toBeLessThan(0.5);
+    expect(patches).toHaveLength(1);
+    await expect(page.getByText(`Verlof goedgekeurd: ${DIETHER}, ${periode(start[1])}.`)).toBeVisible();
+    expect(fouten, `page errors:\n${fouten.join('\n')}`).toEqual([]);
+  });
+
+  test('960 × 720: afwijzen met een reden; het paneel sluit, de rij staat 450 ms met Afgewezen en klapt dicht', async ({ page }) => {
+    await page.setViewportSize({ width: 960, height: 720 });
+    const start = DRIE();
+    const { patches } = await verlofServer(page, start);
+    const antwoord = await houdPatchVast(page);
+    await page.goto('/verlof/w2');
+    await expect(page.getByRole('dialog', { name: DIETHER })).toBeVisible({ timeout: 15_000 });
+    await volgRij(page, 'w2');
+    await page.getByRole('button', { name: 'Afwijzen' }).click();
+    await page.getByLabel('Reden van afwijzing').fill('Te veel collega\'s al vrij.');
+    await page.getByRole('button', { name: 'Afwijzen' }).click();
+    await expect(page.locator('button[aria-busy="true"]')).toHaveText('Afwijzen');
+    await page.waitForTimeout(2000);
+    expect((await rijStand(page)).frames.every((f) => !f.inert && f.knop), 'zonder antwoord geen stand').toBe(true);
+    antwoord();
+    await verwachtTijdlijn(page, 'Afgewezen');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await lijstIds(page)).toEqual(['w1', 'w3']);
+    expect(pad(page)).toBe('/verlof');
+    expect(patches).toHaveLength(1);
+    expect(patches[0]).toMatchObject({ id: 'w2', body: { status: 'rejected', reden: 'Te veel collega\'s al vrij.' } });
+  });
+
+  test('minder beweging: dezelfde stand van 450 ms met Goedgekeurd, daarna meteen weg zonder dichtklappen', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const { patches } = await verlofServer(page, DRIE());
+    await page.goto('/verlof/w3');
+    await expect(paneelKop(page, TEST)).toBeVisible({ timeout: 15_000 });
+    await volgRij(page, 'w3');
+    await page.getByRole('button', { name: 'Goedkeuren' }).click();
+    await verwachtTijdlijn(page, 'Goedgekeurd');
+    const { frames, weg } = await rijStand(page);
+    const laatsteVast = frames.filter((f) => f.inert).at(-1)!;
+    // Geen beeld met een halfdichte rij: van vastgehouden meteen uit de DOM.
+    expect(frames.filter((f) => f.in && f.dekking < 0.99), 'geen beeld met een vervagende rij').toEqual([]);
+    expect(weg! - laatsteVast.t, 'zonder animatie weg binnen twee beelden na de stand').toBeLessThanOrEqual(50);
+    expect(await lijstIds(page)).toEqual(['w1', 'w2']);
+    expect(patches).toHaveLength(1);
+  });
+
+  test('bulk met drie aanvragen waarvan één mislukt (409): twee krijgen de stand en klappen dicht, de mislukte blijft, één samenvattende toast', async ({ page }) => {
+    const { patches } = await verlofServer(page, DRIE());
+    await page.route('**/api/leave/w2', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Deze aanvraag is intussen al behandeld.', currentStatus: 'approved' }) });
+    });
+    await page.goto('/verlof');
+    await expect(page.getByText('Wachtend op goedkeuring')).toBeVisible({ timeout: 15_000 });
+    await volgStanden(page);
+    await page.getByRole('button', { name: 'Selecteer alles' }).click();
+    await page.getByRole('button', { name: 'Goedkeuren (3)' }).click();
+    await page.getByRole('dialog', { name: 'Aanvragen goedkeuren' }).getByRole('button', { name: 'Goedkeuren' }).click();
+    await expect(page.getByText('2 van 3 aanvragen goedgekeurd, de rest was intussen al behandeld.')).toBeVisible();
+    await expect.poll(() => lijstIds(page)).toEqual(['w2']);
+    const ooit = await standen(page);
+    expect(ooit.map((s) => s.id)).toEqual(['w1', 'w3']);
+    expect(ooit.every((s) => s.tekst.includes('Goedgekeurd'))).toBe(true);
+    // Diether wacht nog, gewoon met zijn knop; geen "Alles beoordeeld".
+    await expect(page.getByRole('button', { name: new RegExp(`^${DIETHER}`) })).toBeVisible();
+    await expect(page.getByText('Alles beoordeeld')).toHaveCount(0);
+    expect(patches.map((p) => p.id)).toEqual(['w1', 'w3']);
+  });
+
+  test('wie tijdens een lopende PATCH naar een ander scherm gaat en daar blijft: nergens een vastgehouden rij, geen fout in de console', async ({ page }) => {
+    const fouten: string[] = [];
+    page.on('pageerror', (e) => fouten.push(e.message));
+    // Netwerkruis van de testomgeving (geen realtime-server, een ontbrekend
+    // bestand) is geen fout van de app; al de rest in de console wel.
+    const ruis = /^(Failed to load resource|WebSocket connection to )/;
+    page.on('console', (m) => { if (m.type() === 'error' && !ruis.test(m.text())) fouten.push(m.text()); });
+    const start = DRIE();
+    const { patches } = await verlofServer(page, start);
+    const antwoord = await houdPatchVast(page);
+    await page.goto('/verlof/w1');
+    await expect(paneelKop(page, ALEX)).toBeVisible({ timeout: 15_000 });
+    await volgStanden(page);
+    await page.getByRole('button', { name: 'Goedkeuren' }).click();
+    const zijbalk = page.getByRole('navigation', { name: 'Zijbalk' });
+    await zijbalk.getByRole('button', { name: 'Dashboard', exact: true }).click();
+    await expect.poll(() => pad(page)).toBe('/');
+    // Het dashboard staat er echt (het scherm Verlof is weg), pas dan antwoordt de server.
+    await expect(page.getByText('Wachtend op goedkeuring')).toHaveCount(0);
+    await expect(page.locator('[data-vasthoud-vak]')).toHaveCount(0);
+    antwoord();
+    await expect.poll(() => patches.length).toBe(1);
+    await page.waitForTimeout(BESLIST_MS + 400);
+    await zijbalk.getByRole('button', { name: /^Verlof( \d+)?$/ }).click();
+    await expect(page.getByText('Wachtend op goedkeuring')).toBeVisible();
+    expect(await lijstIds(page)).toEqual(['w2', 'w3']);
+    expect(await standen(page)).toEqual([]);
+    expect(fouten, `fouten:\n${fouten.join('\n')}`).toEqual([]);
+  });
+});
+
+test.describe('verlof beslissen: de besliste rij blijft even staan (telefoon)', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) >= 768, 'de telefoon: het paneel is een SlideOver over de lijst');
+
+  test('390: de laatste goedkeuren; de SlideOver sluit, de rij staat 450 ms met Goedgekeurd in de lijst en klapt dicht', async ({ page }) => {
+    const fouten: string[] = [];
+    page.on('pageerror', (e) => fouten.push(e.message));
+    const start = DRIE();
+    const { patches } = await verlofServer(page, start);
+    const antwoord = await houdPatchVast(page);
+    await page.goto('/verlof/w3');
+    await expect(paneelKop(page, TEST)).toBeVisible({ timeout: 15_000 });
+    await volgRij(page, 'w3');
+    await page.getByRole('button', { name: 'Goedkeuren' }).click();
+    await expect(page.locator('button[aria-busy="true"]')).toHaveText('Goedkeuren');
+    await page.waitForTimeout(2000);
+    expect((await rijStand(page)).frames.every((f) => !f.inert && f.knop), 'zonder antwoord geen stand').toBe(true);
+    antwoord();
+    await verwachtTijdlijn(page, 'Goedgekeurd');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await lijstIds(page)).toEqual(['w1', 'w2']);
+    await expect.poll(() => pad(page)).toBe('/verlof');
+    expect(patches).toHaveLength(1);
+    expect(fouten, `page errors:\n${fouten.join('\n')}`).toEqual([]);
+  });
+
+  /**
+   * Een tik tijdens de stand op de rij onder de vastgehouden rij landt op die
+   * rij: de stand laat pas los ná die tik, zodat er niets onder de vinger
+   * verschuift. Via de bulkbalk (de beslissing valt in de bevestiging, dus
+   * alleen de tijd telt); de PATCH duurt even, zodat de bevestiging dicht is
+   * als de stand begint.
+   */
+  async function bulkAlexMetStand(page: Page) {
+    const { patches } = await verlofServer(page, DRIE());
+    await page.route('**/api/leave/**', async (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      await new Promise((klaar) => setTimeout(klaar, 700));
+      return route.fallback();
+    });
+    await page.goto('/verlof');
+    await expect(page.getByText('Wachtend op goedkeuring')).toBeVisible({ timeout: 15_000 });
+    // De lijst midden in beeld, ver van de toast onderaan.
+    await page.locator('[data-vasthoud-vak="w1"]').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await page.evaluate(() => {
+      const w = window as unknown as { __tik: { stand?: number; klik?: { rij: string | null; vastNog: boolean; ms: number } } };
+      w.__tik = {};
+      new MutationObserver(() => {
+        if (w.__tik.stand === undefined && document.querySelector('[data-vasthoud-vak="w1"][inert]')) w.__tik.stand = performance.now();
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['inert'] });
+      window.addEventListener('click', (e) => {
+        if (!e.isTrusted || w.__tik.stand === undefined || w.__tik.klik) return;
+        const doel = e.target instanceof Element ? e.target.closest('[data-vasthoud-vak]') : null;
+        w.__tik.klik = { rij: doel?.getAttribute('data-vasthoud-vak') ?? null, vastNog: !!document.querySelector('[data-vasthoud-vak="w1"][inert]'), ms: performance.now() - w.__tik.stand };
+      }, true);
+    });
+    // Het vakje zelf is visueel verborgen; een tik op zijn label zet het aan.
+    await page.getByRole('checkbox', { name: `Selecteer ${ALEX}` }).locator('..').click();
+    await expect(page.getByRole('checkbox', { name: `Selecteer ${ALEX}` })).toBeChecked();
+    await page.getByRole('button', { name: 'Goedkeuren (1)' }).click();
+    await page.getByRole('dialog', { name: 'Aanvragen goedkeuren' }).getByRole('button', { name: 'Goedkeuren' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const sindsStand = () => page.evaluate(() => {
+      const s = (window as unknown as { __tik: { stand?: number } }).__tik.stand;
+      return s === undefined ? -1 : performance.now() - s;
+    });
+    // Het midden van de rij van Diether, onder die van Alex, zoals ze tijdens
+    // de stand staat (de bulkbalk is dan al weg en de lijst ligt stil).
+    await expect.poll(sindsStand, { intervals: [10] }).toBeGreaterThanOrEqual(0);
+    const vak = await page.locator('[data-vasthoud-vak="w2"]').boundingBox();
+    if (!vak) throw new Error('de rij van Diether staat er niet');
+    const plek = { x: vak.x + vak.width / 2, y: vak.y + vak.height / 2 };
+    return { patches, plek, sindsStand };
+  }
+  const tikStand = (page: Page) => page.evaluate(() => (window as unknown as { __tik: { klik?: { rij: string | null; vastNog: boolean; ms: number } } }).__tik.klik);
+
+  test('390: een tik tijdens de stand op de rij eronder opent die rij, geen andere', async ({ page }) => {
+    const { patches, plek, sindsStand } = await bulkAlexMetStand(page);
+    await expect.poll(sindsStand, { intervals: [10] }).toBeGreaterThanOrEqual(150);
+    await page.touchscreen.tap(plek.x, plek.y);
+    await expect(paneelKop(page, DIETHER)).toBeVisible();
+    await expect(paneelKop(page, TEST)).toHaveCount(0);
+    const klik = await tikStand(page);
+    expect(klik, 'de tik viel tijdens de stand, op de rij van Diether').toMatchObject({ rij: 'w2', vastNog: true });
+    expect(patches.map((p) => p.id)).toEqual(['w1']);
+  });
+
+  test('390 (Chromium): een vinger die neerkomt vóór het einde van de stand en pas daarna loslaat, landt nog op de rij eronder', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'een vinger die blijft liggen kan alleen via CDP');
+    const { patches, plek, sindsStand } = await bulkAlexMetStand(page);
+    const cdp = await page.context().newCDPSession(page);
+    await expect.poll(sindsStand, { intervals: [10] }).toBeGreaterThanOrEqual(300);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: plek.x, y: plek.y }] });
+    // Blijf liggen tot ruim na het einde van de stand (450 ms) plus het dichtklappen.
+    await expect.poll(sindsStand, { intervals: [10] }).toBeGreaterThanOrEqual(BESLIST_MS + 200);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(paneelKop(page, DIETHER)).toBeVisible();
+    await expect(paneelKop(page, TEST)).toHaveCount(0);
+    const klik = await tikStand(page);
+    expect(klik, 'de tik landde op Diether terwijl Alex nog vastgehouden stond').toMatchObject({ rij: 'w2', vastNog: true });
+    expect(klik!.ms).toBeGreaterThan(BESLIST_MS);
+    // Na de tik laat de stand los: Alex klapt alsnog dicht.
+    await expect.poll(() => lijstIds(page)).toEqual(['w2', 'w3']);
+    expect(patches.map((p) => p.id)).toEqual(['w1']);
+  });
+});
+
+/**
+ * Vaste toetssteen 1 voor het paneel en de bulkbalk (ronde 6, punt 1): wat er
+ * na de beslissing en na het dichtklappen onder de vorige klik ligt, beslist
+ * niets. Een tweede klik (of tik) op dezelfde plek na 0,3, 1 en 2 s stuurt
+ * geen PATCH. Het paneel beslist de laatste van de lijst (dan sluit het op
+ * elke breedte; het doorschakelen naar de volgende heeft zijn eigen slot,
+ * zie hierboven), de bulkbalk de eerste (dan schuift alles eronder op).
+ */
+const ZES = () => [...DRIE(), aanvraag('w4', '43', 30, 31), aanvraag('w5', '44', 40, 41), aanvraag('w6', '42', 50, 52)];
+const NAAM: Record<string, string> = { '42': TEST, '43': ALEX, '44': DIETHER };
+async function tweedeKlik(page: Page, opties: { breedte: number; soort: 'paneel' | 'bulk'; aanraking: boolean }) {
+  await page.setViewportSize({ width: opties.breedte, height: 900 });
+  const { lijst, patches } = await verlofServer(page, ZES());
+  const klik = async (plek: { x: number; y: number }) => {
+    if (opties.aanraking) await page.touchscreen.tap(plek.x, plek.y);
+    else await page.mouse.click(plek.x, plek.y);
+  };
+  const midden = async (knop: ReturnType<Page['locator']>) => {
+    const vak = await knop.boundingBox();
+    if (!vak) throw new Error('de knop staat er niet');
+    return { x: vak.x + vak.width / 2, y: vak.y + vak.height / 2 };
+  };
+  for (const wacht of [300, 1000, 2000]) {
+    const wachtend = lijst.filter((r) => r.status === 'pending');
+    const doel = opties.soort === 'paneel' ? wachtend[wachtend.length - 1] : wachtend[0];
+    const voor = patches.length;
+    let plek: { x: number; y: number };
+    if (opties.soort === 'paneel') {
+      await page.goto(`/verlof/${doel.id}`);
+      await expect(paneelKop(page, NAAM[doel.userId])).toBeVisible({ timeout: 15_000 });
+      await paginaRust(page);
+      plek = await midden(page.getByRole('button', { name: 'Goedkeuren' }));
+    } else {
+      await page.goto('/verlof');
+      await expect(page.getByText('Wachtend op goedkeuring')).toBeVisible({ timeout: 15_000 });
+      // Het vakje zelf is visueel verborgen; een klik op zijn label zet het aan.
+      const vakje = page.getByRole('checkbox', { name: `Selecteer ${NAAM[doel.userId]}` }).first();
+      await vakje.locator('..').click();
+      await expect(vakje).toBeChecked();
+      await page.getByRole('button', { name: 'Goedkeuren (1)' }).click();
+      const venster = page.getByRole('dialog', { name: 'Aanvragen goedkeuren' });
+      await expect(venster).toBeVisible();
+      await paginaRust(page);
+      plek = await midden(venster.getByRole('button', { name: 'Goedkeuren' }));
+    }
+    const t0 = Date.now();
+    await klik(plek);
+    await expect.poll(() => patches.length, { message: `de beslissing over ${doel.id} vertrekt` }).toBe(voor + 1);
+    expect(patches[voor].id).toBe(doel.id);
+    await page.waitForTimeout(Math.max(0, t0 + wacht - Date.now()));
+    await klik(plek);
+    await page.waitForTimeout(900);
+    expect(patches.length, `een tweede ${opties.aanraking ? 'tik' : 'klik'} na ${wacht} ms op ${opties.breedte} px beslist niets`).toBe(voor + 1);
+  }
+}
+
+test.describe('verlof beslissen: na de stand ligt er niets onder de vorige tik dat beslist (aanraakscherm)', () => {
+  test.use({ hasTouch: true });
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1024, 'de breedtes worden in het desktopproject gezet; de iPhone-projecten hebben hun eigen tik hierboven');
+  for (const breedte of [390, 768]) {
+    for (const soort of ['paneel', 'bulk'] as const) {
+      test(`${breedte} px, ${soort === 'paneel' ? 'het paneel' : 'de bulkbalk'}: een tweede tik op dezelfde plek na 0,3, 1 en 2 s beslist niets`, async ({ page }) => {
+        await tweedeKlik(page, { breedte, soort, aanraking: true });
+      });
+    }
+  }
+});
+
+test.describe('verlof beslissen: na de stand ligt er niets onder de vorige klik dat beslist (muis)', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1024, 'de breedtes van een venster op desktop');
+  for (const breedte of [1024, 1280, 1440]) {
+    for (const soort of ['paneel', 'bulk'] as const) {
+      test(`${breedte} px, ${soort === 'paneel' ? 'het paneel' : 'de bulkbalk'}: een tweede klik op dezelfde plek na 0,3, 1 en 2 s beslist niets`, async ({ page }) => {
+        await tweedeKlik(page, { breedte, soort, aanraking: false });
+      });
+    }
+  }
 });
