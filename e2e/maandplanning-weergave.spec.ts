@@ -83,11 +83,16 @@ async function preciesEen(page: Page, breed: boolean) {
   await expect(page.locator(breed ? STRIP : RASTER)).toHaveCount(0);
 }
 
-/** Alle schrijfacties naar de API vanaf nu (de opstart zelf telt niet). */
+/**
+ * Alle schrijfacties naar de API vanaf nu (de opstart zelf telt niet). De
+ * HEAD-ping van useOnline en een foutmelding naar /api/client-errors
+ * beslissen niets en tellen niet mee.
+ */
 function schrijfacties(page: Page) {
   const lijst: string[] = [];
   page.on('request', (r) => {
-    if (r.method() !== 'GET' && new URL(r.url()).pathname.startsWith('/api/')) lijst.push(`${r.method()} ${new URL(r.url()).pathname}`);
+    const pad = new URL(r.url()).pathname;
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method()) && pad.startsWith('/api/') && pad !== '/api/client-errors') lijst.push(`${r.method()} ${pad}`);
   });
   return lijst;
 }
