@@ -9,7 +9,9 @@ import { FoutReferentie } from './FoutReferentie';
  * langer de hele schil (sidebar, sessie, context) — alleen de inhoud, met
  * een knop om het opnieuw te proberen. Zelfde lege-staat-taal als de rest
  * (lus-motief, variant 'fout'). Onder de knop de foutreferentie zodra het
- * rapport is aangekomen (07-09, nr. 6).
+ * rapport is aangekomen (07-09, nr. 6). Knop en referentie staan links onder
+ * de tekst, zoals de EmptyState zelf (ronde 6, punt 10): gecentreerd sprong
+ * de knop opzij zodra de referentie binnenkwam, onder de muis.
  */
 export function ViewFout({ onRetry }: { onRetry: () => void }) {
   return (
@@ -19,9 +21,10 @@ export function ViewFout({ onRetry }: { onRetry: () => void }) {
       title="Dit scherm kon niet geladen worden"
       message="Er ging iets mis bij het tonen van deze pagina. De fout is automatisch gemeld. Probeer het opnieuw of kies een ander scherm."
       action={(
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-start gap-3">
           <Button variant="secondary" onClick={() => { wisReferentie(); onRetry(); }}>Opnieuw proberen</Button>
-          <FoutReferentie />
+          {/* FoutReferentie centreert zichzelf (crashscherm van main.tsx); hier links. */}
+          <FoutReferentie className="items-start" />
         </div>
       )}
     />
