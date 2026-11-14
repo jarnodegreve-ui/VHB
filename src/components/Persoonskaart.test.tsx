@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
+import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 
 // Nulmeting (ronde 6, punt 19, PR 1): de historiek die het rijmenu van
 // Gebruikers opent ("Verlof- en dienstruilhistoriek"), zoals ze vandaag is,
@@ -39,9 +39,9 @@ const { apiJson, apiFetch, apiLijst, server } = vi.hoisted(() => {
     }),
   };
 });
-vi.mock('../../lib/api', async (importOriginal) => ({ ...await importOriginal<typeof import('../../lib/api')>(), apiJson, apiFetch, apiLijst }));
+vi.mock('../lib/api', async (importOriginal) => ({ ...await importOriginal<typeof import('../lib/api')>(), apiJson, apiFetch, apiLijst }));
 
-import { UserHistoryModal } from './UserHistoryModal';
+import { Persoonskaart } from './Persoonskaart';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -83,7 +83,7 @@ const ARCHIEF_RUIL: SwapRequest = { id: 'r2', shiftId: 'x2', requesterId: COLLEG
 /** Het jaar van de vaste klok; `vanaf` en `aantal` zet useArchief er zelf achter (eerste pagina van 10). */
 const ARCHIEF_URL = '/api/swaps/archief?persoon=3&sinds=2026-01-01&vanaf=0&aantal=10';
 
-const toonKaart = () => render(<UserHistoryModal user={PERSOON} shifts={DIENSTEN} leaveRequests={VERLOF} swaps={[VENSTER_RUIL]} users={[PERSOON, COLLEGA]} onClose={vi.fn()} />);
+const toonKaart = () => render(<Persoonskaart user={PERSOON} shifts={DIENSTEN} leaveRequests={VERLOF} swaps={[VENSTER_RUIL]} users={[PERSOON, COLLEGA]} onClose={vi.fn()} />);
 
 const dialoog = () => screen.getByRole('dialog');
 /** Een teller (Stat): het cijfer en de regel eronder, gezocht op zijn label. */
