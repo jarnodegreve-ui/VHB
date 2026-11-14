@@ -217,7 +217,7 @@ export function WerkvoorraadView({
         />
       ) : (
         <div className="surface-table rounded-3xl overflow-clip">
-          <div className="border-b border-hairline px-5 py-4 md:px-6">
+          <div className="border-b border-hairline px-5 py-4 md:px-4">
             <TableToolbar
               rand="kaart"
               zoek={zoek}

@@ -411,7 +411,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
         {/* Vanaf lg staan filters en zoekveld op één regel (de labels boven de
             filters, het zoekveld op hun onderlijn); daaronder stapelen ze. Met
             veel filters krijgt het zoekveld zijn eigen regel in plaats van te krimpen. */}
-        <div className={cn('flex flex-col gap-4 px-4 py-4 md:px-6 md:py-5 lg:flex-row lg:flex-wrap lg:items-end', (toestand === 'laden' || toestand === 'tabel') && 'border-b border-hairline')}>
+        <div className={cn('flex flex-col gap-4 px-4 py-4 md:py-5 lg:flex-row lg:flex-wrap lg:items-end', (toestand === 'laden' || toestand === 'tabel') && 'border-b border-hairline')}>
           <RapportFilterbalk
             def={def}
             filters={filters}
@@ -438,13 +438,13 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
         {toestand === 'tabel' && (
           <>
             {uitleg?.toestand === 'deels' && uitleg.tekst ? (
-              <p className="flex items-start gap-2 border-b border-hairline px-4 py-3 text-body-sm text-slate-600 md:px-6">
+              <p className="flex items-start gap-2 border-b border-hairline px-4 py-3 text-body-sm text-slate-600">
                 <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-slate-500" />
                 {uitleg.tekst}
               </p>
             ) : null}
             {veelRijen ? (
-              <p className="flex items-start gap-2 border-b border-hairline px-4 py-3 text-body-sm text-slate-600 md:px-6">
+              <p className="flex items-start gap-2 border-b border-hairline px-4 py-3 text-body-sm text-slate-600">
                 <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-slate-500" />
                 {veelRijen}
               </p>
