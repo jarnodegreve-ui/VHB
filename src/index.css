@@ -1519,6 +1519,22 @@ html.dark {
   color-scheme: dark;
 }
 
+/* iPhone Duo (14-11): op het buitenscherm zet iOS de bediening van Safari in
+   een strook naast de pagina en kleurt die met de achtergrondkleur van de
+   pagina. Het lichte canvas is alleen een verloop (geen kleur), dus stond er
+   een witte strook naast de lichtgrijze pagina. De kleur onder het verloop
+   lost dat op; het verloop zelf dekt volledig en blijft wat je ziet.
+   Bewust alleen op de twee schermen van de Duo (schermmaat in CSS-pixels:
+   buiten 466 × 678, gemeten in Safari in de simulator; binnen 669 × 951,
+   afgeleid uit het beeld van 2007 × 2853 op schaal 3 en niet op het scherm
+   zelf nagekeken): op elk ander toestel verandert er niets, ook niet aan de
+   tint van de browserbalken. */
+@media (device-width: 466px) and (device-height: 678px), (device-width: 669px) and (device-height: 951px) {
+  html {
+    background-color: var(--laag-canvas);
+  }
+}
+
 :where(.dark) .parallax-bg {
   /* Neutraal wit vignet, geen kleurzweem. Statisch, zonder filter. */
   background:

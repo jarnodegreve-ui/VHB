@@ -334,7 +334,7 @@ test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzend
 // --- Nr. 6: het verzendlog was op de telefoon afgeknipt ---
 
 /** Wat er van de mislukte verzending (m-3) te lezen moet zijn. */
-const M3 = { mail: 'Eigen mail', moment: /21 september/, aantal: '40', status: 'Mislukt', reden: '2 van 40 mislukt', door: /Annelies Admin/ };
+const M3 = { mail: 'Eigen mail', moment: /ma 21 sep, 12:00/, aantal: '40', status: 'Mislukt', reden: '2 van 40 mislukt', door: /Annelies Admin/ };
 
 /** Geen horizontale overloop van de pagina, en het element valt volledig
  *  binnen het kader van het verzendlog (niets afgeknipt). */
