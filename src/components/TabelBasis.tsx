@@ -21,7 +21,9 @@ const TabelLabelContext = createContext<string | undefined>(undefined);
 /**
  * Waar in het tabelkader staat een kop-onderdeel? `true` binnen de `kop` van
  * een `TableShell` (px-5 onder md): TableToolbar laat zijn filterrij daar tot
- * aan de rand van de kaart doorlopen.
+ * aan de rand van de kaart doorlopen. Vanaf md heeft de kop px-4, de opvulling
+ * van de cellen: zoekveld en titel beginnen waar de eerste kolom begint
+ * (ronde 6, punt 10); onder md rekent hij op de kaartlijst (px-5).
  */
 export const TabelKopContext = createContext(false);
 
@@ -90,7 +92,7 @@ export function TableShell({ className, sticky = false, past = false, label, kop
   return (
     <TabelLabelContext.Provider value={label}>
       <div className={cn('surface-table rounded-3xl overflow-clip', className)}>
-        {kop ? <div className="border-b border-hairline px-5 py-4 md:px-6"><TabelKopContext.Provider value>{kop}</TabelKopContext.Provider></div> : null}
+        {kop ? <div className="border-b border-hairline px-5 py-4 md:px-4"><TabelKopContext.Provider value>{kop}</TabelKopContext.Provider></div> : null}
         <div
           ref={strook}
           // `relative`: een absoluut gepositioneerd kind (een sr-only-tekst in

@@ -390,7 +390,7 @@ export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = fal
       {soort === 'tabel' ? (
         <div className="surface-table rounded-3xl overflow-hidden">
           {/* Toolbar (zoekveld + telling), kolomkop, rijen: de maten van TableToolbar, Th en Td. */}
-          <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+          <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4 md:px-4">
             <Skeleton rounded="xl" className="h-10 w-full max-w-xs" />
             <Skeleton className="h-3 w-16" />
           </div>

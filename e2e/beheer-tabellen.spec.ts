@@ -365,3 +365,81 @@ test('Kijkt ook mee: een chauffeur ziet op de Maandplanning niemand', async ({ p
   await page.waitForTimeout(400);
   await expect(page.getByText(/bekijk(t|en) dit ook/)).toHaveCount(0);
 });
+
+/**
+ * Kop en eerste kolom op één lijn (ronde 6, punt 10): vanaf md begint de kop
+ * van een tabelkader (zoekveld, filters, titel) waar de eerste kolom begint.
+ * Gemeten op de inhoudsbox, niet op de eerste letter (een selectievakje of
+ * een rechts uitgelijnde kolom begint niet met tekst), ten opzichte van het
+ * kader (div.surface-table):
+ * - koplijn = linkerrand van het kopblok + zijn padding-left;
+ * - kolomlijn = linkerrand van de eerste th + zijn padding-left, of bij een
+ *   th zonder opvulling (SortTh) de knop erin + zijn padding-left.
+ * Dienstoverzicht houdt 4 px verschil: zijn cellen hebben bewust px-3 (acht
+ * kolommen vanaf 42 rem). Toont een kader op een breedte geen tabel (container
+ * query), dan slaat de toets die breedte over en zegt dat in een annotatie;
+ * elk kader moet op minstens één breedte gemeten zijn.
+ */
+type KopEnKolom = { fout: string | null; getoond: boolean; koplijn: number; kolomlijn: number };
+async function kopEnKolom(page: Page, label: string): Promise<KopEnKolom> {
+  await expect(page.locator(`div.surface-table table[aria-label="${label}"]`).first()).toBeAttached();
+  return page.evaluate((label): KopEnKolom => {
+    const niets: KopEnKolom = { fout: null, getoond: false, koplijn: 0, kolomlijn: 0 };
+    const px = (v: string) => parseFloat(v) || 0;
+    const zichtbaar = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const tabellen = [...document.querySelectorAll('div.surface-table table')].filter((t) => t.getAttribute('aria-label') === label);
+    if (tabellen.length !== 1) return { ...niets, fout: `${tabellen.length} tabellen met dit label` };
+    const tabel = tabellen[0];
+    if (!zichtbaar(tabel)) return niets;
+    const kader = tabel.closest('div.surface-table')!;
+    const kop = kader.firstElementChild;
+    if (!kop || kop.contains(tabel)) return { ...niets, fout: 'kader zonder kop' };
+    const th = [...tabel.querySelectorAll('thead tr:first-child > th')].find(zichtbaar);
+    if (!th) return { ...niets, fout: 'geen zichtbare kolomkop' };
+    const links = kader.getBoundingClientRect().left;
+    const koplijn = kop.getBoundingClientRect().left + px(getComputedStyle(kop).paddingLeft) - links;
+    const thLinks = px(getComputedStyle(th).paddingLeft);
+    const knop = thLinks === 0 ? th.querySelector('button') : null;
+    const kolomlijn = knop
+      ? knop.getBoundingClientRect().left + px(getComputedStyle(knop).paddingLeft) - links
+      : th.getBoundingClientRect().left + thLinks - links;
+    return { fout: null, getoond: true, koplijn, kolomlijn };
+  }, label);
+}
+
+test('kop en eerste kolom op één lijn', async ({ browser, baseURL }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'eenmaal per run, in het desktopproject; de breedtes maakt de test zelf');
+  test.setTimeout(150_000);
+  const schermen: Array<{ open: (page: Page) => Promise<unknown>; kaders: Array<{ label: string; verschil?: number }> }> = [
+    { open: (page) => open(page, SCHERMEN[0]), kaders: [{ label: 'Gebruikers' }] },
+    { open: (page) => open(page, SCHERMEN[2]), kaders: [{ label: 'Vervaldata per chauffeur' }] },
+    { open: (page) => open(page, SCHERMEN[4]), kaders: [{ label: 'Diensten', verschil: 4 }] },
+    { open: (page) => open(page, SCHERMEN[5]), kaders: [{ label: 'Verzendlog' }] },
+    { open: (page) => openOverzicht(page), kaders: [{ label: 'Werkvoorraad' }] },
+  ];
+  const gemeten = new Map<string, number>();
+  const fouten: string[] = [];
+  for (const breedte of [768, 1024, 1280, 1440]) {
+    const context = await browser.newContext({ baseURL, viewport: { width: breedte, height: 900 }, hasTouch: breedte < 1024, serviceWorkers: 'block' });
+    try {
+      for (const scherm of schermen) {
+        const page = await context.newPage();
+        await scherm.open(page);
+        for (const { label, verschil = 0 } of scherm.kaders) {
+          const m = await kopEnKolom(page, label);
+          if (m.fout) { fouten.push(`${label} op ${breedte}px: ${m.fout}`); continue; }
+          if (!m.getoond) { info.annotations.push({ type: 'niet getoond', description: `${label} op ${breedte}px: geen tabel op deze breedte (container query)` }); continue; }
+          gemeten.set(label, (gemeten.get(label) ?? 0) + 1);
+          const gezien = m.koplijn - m.kolomlijn;
+          if (Math.abs(gezien - verschil) > 1) fouten.push(`${label} op ${breedte}px: koplijn ${m.koplijn.toFixed(2)}, kolomlijn ${m.kolomlijn.toFixed(2)} (verschil ${gezien.toFixed(2)}, verwacht ${verschil})`);
+        }
+        await page.close();
+      }
+    } finally {
+      await context.close();
+    }
+  }
+  expect(fouten, 'kop en eerste kolom niet op één lijn').toEqual([]);
+  const nooit = schermen.flatMap((s) => s.kaders.map((k) => k.label)).filter((label) => !gemeten.get(label));
+  expect(nooit, 'kader op geen enkele breedte gemeten').toEqual([]);
+});
