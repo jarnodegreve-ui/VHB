@@ -130,7 +130,6 @@ export function DagDetail({ dag, onSluit, onDag, eersteDag }: { dag: string | nu
                       ariaLabel={`Vermogen op ${dagLang(dag)}: ${data.piekKw !== null ? `piek ${tekstKw(data.piekKw)} om ${uurLabel(data.piekTs)}` : 'geen meting'}`}
                       gekozen={gekozenSlot}
                       onKies={setGekozenSlot}
-                      titelVan={(s) => `${uurLabel(s.ts)} · ${tekstKw(s.kw)} · ${s.charging} bus${s.charging === 1 ? '' : 'sen'}`}
                       asLinks={uurLabel(slots[0].ts)}
                       asRechts={uurLabel(slots[slots.length - 1].ts)}
                       samenvatting={(s) => (s
