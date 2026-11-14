@@ -79,6 +79,16 @@ describe('formatTijdstip (korte dag, komma, uur; 24-uurs, nooit een rauwe ISO)',
     expect(formatTijdstip('2026-11-04T23:30:00Z', nu)).toBe('do 5 nov, 00:30');
     expect(formatTijdstip('2026-07-06T10:05:00Z', nu)).toBe('ma 6 jul, 12:05');
   });
+  it('de twee wisselnachten: de klok springt in maart van 02:00 naar 03:00 en valt in oktober van 03:00 terug naar 02:00', () => {
+    // Zomertijd 29-03-2026 om 01:00 UTC: vlak ervoor 01:30 wintertijd, vlak erna 03:30 zomertijd.
+    expect(formatTijdstip('2026-03-29T00:30:00Z', nu)).toBe('zo 29 mrt, 01:30');
+    expect(formatTijdstip('2026-03-29T01:30:00Z', nu)).toBe('zo 29 mrt, 03:30');
+    // Wintertijd 25-10-2026 om 01:00 UTC: 02:30 komt twee keer voor, telkens op dezelfde dag.
+    expect(formatTijdstip('2026-10-25T00:30:00Z', nu)).toBe('zo 25 okt, 02:30');
+    expect(formatTijdstip('2026-10-25T01:30:00Z', nu)).toBe('zo 25 okt, 02:30');
+    // De avond ervoor (nog zomertijd) is na 22:00 UTC al de volgende dag.
+    expect(formatTijdstip('2026-10-24T22:30:00Z', nu)).toBe('zo 25 okt, 00:30');
+  });
   it('leest de vorm van PostgREST (microseconden, +00:00) en die van toISOString', () => {
     expect(formatTijdstip('2026-10-08T12:02:00.123456+00:00', nu)).toBe('do 8 okt, 14:02');
     expect(formatTijdstip('2026-10-08T12:02:00.000Z', nu)).toBe('do 8 okt, 14:02');
@@ -135,6 +145,13 @@ describe('formatShortDay (korte dag: nooit een voorloopnul, het jaar alleen op v
   it('een tijdstempel telt als zijn Brusselse dag', () => {
     expect(formatShortDay('2026-11-04T23:30:00Z')).toBe('do 5 nov');
     expect(formatShortDay('2026-11-04T23:30:00')).toBe('wo 4 nov');
+  });
+  it('rond de twee wisselnachten blijft het de Brusselse dag', () => {
+    expect(formatShortDay('2026-03-28T23:30:00Z')).toBe('zo 29 mrt');
+    expect(formatShortDay('2026-03-28T22:30:00Z')).toBe('za 28 mrt');
+    expect(formatShortDay('2026-10-24T22:30:00Z')).toBe('zo 25 okt');
+    expect(formatShortDay('2026-10-25T22:30:00Z')).toBe('zo 25 okt');
+    expect(formatShortDay('2026-10-25T23:30:00Z')).toBe('ma 26 okt');
   });
   it('het jaar alleen op vraag, ook buiten dit jaar', () => {
     expect(formatShortDay('2025-10-08')).toBe('wo 8 okt');
