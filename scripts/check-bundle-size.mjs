@@ -312,7 +312,13 @@ const DEELBUDGET_KB = {
   // index) noemt de nieuwe gedeelde chunks (ToonMeer, archief). Lokaal
   // 78,63 → 78,77; de CI-runner meet de index ±0,4 kB zwaarder, dat kwam
   // op de grens. Budget = de meting plus ±0,8 kB.
-  index: 80.5,
+  // 14-11 (ronde 6, punt 21a, startmeting): 80,5 → 80,9. src/lib/startMeting.ts
+  // zit bewust in de startbundel (de meting begint met de eerste regel JS):
+  // lokaal 79,56 → 80,27 (+0,71), geen andere module erbij. In CI weegt de
+  // index op main 79,85 en met #817 (één datumvorm) 79,96; met deze PR erbij
+  // dus ±80,67. Budget = die meting plus ±0,2 kB (keuze 14-11: een grens gaat
+  // per PR omhoog, met de meting). De warmups blijven gelijk.
+  index: 80.9,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
