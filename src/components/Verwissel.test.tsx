@@ -113,7 +113,8 @@ describe('Verwissel', () => {
     expect(laag()!.className).toContain('fade-uit');
     expect(laag()!.className).toContain('absolute');
     expect(laag()!.className).toContain('pointer-events-none');
-    expect(laag()!.className).toContain('overflow-clip');
+    expect(laag()!.className).toContain('[clip-path:inset(0)]');
+    expect(laag()!.className).not.toContain('overflow');
     expect(laag()!.getAttribute('aria-hidden')).toBe('true');
     expect(wrapper().className).toBe('relative');
     // Inhoud eerst in de DOM, de laag erna (hij tekent erboven).
@@ -199,13 +200,12 @@ describe('Verwissel', () => {
     expect(scherm.getByRole('button', { name: 'Opslaan' })).not.toBeNull();
   });
 
-  /** Nep-layout: de wrapper staat op `wrapperTop` (skelet- of overlapfase),
-   *  het eerste element van het skelet op `skeletTop` (in de flow of in de
-   *  absolute laag, vóór die verschoven is). */
-  function nepLayout(maat: { wrapper: [number, number]; skelet: [number, number] }) {
+  /** Nep-layout: de laag staat op `laag` (skelet- of overlapfase, vóór ze
+   *  verschoven is), het eerste element van het skelet op `skelet`. */
+  function nepLayout(maat: { laag: [number, number]; skelet: [number, number] }) {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       const overlap = wrapper().classList.contains('relative');
-      const top = this === wrapper() ? maat.wrapper[overlap ? 1 : 0] : this.hasAttribute('data-skelet') ? maat.skelet[overlap ? 1 : 0] : 0;
+      const top = this === laag() ? maat.laag[overlap ? 1 : 0] : this.hasAttribute('data-skelet') ? maat.skelet[overlap ? 1 : 0] : 0;
       return { top, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
     });
   }
@@ -214,19 +214,26 @@ describe('Verwissel', () => {
     // In de flow viel de marge van 17 px door de wrapper heen (skelet en
     // wrapper delen hun bovenrand); in de absolute laag, een eigen
     // blokcontext, staat ze tussen laag en skelet.
-    nepLayout({ wrapper: [116, 116], skelet: [116, 133] });
+    nepLayout({ laag: [116, 116], skelet: [116, 133] });
     await toon(true);
     await wacht(400);
     await toon(false);
-    expect(laag()!.style.top).toBe('-17px');
+    expect(laag()!.style.transform).toBe('translateY(-17px)');
+    // Even veel langer, zodat de geschoven laag weer precies de inhoud knipt.
+    expect(laag()!.style.bottom).toBe('-17px');
+    // Laden komt terug: weer in de flow, zonder verschuiving.
+    await toon(true);
+    expect(laag()!.className).toBe('');
+    expect(laag()!.style.transform).toBe('');
+    expect(laag()!.style.bottom).toBe('');
   });
 
   it('wat erboven in dezelfde render van hoogte wisselt: het skelet volgt zijn wrapper, zoals de inhoud', async () => {
-    nepLayout({ wrapper: [416, 336], skelet: [416, 336] });
+    nepLayout({ laag: [416, 336], skelet: [416, 336] });
     await toon(true);
     await wacht(400);
     await toon(false);
-    expect(laag()!.style.top).toBe('0px');
+    expect(laag()!.style.transform).toBe('translateY(0px)');
   });
 
   it('reduced motion: meteen de inhoud, geen laag en geen timer die blijft hangen', async () => {

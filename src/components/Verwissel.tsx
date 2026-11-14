@@ -20,11 +20,14 @@ import { overgangActief } from '../lib/overgang';
  *
  * Tijdens de overlap krijgt de wrapper alleen `relative`, als anker voor de
  * skeletlaag. Die laag ligt op de doos van de inhoud (`inset-0`), knipt het
- * skelet daarop (`overflow-clip`, nooit `overflow-hidden`: dat maakt een
- * scrollcontainer en dan plakt een tabelkop niet meer), vangt geen klik en
- * is aria-hidden: alleen de inhoud is bedienbaar en wordt voorgelezen, en de
- * hoogte is die van de inhoud. Het knippen zit op de laag en niet op de
- * wrapper, zodat schaduw en focusring van de inhoud nooit even wegvallen.
+ * skelet daarop, vangt geen klik en is aria-hidden: alleen de inhoud is
+ * bedienbaar en wordt voorgelezen, en de hoogte is die van de inhoud. Het
+ * knippen zit op de laag en niet op de wrapper, zodat schaduw en focusring
+ * van de inhoud nooit even wegvallen, en het is een `clip-path`, geen
+ * overflow: `overflow-hidden` maakt een scrollcontainer (dan plakt een
+ * tabelkop niet meer), en met `overflow-clip` op de laag sprong de pagina in
+ * Chromium soms naar boven als je tijdens de overlap een rij opende (Verlof,
+ * gescrolde pagina, 5 van 18 runs; met clip-path 0 van 30).
  * Een bovenmarge die in de flow door de wrapper heen viel, valt in de
  * absolute laag niet meer weg; de laag schuift dat verschil terug (gemeten
  * vóór de browser tekent), zodat het skelet niet verspringt. De inhoud staat
@@ -61,12 +64,12 @@ export function Verwissel({
   const inloopRef = useRef(false);
   // De skeletlaag is in de fase skelet en in de overlap hetzelfde element
   // (geen nieuwe mount, de shimmer loopt door); `boven` = waar zijn eerste
-  // element vóór de overlap stond, gemeten vanaf de bovenrand van de wrapper.
+  // element vóór de overlap stond, gemeten vanaf de bovenrand van de laag.
   // Relatief, want wat erboven staat kan in dezelfde render van hoogte
   // wisselen (Beheer › Mails: elke kaart laadt tegelijk); het skelet volgt
   // dan zijn wrapper, zoals de inhoud.
   const laagRef = useRef<HTMLDivElement>(null);
-  const boven = useRef<number | undefined>(undefined);
+  const boven = useRef(0);
   const zetFase = (volgende: Fase) => {
     if (volgende !== 'skelet') inloopRef.current = true;
     faseRef.current = volgende;
@@ -96,12 +99,19 @@ export function Verwissel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toonSkelet]);
 
+  // De laag schuift met een transform en niet met `top`: dan blijft haar
+  // plaats in de layout dezelfde en telt de CLS geen verschuiving van een
+  // vak waarvan niets zichtbaars beweegt. `bottom` rekt haar even veel, zodat
+  // ze na het schuiven weer precies de doos van de inhoud knipt. Terug naar
+  // het skelet (laden komt terug) = weer zonder.
   useLayoutEffect(() => {
-    const laag = laagRef.current;
-    if (fase !== 'overlap' || !laag) return;
-    laag.style.top = '';
-    const nu = skeletOffset(laag);
-    if (nu !== undefined && boven.current !== undefined) laag.style.top = `${boven.current - nu}px`;
+    const stijl = laagRef.current?.style;
+    if (!stijl) return;
+    stijl.transform = stijl.bottom = '';
+    if (fase !== 'overlap') return;
+    const d = `${boven.current - skeletOffset(laagRef.current)}px`;
+    stijl.bottom = d;
+    stijl.transform = `translateY(${d})`;
   }, [fase]);
 
   const naUitfaden = (e: AnimationEvent<HTMLDivElement>) => {
@@ -118,7 +128,7 @@ export function Verwissel({
       {fase !== 'inhoud' && (
         <div
           ref={laagRef}
-          className={overlap ? 'fade-uit pointer-events-none absolute inset-0 overflow-clip' : undefined}
+          className={overlap ? 'fade-uit pointer-events-none absolute inset-0 [clip-path:inset(0)]' : undefined}
           aria-hidden={overlap || undefined}
           onAnimationEnd={naUitfaden}
         >
@@ -131,11 +141,12 @@ export function Verwissel({
 
 type Fase = 'skelet' | 'overlap' | 'inhoud';
 
-/** De bovenrand van het eerste element van het skelet, vanaf de bovenrand
- *  van de wrapper. */
+/** De bovenrand van het eerste element van het skelet, vanaf die van de
+ *  laag. In de flow valt een bovenmarge door de laag (en de wrapper) heen
+ *  en is dit 0; in de absolute laag, een eigen blokcontext, niet. */
 const skeletOffset = (laag: HTMLElement | null) => {
   const eerste = laag?.firstElementChild;
-  return eerste ? eerste.getBoundingClientRect().top - laag!.parentElement!.getBoundingClientRect().top : undefined;
+  return eerste ? eerste.getBoundingClientRect().top - laag!.getBoundingClientRect().top : 0;
 };
 
 /** `laden` met een minimale aan-tijd: zodra het skelet zichtbaar werd,

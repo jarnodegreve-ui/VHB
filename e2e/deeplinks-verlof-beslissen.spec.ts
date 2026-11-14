@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ADMIN, USERS, historiekOpgeruimd, kanScrollen, seed } from './helpers';
+import { ADMIN, USERS, historiekOpgeruimd, kanScrollen, seed, wachtOpAnimaties } from './helpers';
 import { dayOffset } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -913,6 +913,11 @@ test.describe('verlof beslissen: doorschakelen alleen waar de bevestiging de kop
       const { patches } = await verlofServer(page, start);
       await page.goto('/verlof');
       await expect(page.getByText('Wachtend op goedkeuring')).toBeVisible({ timeout: 15_000 });
+      // Eerst de wissel van skelet naar lijst laten uitlopen (Verwissel, ronde
+      // 6 punt 3): de lijst is al zichtbaar terwijl het skelet er nog boven
+      // vervaagt, en scrollen en klikken in die ±150 ms liet de pagina soms
+      // bovenaan eindigen. Deze test gaat over de plaats van paneel en toast.
+      await wachtOpAnimaties(page);
       await page.locator('[data-scroll-root]').evaluate((el) => { el.scrollTop = 260; });
       await page.getByRole('button', { name: new RegExp(`^${ALEX}`) }).click();
       await expect(paneelKop(page, ALEX)).toBeVisible();

@@ -16,12 +16,12 @@ import { ADMIN, CHAUFFEUR, seed, type Extra } from './helpers';
 
 type Laag = {
   start: number; eind: number | null;
-  pointerEvents: string; position: string; laagOverflow: string;
+  pointerEvents: string; position: string; laagOverflow: string; laagClip: string;
   wrapperPosition: string; wrapperOverflow: string; wrapperTransform: string;
   raakSkelet: boolean | null; inhoudDekking: number;
   naPosition: string; naOverflow: string; naTransform: string; naClass: string; inDom: boolean;
 };
-type Frame = { t: number; overlap: boolean; skelet: number | null; skeletInLaag: boolean; kop: number | null; kopTop: number | null; onder: number[]; extra: number | null };
+type Frame = { t: number; overlap: boolean; skelet: number | null; skeletTop: number | null; skeletInLaag: boolean; kop: number | null; kopTop: number | null; onder: number[]; extra: number | null };
 type Opname = { lagen: Laag[]; frames: Frame[]; shifts: Array<{ t: number; v: number }> };
 
 function opname() {
@@ -56,7 +56,7 @@ function opname() {
         const ws = getComputedStyle(wrapper);
         lagen.push({ laag, wrapper, data: {
           start: performance.now(), eind: null,
-          pointerEvents: ls.pointerEvents, position: ls.position, laagOverflow: ls.overflow,
+          pointerEvents: ls.pointerEvents, position: ls.position, laagOverflow: ls.overflow, laagClip: ls.clipPath,
           wrapperPosition: ws.position, wrapperOverflow: ws.overflow, wrapperTransform: ws.transform,
           raakSkelet: raak ? laag.contains(raak) : null, inhoudDekking: dekking(inhoud),
         } });
@@ -81,6 +81,7 @@ function opname() {
         t: performance.now(),
         overlap: lagen.some((l) => l.laag.isConnected && l.data.eind === null && l.laag.classList.contains('fade-uit')),
         skelet: sk ? dekking(sk) : null,
+        skeletTop: sk ? sk.getBoundingClientRect().top : null,
         skeletInLaag: !!sk?.closest('.fade-uit'),
         kop: kop ? dekking(kop) : null,
         kopTop: kop ? kop.getBoundingClientRect().top : null,
@@ -187,7 +188,8 @@ test.describe('Mijn dag (telefoon)', () => {
     const [laag] = lagen;
     expect(laag.pointerEvents).toBe('none');
     expect(laag.position).toBe('absolute');
-    expect(laag.laagOverflow).toBe('clip');
+    // Geknipt met clip-path, zonder overflow (zie Verwissel.tsx).
+    expect([laag.laagOverflow, laag.laagClip]).toEqual(['visible', 'inset(0px)']);
     expect(laag.wrapperPosition).toBe('relative');
     expect(laag.wrapperOverflow, 'de wrapper zelf knipt niet').toBe('visible');
     expect(laag.wrapperTransform).toBe('none');
@@ -313,7 +315,7 @@ test.describe('Desktop', () => {
     // verzendlijsten en het verzendlog.
     expect(lagen.length).toBe(7);
     for (const l of lagen) {
-      expect([l.pointerEvents, l.position, l.laagOverflow, l.wrapperPosition, l.wrapperOverflow]).toEqual(['none', 'absolute', 'clip', 'relative', 'visible']);
+      expect([l.pointerEvents, l.position, l.laagOverflow, l.laagClip, l.wrapperPosition, l.wrapperOverflow]).toEqual(['none', 'absolute', 'visible', 'inset(0px)', 'relative', 'visible']);
       expect(l.raakSkelet).not.toBe(true);
       expect([l.naPosition, l.naOverflow, l.naTransform, l.naClass, l.inDom]).toEqual(['static', 'visible', 'none', '', true]);
     }
@@ -324,6 +326,12 @@ test.describe('Desktop', () => {
     for (const f of frames) expect(Math.max(f.skelet ?? 0, f.kop ?? 0)).toBeGreaterThan(0.3);
     const eind = frames[frames.length - 1];
     for (const f of frames.slice(i0)) expect(Math.abs(f.kopTop! - eind.kopTop!)).toBeLessThanOrEqual(1);
+    // Het vervagende skelet van de verzendlijsten ligt op de lijst zelf: zijn
+    // bovenmarge (mt-4), die in de flow door de wrapper heen viel, schuift
+    // de laag terug, anders zakte het 17 px tijdens het vervagen.
+    const metSkelet = frames.slice(i0).filter((f) => f.skeletInLaag);
+    expect(metSkelet.length).toBeGreaterThan(0);
+    for (const f of metSkelet) expect(Math.abs(f.skeletTop! - f.kopTop!), `skelet op ${Math.round(f.t - frames[i0].t)} ms`).toBeLessThanOrEqual(1);
     // Wat onder de Verwissels staat: vanaf het eerste overlapframe op zijn eindplaats.
     for (const f of frames.slice(i0)) {
       expect(f.onder.length).toBe(eind.onder.length);
@@ -373,7 +381,7 @@ test.describe('Desktop', () => {
     await page.waitForTimeout(400);
     const { frames, lagen } = await meetWissel(page, data.laatLos, { skelet: '[aria-label="Scherm wordt geladen"]', kop: '#hoofdinhoud thead' });
     expect(lagen).toHaveLength(1);
-    expect(lagen[0].laagOverflow).toBe('clip');
+    expect([lagen[0].laagOverflow, lagen[0].laagClip]).toEqual(['visible', 'inset(0px)']);
     expect(lagen[0].wrapperOverflow, 'geen overflow op de wrapper: de kop plakt aan de pagina').toBe('visible');
     const i0 = frames.findIndex((f) => f.extra !== null);
     expect(i0, 'de tabel stond er bij het begin van de overlap').toBeGreaterThanOrEqual(0);
