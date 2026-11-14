@@ -16,6 +16,7 @@ import { bouwTestMail } from "./mailTeksten.js";
 import type { AuthenticatedRequest } from "./types.js";
 import { db, supabase } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { heeftRol } from "../../shared/toegang.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
 import { clientErrorRateLimit } from "./rateLimit.js";
@@ -243,18 +244,24 @@ export function mountSysteemRoutes(app: express.Express) {
     }
   });
 
-  // Per-entity geschiedenis — toegankelijk voor planner/admin om wijzigingen
-  // te traceren per dienst, swap, verlof, etc.
+  // Per-entity geschiedenis: planner en admin traceren hiermee de wijzigingen
+  // per dienst, ruil, verlof, enz. Die van een gebruiker is alleen voor een
+  // admin (keuze 7, 11-11): daar staan documenten met bestandsnaam, wachtwoord-
+  // en 2FA-resets, uitnodigingen en de Easypay-matricule. Zelfde rolcheck en
+  // antwoord als requireRole, vóór elke lezing; een onbekend type blijft 400.
   app.get(
     "/api/activity/:entityType/:entityId",
     authenticate,
     requireRole("planner", "admin"),
-    async (req, res) => {
+    async (req: AuthenticatedRequest, res) => {
       try {
         const { entityType, entityId } = req.params;
         const allowed = ["user", "service", "diversion", "update", "swap", "leave", "planning_code", "shift"];
         if (!allowed.includes(entityType)) {
           return res.status(400).json({ error: "Onbekend entity-type." });
+        }
+        if (entityType === "user" && (!req.appUser || !heeftRol(req.appUser, ["admin"]))) {
+          return res.status(403).json({ error: "Onvoldoende rechten." });
         }
         const history = await getEntityHistory(entityType as any, entityId);
         res.json(history);
