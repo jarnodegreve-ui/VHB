@@ -268,3 +268,80 @@ test.describe('installatiekaart (Android/Chrome)', () => {
     await expect.poll(bovenaan).toBe(true);
   });
 });
+
+test.describe('toast: van onder op de telefoon, weg in de richting van de veeg', () => {
+  // Ronde 6, punt 5. Een logboek in de pagina noteert de inline transform die
+  // motion zet op het moment dat een toast in de DOM komt (de beginstand) en
+  // op het moment dat ze eruit gaat (de eindstand van de uitgang). Zo hangt
+  // de toets niet af van frames of van hoe druk de machine is.
+  type Regel = { soort: 'in' | 'uit'; transform: string; opacity: string };
+  const toast = (page: Page) => page.locator('[aria-live="polite"].z-toast > [role="status"]');
+  const logboek = (page: Page) => page.evaluate(() => (window as unknown as { __toasts: Regel[] }).__toasts);
+  const ty = (t: string) => Number(/translateY\((-?[\d.]+)px\)/.exec(t)?.[1] ?? 0);
+  const tx = (t: string) => Number(/translateX\((-?[\d.]+)px\)/.exec(t)?.[1] ?? 0);
+
+  async function designsysteemMetLogboek(page: Page) {
+    await seed(page, { user: ADMIN });
+    await page.goto('/beheer/designsysteem');
+    await expect(page.getByRole('button', { name: 'Succes', exact: true })).toBeVisible({ timeout: 15_000 });
+    await page.evaluate(() => {
+      const w = window as unknown as { __toasts: Regel[] };
+      w.__toasts = [];
+      const isToast = (n: Node): n is HTMLElement => n instanceof HTMLElement && n.getAttribute('role') === 'status';
+      new MutationObserver((lijst) => {
+        for (const m of lijst) {
+          if (!(m.target instanceof HTMLElement) || !m.target.classList.contains('z-toast')) continue;
+          m.addedNodes.forEach((n) => { if (isToast(n)) w.__toasts.push({ soort: 'in', transform: n.style.transform, opacity: n.style.opacity }); });
+          m.removedNodes.forEach((n) => { if (isToast(n)) w.__toasts.push({ soort: 'uit', transform: n.style.transform, opacity: n.style.opacity }); });
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+  }
+
+  /** Een nieuwe toast, in rust (motion zet de transform dan op none). */
+  async function nieuweToast(page: Page) {
+    await page.getByRole('button', { name: 'Succes', exact: true }).click();
+    await expect(toast(page)).toHaveCount(1);
+    await expect.poll(() => toast(page).evaluate((el) => (el as HTMLElement).style.transform || 'none')).toBe('none');
+  }
+
+  test('komt op de telefoon van onder en gaat naar onder, vanaf 768 px van boven', async ({ page }) => {
+    await designsysteemMetLogboek(page);
+    const y = (page.viewportSize()?.width ?? 0) >= 768 ? -8 : 8;
+    await nieuweToast(page);
+    await toast(page).getByRole('button', { name: 'Sluit melding' }).click();
+    await expect(toast(page)).toHaveCount(0);
+    const log = await logboek(page);
+    expect(log.map((r) => r.soort)).toEqual(['in', 'uit']);
+    expect(ty(log[0].transform)).toBe(y);
+    expect(ty(log[1].transform)).toBe(y);
+    expect(tx(log[1].transform)).toBe(0);
+    expect(log[1].opacity).toBe('0');
+  });
+
+  test('weggeveegd naar rechts of links gaat ze in die richting tot buiten de rand', async ({ page }, info) => {
+    // Gemeten 14-11: in WebKit met aanraakemulatie komt page.mouse niet als
+    // sleep bij motion aan (de toast blijft staan tot haar tijd om is).
+    test.skip(info.project.name.includes('webkit'), 'page.mouse sleept niet in WebKit met aanraakemulatie');
+    await designsysteemMetLogboek(page);
+    const breedte = page.viewportSize()!.width;
+    for (const richting of [1, -1]) {
+      await nieuweToast(page);
+      const box = (await toast(page).boundingBox())!;
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      // page.mouse: daarop reageert de sleep van motion (pointer events).
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(x + richting * 20 * i, y);
+      await page.mouse.up();
+      await expect(toast(page)).toHaveCount(0);
+      const uit = (await logboek(page)).filter((r) => r.soort === 'uit').at(-1)!;
+      // Een schermbreedte verder: de linkerrand voorbij de rechterrand van het
+      // scherm (of andersom), vervaagd. Op main vervaagde ze op haar plek.
+      expect(tx(uit.transform)).toBe(richting * breedte);
+      expect(ty(uit.transform)).toBe(0);
+      expect(uit.opacity).toBe('0');
+    }
+  });
+});

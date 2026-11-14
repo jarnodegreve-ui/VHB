@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING, scrimTransitie } from '../lib/motion';
 import { useLaag } from '../lib/lagen';
 import { Button } from './primitives';
 
@@ -242,8 +242,8 @@ export function Modal({
     <motion.div
       key="modal"
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1, transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
-      exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
+      animate={{ opacity: 1, transition: scrimTransitie(reduceMotion) }}
+      exit={{ opacity: 0, pointerEvents: 'none', transition: scrimTransitie(reduceMotion) }}
       onClick={dismissOnBackdrop && !vast ? () => sluit() : undefined}
       // Op mobile: minimale padding zodat de modal bijna full-screen kan,
       // en respecteer safe-area (notch + home-indicator).

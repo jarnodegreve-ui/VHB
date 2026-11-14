@@ -36,5 +36,14 @@ export const verminderdeBeweging = (): boolean =>
   && typeof window.matchMedia === 'function'
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/**
+ * Eén transitie voor elke achtergrond (scrim) van een laag: Modal,
+ * SlideOver, Sheet, de mobiele lade en de twee kiezers (ronde 6, punt 5).
+ * Alleen opacity, in en uit even snel; tint en blur blijven per laag. Het
+ * paneel of venster erboven houdt zijn eigen duur. Minder beweging = meteen.
+ */
+export const SCRIM_TRANSITIE = { duration: DUR.fast, ease: EASE } as const;
+export const scrimTransitie = (verminderd: boolean | null) => (verminderd ? { duration: 0 } : SCRIM_TRANSITIE);
+
 /** Kant-en-klare transition-props voor `motion`-elementen. */
 export const transitie = (duration: number = DUR.base, delay = 0) => ({ duration, ease: EASE, delay });

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING, scrimTransitie } from '../lib/motion';
 import { useLaag } from '../lib/lagen';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { SluitContext, useSluitPoort } from './Modal';
@@ -120,7 +120,7 @@ export function SlideOver({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.2 }}
+            transition={scrimTransitie(reduceMotion)}
             onClick={() => sluit()}
             className="fixed inset-0 z-modal bg-ink/40 backdrop-blur-sm"
             aria-hidden="true"

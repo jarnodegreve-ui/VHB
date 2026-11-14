@@ -12,6 +12,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { X, RefreshCw, Menu, Eye, WifiOff } from 'lucide-react';
 import { formatSyncedTime } from '../lib/format';
 import { AnimatePresence, motion } from 'motion/react';
+import { scrimTransitie, verminderdeBeweging } from '../lib/motion';
 import type { Session } from '@supabase/supabase-js';
 import type { Role, Shift, User, View } from '../types';
 import { cn } from '../lib/ui';
@@ -265,6 +266,7 @@ export function AppSchil({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={scrimTransitie(verminderdeBeweging())}
             onClick={() => setIsSidebarOpen(false)}
             className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-zwevend lg:hidden"
           />

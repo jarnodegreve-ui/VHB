@@ -48,6 +48,27 @@ const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** Vanaf md staat de stapel rechtsboven, daaronder onderaan boven het dock
+ *  (zelfde grens als de klassen van de stapel hieronder). */
+const vanafMd = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(min-width: 768px)').matches;
+
+/** Richting van een veeg per toast-id: -1 naar links, 1 naar rechts. */
+type Veeg = Record<number, number>;
+
+/**
+ * Hoe een toast vertrekt (ronde 6, punt 5). Weggeveegd gaat ze verder in de
+ * richting van de veeg, een schermbreedte ver (dus tot buiten de rand), en
+ * vervaagt onderweg. Anders (kruisje, tijd om, verdrongen) gaat ze terug naar
+ * waar ze vandaan kwam: onder md naar onder, vanaf md naar boven.
+ */
+export function toastUitgang(richting: number | undefined, vanOnder: boolean, reduced: boolean, breedte: number) {
+  if (reduced) return { opacity: 0 };
+  if (richting) return { opacity: 0, x: richting * breedte, transition: { duration: DUR.fast, ease: EASE } };
+  return { opacity: 0, y: vanOnder ? 8 : -8, scale: 0.98 };
+}
+
 /** Maximaal zichtbaar tegelijk — een salvo meldingen bedekte anders het
  *  halve scherm; de oudste vallen weg, de nieuwste blijven. */
 const MAX_VISIBLE = 2;
@@ -252,8 +273,13 @@ export function ToastStack({
   onDismiss: (id: number) => void;
 }) {
   const reduced = prefersReducedMotion();
+  const vanOnder = !vanafMd();
   const visible = toasts.slice(-MAX_VISIBLE);
   const { weergave, pauzeer, hervat } = useOngedaanKlokken(toasts, onDismiss);
+  // Een uitgaande toast houdt de props van haar laatste render; de richting
+  // van de veeg komt daarom via `custom` van AnimatePresence, dat ook een
+  // vertrekkend kind nog bereikt. Leeg zodra niets meer vertrekt.
+  const [veeg, setVeeg] = useState<Veeg>({});
 
   return (
     <div
@@ -263,7 +289,7 @@ export function ToastStack({
       // rechtsboven zoals voorheen.
       className="fixed inset-x-4 bottom-boven-dock z-toast mx-auto max-w-sm space-y-2.5 md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:mx-0 md:w-[calc(100vw-2rem)]"
     >
-      <AnimatePresence>
+      <AnimatePresence custom={veeg} onExitComplete={() => setVeeg((v) => (Object.keys(v).length ? {} : v))}>
         {visible.map((toast) => {
           const tone = TONE_STYLES[toast.tone ?? 'info'];
           const ToneIcon = tone.icon;
@@ -277,12 +303,19 @@ export function ToastStack({
               drag={reduced ? false : 'x'}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.6}
-              onDragEnd={(_e, info) => {
-                if (Math.abs(info.offset.x) > 80 || Math.abs(info.velocity.x) > 600) onDismiss(toast.id);
+              onDragEnd={(_e, { offset, velocity }) => {
+                const ver = Math.abs(offset.x) > 80;
+                if (!ver && Math.abs(velocity.x) <= 600) return;
+                // Eerst de richting, dan sluiten: één render, dus de uitgang kent ze.
+                setVeeg((v) => ({ ...v, [toast.id]: Math.sign(ver ? offset.x : velocity.x) }));
+                onDismiss(toast.id);
               }}
-              initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+              // Onder md van onder (naast het dock), vanaf md van boven.
+              initial={reduced ? { opacity: 0 } : { opacity: 0, y: vanOnder ? 8 : -8, scale: 0.98 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+              custom={veeg}
+              variants={{ uit: (v: Veeg) => toastUitgang(v[toast.id], vanOnder, reduced, window.innerWidth) }}
+              exit="uit"
               transition={{ duration: DUR.base, ease: EASE }}
               className="rounded-2xl border border-hairline bg-overlay px-4 py-3 elev-2 touch-pan-y"
             >

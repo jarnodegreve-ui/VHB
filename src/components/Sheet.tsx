@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING, scrimTransitie } from '../lib/motion';
 import { useLaag } from '../lib/lagen';
 import { IconButton } from './primitives';
 import { SluitContext, useSluitPoort } from './Modal';
@@ -86,7 +86,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: reduced ? 0 : DUR.fast }}
+            transition={scrimTransitie(reduced)}
             onClick={() => sluit()}
             className="fixed inset-0 z-modal bg-ink/40"
           />

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { ONGEDAAN_DUUR_MS, ToastStack, type Toast } from './ToastStack';
+import { ONGEDAAN_DUUR_MS, ToastStack, toastUitgang, type Toast } from './ToastStack';
+import { DUR, EASE } from '../lib/motion';
 
 // jsdom kent geen matchMedia (reduced-motion-check in ToastStack).
 beforeEach(() => {
@@ -106,5 +107,48 @@ describe('ToastStack, ongedaan-variant', () => {
     expect(screen.queryByRole('button', { name: 'Ongedaan maken' })).toBeNull();
     act(() => { vi.advanceTimersByTime(ONGEDAAN_DUUR_MS * 2); });
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+});
+
+// Ronde 6, punt 5: op de telefoon (onder md) staat de stapel onderaan boven
+// het dock en komt een toast van onder; vanaf md rechtsboven en van boven.
+// Weggeveegd gaat ze verder in de richting van de veeg, tot buiten de rand.
+describe('ToastStack, beweging', () => {
+  const metBreedte = (breed: boolean) => {
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(min-width: 768px)' ? breed : false, media: query, onchange: null,
+      addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  };
+  const vorige = window.matchMedia;
+  afterEach(() => { window.matchMedia = vorige; });
+
+  it('weggeveegd: verder in de richting van de veeg, een schermbreedte ver, vervagend op DUR.fast', () => {
+    expect(toastUitgang(1, true, false, 390)).toEqual({ opacity: 0, x: 390, transition: { duration: DUR.fast, ease: EASE } });
+    expect(toastUitgang(-1, true, false, 390)).toEqual({ opacity: 0, x: -390, transition: { duration: DUR.fast, ease: EASE } });
+    // Vanaf md net zo: de veeg wint van de plaats van de stapel.
+    expect(toastUitgang(1, false, false, 1280)).toMatchObject({ x: 1280 });
+    expect(toastUitgang(-1, false, false, 1280)).toMatchObject({ x: -1280 });
+  });
+
+  it('niet weggeveegd: terug naar waar ze vandaan kwam (onder md naar onder, vanaf md naar boven)', () => {
+    expect(toastUitgang(undefined, true, false, 390)).toEqual({ opacity: 0, y: 8, scale: 0.98 });
+    expect(toastUitgang(undefined, false, false, 1280)).toEqual({ opacity: 0, y: -8, scale: 0.98 });
+    expect(toastUitgang(0, true, false, 390)).toEqual({ opacity: 0, y: 8, scale: 0.98 });
+  });
+
+  it('minder beweging: alleen vervagen, ook na een veeg', () => {
+    expect(toastUitgang(undefined, true, true, 390)).toEqual({ opacity: 0 });
+    expect(toastUitgang(1, false, true, 1280)).toEqual({ opacity: 0 });
+  });
+
+  it('komt onder md van onder en vanaf md van boven binnen', () => {
+    metBreedte(false);
+    const { unmount } = render(<ToastStack toasts={[{ id: 7, message: 'Opgeslagen.', tone: 'success' }]} onDismiss={() => {}} />);
+    expect(screen.getByRole('status').style.transform).toContain('translateY(8px)');
+    unmount();
+    metBreedte(true);
+    render(<ToastStack toasts={[{ id: 8, message: 'Opgeslagen.', tone: 'success' }]} onDismiss={() => {}} />);
+    expect(screen.getByRole('status').style.transform).toContain('translateY(-8px)');
   });
 });
