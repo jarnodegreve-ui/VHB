@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { maandPlus } from '../lib/datum';
-import { MONTH_NAMES } from '../lib/format';
+import { MAAND_KORT, MONTH_NAMES } from '../lib/format';
 import { isMaand, leesMj, maandBereikFout, maandNaarMj } from '../lib/maand';
 import { useLaag } from '../lib/lagen';
 import { Button, IconButton } from './primitives';
@@ -59,8 +59,6 @@ const huidigeMaand = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
-/** Korte maandnamen zoals elders in het portaal (mrt, niet "maa"). */
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const binnen = (m: string, min?: string, max?: string) => !(min && m < min) && !(max && m > max);
 const klem = (m: string, min?: string, max?: string) => (min && m < min ? min : max && m > max ? max : m);
 

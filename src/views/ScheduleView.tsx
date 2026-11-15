@@ -25,7 +25,7 @@ import { formatDuration } from '../lib/shiftTime';
 import { brusselseMinuten, dienstGereden } from '../../shared/dienstGereden';
 import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
-import { formatDatumDMJ, formatDayLong, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDagMaand, formatDatumDMJ, formatDayLong, formatMaand, formatSyncedTime, formatWeekdag, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
@@ -59,13 +59,8 @@ type GroupedShift = {
   geruild?: RuilBadge;
 };
 
-const formatShiftDate = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
+/** Datum in de tabel en het dagdetail: de kop met jaar, "donderdag 8 oktober 2026". */
+const formatShiftDate = (date: string) => formatDayLong(date, true);
 
 
 /** Badge-tekst voor een dienst waarvoor een eigen ruilaanvraag loopt. */
@@ -457,7 +452,7 @@ function MonthCalendar({
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const monthName = viewMonth.toLocaleDateString('nl-BE', { month: 'long', year: 'numeric' });
+  const monthName = formatMaand(isoDate(viewMonth));
   const dateIso = (day: number) => `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   // Maandag-eerst: JS-zondag (0) wordt kolom 7.
   const leadingBlanks = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
@@ -797,10 +792,10 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <MicroLabel className={cn(isToday && 'text-oker-700')}>
-                    {isToday ? 'Vandaag' : formatShortDayPadded(g.date).split(' ')[0]}
+                    {isToday ? 'Vandaag' : formatWeekdag(g.date)}
                   </MicroLabel>
                   <p className="text-md font-semibold text-slate-900 mt-0.5">
-                    {formatShortDayPadded(g.date).split(' ').slice(1).join(' ')}
+                    {formatDagMaand(g.date)}
                   </p>
                   {g.hasConflict && (
                     <div className="mt-1">

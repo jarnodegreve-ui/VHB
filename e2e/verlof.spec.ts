@@ -90,8 +90,14 @@ test('chauffeur vraagt verlof aan via de kalender-modal', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText('Volgende dienst')).toBeVisible({ timeout: 15_000 });
 
-  // Snelle actie op het dashboard → verlofpagina → aanvraag-modal.
+  // Snelle actie op het dashboard → verlofpagina → aanvraag-modal. Eerst het
+  // scherm Verlof zelf: de snelle actie op het dashboard heet ook "Verlof
+  // aanvragen", en een klik vóór het scherm gewisseld is raakt die opnieuw in
+  // plaats van de knop op Verlof (dan opent er geen venster; op de CI-runner
+  // in 6 van 40 rondes, ook op main).
   await page.getByText('Verlof aanvragen', { exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Verlof' })).toBeVisible();
+  await expect(page.getByText('Volgende dienst')).toHaveCount(0);
   await page.getByRole('button', { name: /Verlof aanvragen/ }).click();
   await expect(page.getByText('Periode kiezen')).toBeVisible();
 

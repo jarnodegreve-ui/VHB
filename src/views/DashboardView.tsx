@@ -15,7 +15,7 @@ import { ruilenDieOpMijWachten } from '../lib/ruilWachtOpMij';
 import { ruilWachtRegels } from '../lib/ruilWachtRegels';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn } from '../lib/ui';
-import { formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
+import { formatDayLong, formatShortDay, formatSyncedTime, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
 import { warmRitbladCache } from '../lib/ritbladCache';
@@ -129,7 +129,7 @@ export function DashboardView({ notes = [],
     return venster ? [{ ...venster, loopnr: p.loopnr }] : [];
   });
   const nowMin = now.getHours() * 60 + now.getMinutes() + (nachtdienstLoopt ? 1440 : 0);
-  const nowLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+  const nowLabel = formatSyncedTime(now.getTime());
   // Statusregel van de Vandaag-tegel: hoelang nog (bezig), wanneer het begint, of klaar.
   const activeBlok = balkDelen.find((d) => nowMin >= d.start && nowMin < d.end);
   const volgendBlok = balkDelen.find((d) => d.start > nowMin);
@@ -353,7 +353,7 @@ export function DashboardView({ notes = [],
                 <OpsRow
                   tone={i === 0 ? 'oker' : 'slate'}
                   icon={<Calendar size={16} />}
-                  primary={formatShortDayPadded(dag.datum)}
+                  primary={formatShortDay(dag.datum)}
                   secondary={(
                     <span className="block whitespace-normal">
                       {komendeDagStukken(dag).map((stuk, j) => (
@@ -435,7 +435,7 @@ export function DashboardView({ notes = [],
               </h1>
               <p className="mt-0.5 text-md font-normal text-slate-500">
                 {formatDayLong(isoDate(now))} ·{' '}
-                {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+                {formatSyncedTime(now.getTime())}
               </p>
             </div>
             <div className="shrink-0 md:hidden">

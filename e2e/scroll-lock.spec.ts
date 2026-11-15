@@ -93,10 +93,21 @@ test.describe('enkele overlay', () => {
 
 test.describe('geneste lagen (zijpaneel in het Dienstoverzicht)', () => {
   const paneel = (page: Page) => page.getByRole('dialog', { name: 'Dienst 2515', exact: true });
+  /**
+   * De bovenste laag met een eigen stap in de historiek. src/lib/lagen.ts zet
+   * een laag in de stapel en in de historiek in een effect, dus ná het
+   * tekenen: een Escape of een stap terug op het moment dat de laag zichtbaar
+   * wordt, kan haar voor zijn en raakt dan de laag eronder. In WebKit op de
+   * CI-runner gebeurde dat geregeld (op main in 6 van 14 rondes "routewissel",
+   * in 2 "geschiedenis → Escape"); een mens is nooit zo snel.
+   */
+  const laagBoven = (page: Page) => page.evaluate(() => (history.state as { vhbOverlay?: unknown } | null)?.vhbOverlay ?? null);
+  const paneelInStapel = (page: Page) => expect.poll(() => laagBoven(page), 'het paneel heeft zijn stap in de historiek').not.toBeNull();
   const openPaneel = async (page: Page) => {
     await seed(page, { user: ADMIN, view: 'dienstoverzicht' });
     await page.goto('/beheer/dienstoverzicht/3');
     await expect(paneel(page)).toBeVisible({ timeout: 15_000 });
+    await paneelInStapel(page);
   };
   const serverOk = (page: Page) => page.route('**/api/services', (r: Route) => (r.request().method() === 'POST'
     ? r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })
@@ -129,8 +140,13 @@ test.describe('geneste lagen (zijpaneel in het Dienstoverzicht)', () => {
 
   test('geschiedenis boven het paneel → Escape', async ({ page }) => {
     await openPaneel(page);
+    const vanPaneel = await laagBoven(page);
     await paneel(page).getByRole('button', { name: 'Wijzigingsgeschiedenis' }).click();
+    // Elke Escape sluit de bovenste laag: eerst de geschiedenis (zodra ze in
+    // de stapel ligt), dan het paneel (zodra de geschiedenis eruit is).
+    await expect.poll(() => laagBoven(page), 'de geschiedenis ligt boven het paneel').not.toBe(vanPaneel);
     await page.keyboard.press('Escape');
+    await expect.poll(() => laagBoven(page), 'alleen de geschiedenis is dicht').toBe(vanPaneel);
     await page.keyboard.press('Escape');
     await kanScrollen(page);
   });
@@ -157,6 +173,9 @@ test.describe('geneste lagen (zijpaneel in het Dienstoverzicht)', () => {
     // het scherm wisselt terwijl het paneel nog open staat.
     await page.evaluate(() => { history.pushState(null, '', '/beheer/dienstoverzicht/3'); dispatchEvent(new PopStateEvent('popstate')); });
     await expect(paneel(page)).toBeVisible({ timeout: 15_000 });
+    // Twee stappen terug = de stap van het paneel en de dienst zelf: die van
+    // het paneel moet er dus staan, anders eindigt de sprong vóór het portaal.
+    await paneelInStapel(page);
     await page.evaluate(() => history.go(-2));
     await expect(page).toHaveURL(/\/$/);
     await kanScrollen(page);

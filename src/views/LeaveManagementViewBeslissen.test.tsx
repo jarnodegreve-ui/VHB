@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { LeaveRequest, User } from '../types';
 import { BESLIS_SLOT_MS } from '../components/VerlofBeoordeling';
+import { BESLIST_MS } from '../lib/beslisteRijen';
 
 // Verlof beslissen met alles in beeld (ronde 6, punt 15), de kant van het
 // scherm: na een geslaagde beslissing opent het paneel de volgende wachtende
@@ -99,6 +100,9 @@ function Scherm({ start, beslissingen, slaagt = () => true }: { start: LeaveRequ
  *  inhoud met een fade; de standaard van waitFor (1 s) is op een drukke
  *  machine te krap. */
 const RUIM = { timeout: 6000 };
+/** De rijen van "Wachtend op goedkeuring" die nu vastgehouden worden (inert), met hun tekst. */
+const vastgehouden = () => [...document.querySelectorAll<HTMLElement>('[data-vasthoud-vak][inert]')]
+  .map((el) => ({ id: el.getAttribute('data-vasthoud-vak'), tekst: el.textContent ?? '' }));
 const paneel = (naam: string) => screen.queryByRole('dialog', { name: naam });
 const paneelDicht = () => waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), RUIM);
 const inPaneel = (naam: string) => within(screen.getByRole('dialog', { name: naam }));
@@ -381,5 +385,213 @@ describe('Verlof beslissen: ook aangevraagd voor deze periode', () => {
     render(<Scherm start={DRIE()} beslissingen={[]} />);
     await openRij('Els Goossens');
     expect(inPaneel('Els Goossens').queryByText('Ook aangevraagd voor deze periode')).toBeNull();
+  });
+});
+
+// Ronde 6, punt 1: na een beslissing blijft de rij een halve tel staan met
+// haar nieuwe status en klapt dan dicht. Alleen weergave: het doorschakelen,
+// "Ook aangevraagd" en de selectie rekenen op de wachtenden zoals voorheen.
+describe('Verlof beslissen: de besliste rij blijft even staan', () => {
+  /**
+   * Zoals in de browser: het antwoord van de server komt in een eigen taak,
+   * buiten elk event, en React tekent de update daarvan pas in een volgende
+   * taak (Scheduler), dus nadat de hele keten na het antwoord gelopen heeft
+   * (collectie bijgewerkt, toast, houdVast). `act` tekent al zodra zijn
+   * callback klaar is; deze callback wacht daarom één taak, zodat collectie
+   * en stand samen getekend worden, net als in de browser (de e2e-spec
+   * bewijst dat de rij daar nooit uit de DOM gaat). Daarom ook antwoordt de
+   * server hier apart (`uitgesteld`): `Scherm` past de lijst al toe tijdens
+   * de klik zelf, en een update tijdens een klik tekent React meteen.
+   */
+  const alsInDeBrowser = (actie: () => void) => act(async () => { actie(); await new Promise((klaar) => setTimeout(klaar, 0)); });
+  const ids = () => [...document.querySelectorAll('[data-vasthoud-vak]')].map((el) => el.getAttribute('data-vasthoud-vak'));
+
+  /** Een scherm waarvan de test per aanvraag bepaalt wanneer de server antwoordt. */
+  const uitgesteld = (start: LeaveRequest[] = DRIE()) => {
+    const greep = { beslissingen: [] as Beslissing[], antwoord: new Map<string, (ok: boolean) => void>(), wijzig: (_f: (l: LeaveRequest[]) => LeaveRequest[]) => {} };
+    function Uitgesteld() {
+      const [lijst, setLijst] = useState(start);
+      greep.wijzig = setLijst;
+      return (
+        <LeaveManagementView
+          user={PLANNER}
+          users={USERS}
+          leaveRequests={lijst}
+          onSave={vi.fn()}
+          onDecide={(id, status, _gezien, reden) => new Promise<boolean>((klaar) => {
+            greep.beslissingen.push(reden ? { id, status, reden } : { id, status });
+            greep.antwoord.set(id, (ok) => {
+              if (ok) setLijst((l) => l.map((r) => (r.id === id ? { ...r, status } : r)));
+              klaar(ok);
+            });
+          })}
+        />
+      );
+    }
+    const antwoord = (id: string, ok: boolean) => alsInDeBrowser(() => { greep.antwoord.get(id)!(ok); });
+    return { greep, antwoord, Uitgesteld };
+  };
+  /** De rij van een aanvrager in de lijst selecteren (ook achter een open SlideOver). */
+  const selecteer = (naam: string) => act(async () => { fireEvent.click(screen.getByLabelText(`Selecteer ${naam}`)); });
+  const bulkGoedkeuren = async (aantalAanvragen: number) => {
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: `Goedkeuren (${aantalAanvragen})`, hidden: true })); });
+    const venster = await waitFor(() => screen.getByRole('dialog', { name: 'Aanvragen goedkeuren' }), RUIM);
+    await alsInDeBrowser(() => { fireEvent.click(within(venster).getByRole('button', { name: 'Goedkeuren' })); });
+  };
+
+  it('in het paneel: de rij staat met Goedgekeurd op haar plaats, hetzelfde element, zonder keuzevakje en knop, en verdwijnt dan', async () => {
+    const { greep, antwoord, Uitgesteld } = uitgesteld();
+    render(<Uitgesteld />);
+    await openRij('Alex Du Priez');
+    const rij = document.querySelector('[data-vasthoud-vak="w1"]');
+    await klikInPaneel('Alex Du Priez', 'Goedkeuren');
+    // Zolang de server niet antwoordde, verandert de rij niet.
+    expect(vastgehouden()).toEqual([]);
+    expect(document.querySelector('[data-vasthoud-vak="w1"]')).toBe(rij);
+    expect(screen.getByLabelText('Selecteer Alex Du Priez')).toBeTruthy();
+    await antwoord('w1', true);
+    expect(vastgehouden()).toEqual([{ id: 'w1', tekst: expect.stringContaining('Goedgekeurd') }]);
+    const nu = document.querySelector<HTMLElement>('[data-vasthoud-vak="w1"]')!;
+    expect(nu).toBe(rij);
+    expect(ids()).toEqual(['w1', 'w2', 'w3']);
+    expect(nu.querySelector('button, input')).toBeNull();
+    expect(screen.queryByLabelText('Selecteer Alex Du Priez')).toBeNull();
+    // Het paneel schakelde gewoon door (390 px), en de toast noemt wie en wat.
+    await wachtOpPaneel('Diether Van Haute');
+    expect(toasts).toEqual([TOAST_ALEX]);
+    await waitFor(() => expect(ids()).toEqual(['w2', 'w3']), RUIM);
+    expect(greep.beslissingen).toEqual([{ id: 'w1', status: 'approved' }]);
+  });
+
+  it('de stand duurt BESLIST_MS, niet korter; daarna "Alles beoordeeld" als het de laatste was', async () => {
+    const { greep, antwoord, Uitgesteld } = uitgesteld([DRIE()[2]]);
+    render(<Uitgesteld />);
+    await openRij('Els Goossens');
+    await klikInPaneel('Els Goossens', 'Afwijzen');
+    await act(async () => { fireEvent.change(inPaneel('Els Goossens').getByLabelText('Reden van afwijzing'), { target: { value: 'Te veel collega\'s al vrij.' } }); });
+    await klikInPaneel('Els Goossens', 'Afwijzen');
+    const t0 = performance.now();
+    await antwoord('w3', true);
+    expect(vastgehouden()).toEqual([{ id: 'w3', tekst: expect.stringContaining('Afgewezen') }]);
+    expect(screen.queryByText('Alles beoordeeld')).toBeNull();
+    await act(async () => { await new Promise((klaar) => setTimeout(klaar, BESLIST_MS - 150)); });
+    expect(vastgehouden().map((r) => r.id), 'de stand is er nog').toEqual(['w3']);
+    expect(screen.queryByText('Alles beoordeeld')).toBeNull();
+    await waitFor(() => expect(screen.getByText('Alles beoordeeld')).toBeTruthy(), RUIM);
+    expect(performance.now() - t0).toBeGreaterThanOrEqual(BESLIST_MS);
+    // De rij klapt dicht en is dan uit de DOM.
+    await waitFor(() => expect(ids()).toEqual([]), RUIM);
+    expect(greep.beslissingen).toEqual([{ id: 'w3', status: 'rejected', reden: 'Te veel collega\'s al vrij.' }]);
+  });
+
+  it('mislukt de beslissing, dan geen stand: de rij blijft gewoon wachtend, met haar knop', async () => {
+    const { antwoord, Uitgesteld } = uitgesteld();
+    render(<Uitgesteld />);
+    await openRij('Alex Du Priez');
+    await klikInPaneel('Alex Du Priez', 'Goedkeuren');
+    await antwoord('w1', false);
+    expect(vastgehouden()).toEqual([]);
+    expect(screen.getByLabelText('Selecteer Alex Du Priez')).toBeTruthy();
+    expect(ids()).toEqual(['w1', 'w2', 'w3']);
+  });
+
+  it('"Ook aangevraagd voor deze periode" ziet de vastgehouden rij niet', async () => {
+    const { greep, antwoord, Uitgesteld } = uitgesteld();
+    render(<Uitgesteld />);
+    await openRij('Diether Van Haute');
+    const blok = () => inPaneel('Diether Van Haute').queryByText('Ook aangevraagd voor deze periode');
+    expect(blok()).not.toBeNull();
+    // Achter het paneel: Alex (raakt de periode van Diether) via de bulkbalk goedkeuren.
+    await selecteer('Alex Du Priez');
+    await bulkGoedkeuren(1);
+    await antwoord('w1', true);
+    // Alex staat nog in de lijst, vastgehouden met Goedgekeurd, maar niet meer in het paneel van Diether.
+    expect(vastgehouden()).toEqual([{ id: 'w1', tekst: expect.stringContaining('Goedgekeurd') }]);
+    expect(blok()).toBeNull();
+    expect(greep.beslissingen).toEqual([{ id: 'w1', status: 'approved' }]);
+  });
+
+  it('het doorschakelen ziet de vastgehouden rij niet: wie na een vastgehouden rij beslist, krijgt die nooit als volgende', async () => {
+    const { greep, antwoord, Uitgesteld } = uitgesteld();
+    render(<Uitgesteld />);
+    await openRij('Diether Van Haute');
+    // Diether goedkeuren; zijn antwoord laat op zich wachten.
+    await klikInPaneel('Diether Van Haute', 'Goedkeuren');
+    // Intussen keurt de bulkbalk Els (de laatste) goed, en haar antwoord komt eerst.
+    await selecteer('Els Goossens');
+    await bulkGoedkeuren(1);
+    await antwoord('w3', true);
+    expect(vastgehouden().map((r) => r.id)).toEqual(['w3']);
+    // Dan Diether: Els staat nog vastgehouden in de lijst, maar ze wacht niet meer.
+    await antwoord('w2', true);
+    expect(vastgehouden().map((r) => r.id)).toEqual(['w2', 'w3']);
+    await paneelDicht();
+    expect(paneel('Els Goossens')).toBeNull();
+    expect(greep.beslissingen).toEqual([{ id: 'w2', status: 'approved' }, { id: 'w3', status: 'approved' }]);
+  });
+
+  it('bulk met drie aanvragen waarvan één mislukt: twee krijgen de stand en verdwijnen, de mislukte blijft, één samenvattende toast', async () => {
+    const { greep, antwoord, Uitgesteld } = uitgesteld();
+    render(<Uitgesteld />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Selecteer alles' })); });
+    await bulkGoedkeuren(3);
+    // Na elkaar, elk met zijn eigen antwoord: de stand begint op het moment dat die PATCH slaagt.
+    await antwoord('w1', true);
+    expect(vastgehouden().map((r) => r.id)).toEqual(['w1']);
+    await antwoord('w2', false);
+    expect(vastgehouden().map((r) => r.id)).toEqual(['w1']);
+    await antwoord('w3', true);
+    expect(vastgehouden()).toEqual([
+      { id: 'w1', tekst: expect.stringContaining('Goedgekeurd') },
+      { id: 'w3', tekst: expect.stringContaining('Goedgekeurd') },
+    ]);
+    // In de volgorde van voorheen, w2 gewoon wachtend met zijn knop.
+    expect(ids()).toEqual(['w1', 'w2', 'w3']);
+    expect(screen.getByRole('button', { name: /^Diether Van Haute/ })).toBeTruthy();
+    expect(toasts).toEqual([{ message: '2 van 3 aanvragen goedgekeurd, de rest was intussen al behandeld.', tone: 'info' }]);
+    await waitFor(() => expect(ids()).toEqual(['w2']), RUIM);
+    expect(screen.queryByText('Alles beoordeeld')).toBeNull();
+    expect(greep.beslissingen.map((b) => b.id)).toEqual(['w1', 'w2', 'w3']);
+  });
+
+  // Bekende grens (gemeld aan de eigenaar): de server antwoordt op de PATCH
+  // pas na de mail en de push aan de chauffeur, en de live verversing van
+  // `leave` (Realtime, 400 ms debounce, GET) kan er dan al zijn. Haalt die de
+  // aanvraag uit de wachtenden vóór het antwoord, dan verdwijnt de rij op dat
+  // moment zoals vroeger en komt er geen stand meer: geen dubbele rij, geen
+  // rij die terugkomt, geen fout. Deze test legt dat gedrag vast.
+  it('een live verversing die de beslissing vóór het antwoord al toont: de rij verdwijnt zoals vroeger, geen stand, nooit dubbel', async () => {
+    const fouten = vi.spyOn(console, 'error');
+    const { greep, antwoord, Uitgesteld } = uitgesteld();
+    render(<Uitgesteld />);
+    await openRij('Alex Du Priez');
+    await klikInPaneel('Alex Du Priez', 'Goedkeuren');
+    // De verversing komt eerst: Alex is volgens de server al goedgekeurd.
+    await alsInDeBrowser(() => { greep.wijzig((l) => l.map((r) => (r.id === 'w1' ? { ...r, status: 'approved' } : r))); });
+    await waitFor(() => expect(ids()).toEqual(['w2', 'w3']), RUIM);
+    await antwoord('w1', true);
+    expect(vastgehouden()).toEqual([]);
+    expect(ids()).toEqual(['w2', 'w3']);
+    // Het doorschakelen werkt zoals vroeger.
+    await wachtOpPaneel('Diether Van Haute');
+    await act(async () => { await new Promise((klaar) => setTimeout(klaar, BESLIST_MS + 100)); });
+    expect(ids()).toEqual(['w2', 'w3']);
+    expect(fouten).not.toHaveBeenCalled();
+    fouten.mockRestore();
+  });
+
+  it('wie het scherm verlaat terwijl de beslissing onderweg is: geen stand, geen fout', async () => {
+    const fouten = vi.spyOn(console, 'error');
+    const { antwoord, Uitgesteld } = uitgesteld();
+    const scherm = render(<Uitgesteld />);
+    await openRij('Alex Du Priez');
+    await klikInPaneel('Alex Du Priez', 'Goedkeuren');
+    // Ander scherm: de view gaat weg.
+    scherm.unmount();
+    await antwoord('w1', true);
+    await act(async () => { await new Promise((klaar) => setTimeout(klaar, BESLIST_MS + 100)); });
+    expect(vastgehouden()).toEqual([]);
+    expect(fouten).not.toHaveBeenCalled();
+    fouten.mockRestore();
   });
 });

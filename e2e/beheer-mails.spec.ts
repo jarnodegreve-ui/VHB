@@ -334,7 +334,7 @@ test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzend
 // --- Nr. 6: het verzendlog was op de telefoon afgeknipt ---
 
 /** Wat er van de mislukte verzending (m-3) te lezen moet zijn. */
-const M3 = { mail: 'Eigen mail', moment: /21 september/, aantal: '40', status: 'Mislukt', reden: '2 van 40 mislukt', door: /Annelies Admin/ };
+const M3 = { mail: 'Eigen mail', moment: /ma 21 sep, 12:00/, aantal: '40', status: 'Mislukt', reden: '2 van 40 mislukt', door: /Annelies Admin/ };
 
 /** Geen horizontale overloop van de pagina, en het element valt volledig
  *  binnen het kader van het verzendlog (niets afgeknipt). */
@@ -448,6 +448,25 @@ const plaatsVan = (page: Page, koppen: string[]) => page.evaluate((namen) => {
   }));
 }, koppen);
 
+/**
+ * De plaatsen zodra ze stilstaan (twee gelijke metingen na elkaar). Eén meting
+ * op het moment dat de voorwaarden kloppen, kan een plaats van onderweg geven:
+ * op de WebKit-runner van CI stond "Automatische mails" twee keer 4 px lager
+ * terwijl het scherm nog binnenkwam (317, daarna 313), en dat las als een
+ * sprong bij het laden. Lokaal staat ze voor en na het laden op 313.
+ */
+async function stillePlaats(page: Page, koppen: string[]) {
+  let vorige = await plaatsVan(page, koppen);
+  await expect.poll(async () => {
+    await page.waitForTimeout(100);
+    const nu = await plaatsVan(page, koppen);
+    const stil = JSON.stringify(nu) === JSON.stringify(vorige);
+    vorige = nu;
+    return stil;
+  }, 'de koppen staan stil').toBe(true);
+  return vorige;
+}
+
 test('mails: tijdens het laden een skelet, geen tekst “Laden…”, en de kaarten verspringen niet (nr. 22)', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
   await seed(page, { user: ADMIN, view: 'beheer-mails' });
@@ -468,7 +487,7 @@ test('mails: tijdens het laden een skelet, geen tekst “Laden…”, en de kaar
   await expect(mails.getByRole('switch')).toHaveCount(0);
   await page.evaluate(() => document.fonts.ready);
   const koppen = ['Mails', 'Automatische mails', 'Verzendlijsten'];
-  const voor = await plaatsVan(page, koppen);
+  const voor = await stillePlaats(page, koppen);
 
   laat();
   await expect(page.getByRole('list', { name: 'Verzendlijsten' })).toBeVisible();
@@ -477,7 +496,7 @@ test('mails: tijdens het laden een skelet, geen tekst “Laden…”, en de kaar
   await expect(mails).not.toHaveAttribute('aria-busy', 'true');
   await expect(page.getByText(/^Bijgewerkt om \d{2}:\d{2}$/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mail versturen' })).toBeEnabled();
-  const na = await plaatsVan(page, koppen);
+  const na = await stillePlaats(page, koppen);
   // Elke kop staat waar hij stond: niets is omlaag of omhoog gesprongen.
   for (const kop of koppen) expect(Math.abs(na[kop]! - voor[kop]!), `${kop}: ${voor[kop]} → ${na[kop]}`).toBeLessThanOrEqual(2);
 });
