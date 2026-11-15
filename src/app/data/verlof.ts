@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LeaveRequest } from '../../types';
 import { apiFetch, apiJson } from '../../lib/api';
 import { stelExtraFeestdagenIn } from '../../lib/leaveBalance';
@@ -18,19 +18,56 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
   const [leaveRequests, setLeaveRequests, zetLeaveUitAntwoord] = useCollectieState<LeaveRequest[]>([]);
   const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
 
+  // Een lijst die vertrok vóór een eigen geslaagde beslissing, mag die
+  // beslissing niet terugzetten. In een bulk met één aanvraag die al behandeld
+  // was (409) ververst de lijst zonder dat de bulk erop wacht; kwam dat
+  // antwoord binnen ná de beslissing over de volgende aanvraag, dan stond die
+  // net goedgekeurde aanvraag weer als "in behandeling" in beeld tot de
+  // volgende verversing (15-11, e2e "bulk met drie aanvragen").
+  //
+  // De late lijst telt nog altijd volledig (wat een collega intussen deed staat
+  // erin, en haar revisie geldt zoals vroeger, dus een opslag daarna krijgt
+  // eerder een revisieconflict dan dat ze iets overschrijft). Alleen een
+  // aanvraag die ze nog toont in de status van vóór de eigen beslissing, houdt
+  // het antwoord van die beslissing. Geen extra verzoek, niets weggegooid.
+  //  - `nr`: aantal eigen beslissingen tot nu;
+  //  - `lopend`: per lezing die onderweg is de `nr` bij haar vertrek;
+  //  - `recent`: de beslissingen die vielen terwijl er een lezing onderweg was.
+  const kruising = useRef<{ nr: number; lopend: number[]; recent: Array<{ nr: number; id: string; van: string; record: Partial<LeaveRequest> }> }>({ nr: 0, lopend: [], recent: [] });
+
   const fetchLeave = async (accessToken = session?.access_token) => {
+    const k = kruising.current;
+    const stand = k.nr;
+    k.lopend.push(stand);
     try {
       const response = await apiFetch('/api/leave', { accessToken });
       ctx.noteerAntwoord(response);
       ctx.captureRevision('leave', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        zetLeaveUitAntwoord(response, data, data);
+        // De eigen beslissingen van na het vertrek, in volgorde over de rij
+        // gevouwen: elke beslissing telt alleen als de rij nog in de status
+        // staat waaruit ze vertrok (goedkeuren en daarna annuleren geeft dus
+        // geannuleerd, en een status die een collega intussen zette blijft).
+        const later = k.recent.filter((b) => b.nr > stand);
+        const lijst = (data as LeaveRequest[]).map((r) => later.reduce((rij, b) => (b.id === rij.id && rij.status === b.van ? { ...rij, ...b.record } : rij), r));
+        if (lijst.some((r, i) => r !== data[i])) {
+          // De gewone setter: de afdruk van dit antwoord telt niet, zodat de
+          // volgende lezing altijd toegepast wordt.
+          setLeaveRequests(lijst);
+        } else {
+          zetLeaveUitAntwoord(response, data, data);
+        }
         ctx.markCollectionLoaded('leave');
       }
     } catch (error) {
       console.error('Error fetching leave:', error);
       meldLaadfout('de verlofaanvragen', error);
+    } finally {
+      k.lopend.splice(k.lopend.indexOf(stand), 1);
+      // Wat geen lopende lezing meer kan kruisen, hoeft niet onthouden.
+      const oudste = k.lopend.length > 0 ? Math.min(...k.lopend) : k.nr;
+      k.recent = k.recent.filter((b) => b.nr > oudste);
     }
   };
 
@@ -118,7 +155,11 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     // state: realtime kan de lijst intussen ververst hebben met de beslissing
     // van een collega — met de live status als referentie keurt de check dan
     // altijd goed en is de guard feitelijk uitgeschakeld (controleronde 30/07).
-    return ctx.decideViaPatch('leave', id, status, seenStatus ?? current.status, fetchLeave, (updated) => {
+    const van = seenStatus ?? current.status;
+    return ctx.decideViaPatch('leave', id, status, van, fetchLeave, (updated) => {
+      const k = kruising.current;
+      k.nr += 1;
+      if (k.lopend.length > 0) k.recent.push({ nr: k.nr, id, van, record: updated });
       setLeaveRequests((curr) => curr.map((r) => (r.id === id ? { ...r, ...updated } : r)));
     }, reden ? { reden } : {}).then((ok) => {
       // Een goedkeuring maakt een dienst tot dekkingsgat: dashboard en
