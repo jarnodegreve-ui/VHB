@@ -43,7 +43,7 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
        van 14 dagen in het kader en plakt de dagkop onder de topbar
        terwijl je door de chauffeurs scrollt. Vroeger plakte er
        verticaal niets: de kaart had overflow-hidden. */
-    <TableShell label="Maandplanning per chauffeur en dag" sticky className="hidden md:block">
+    <TableShell label="Maandplanning per chauffeur en dag" sticky>
       <Tabel>
         {/* De dagkop draagt een dikke lijn eronder (zoals het bord), niet de dunne van StickyThead. */}
         <StickyThead className="[&_th]:border-b-2 [&_th]:border-hairline-strong">

@@ -18,7 +18,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { voorbeeldMail } from '../api/_lib/mailVoorbeelden';
-import { bouwVerlofBeslissingMail, portalUrl } from '../api/_lib/email';
+import { bouwVerlofBeslissingMail, bouwVervaldatumMail, portalUrl } from '../api/_lib/email';
+import { STATUS_KLEUR } from '../api/_lib/mailLayout';
 import { bouwBackupWeekkopieMail, bouwZiekmeldingMail } from '../api/_lib/mailTeksten';
 import { MAIL_SOORTEN } from '../shared/schemas/mail';
 import { MAILS } from '../scripts/auth-mails.mjs';
@@ -92,6 +93,16 @@ describe('voorbeelden van de mails', () => {
 });
 
 describe('bouwers', () => {
+  it('de vervaldatummail houdt de pil amber, ook bij "Dringend": het document is nog geldig, rood is voor verlopen (keuze Jarno 15-11)', () => {
+    const mail = (dagen: number) => bouwVervaldatumMail({ name: 'Dirk', soortLabel: 'Code 95', validUntil: '2026-12-01', dagen });
+    for (const [dagen, label] of [[30, 'Tijdig regelen'], [7, 'Dringend'], [1, 'Dringend'], [0, 'Dringend']] as const) {
+      const { html } = mail(dagen);
+      expect(html, `${dagen} dagen`).toContain(label);
+      expect(html, `${dagen} dagen: amber vlak`).toContain(`background-color: ${STATUS_KLEUR.aandacht.vlak};`);
+      expect(html, `${dagen} dagen: geen rode pil`).not.toContain(STATUS_KLEUR.fout.vlak);
+      expect(html, `${dagen} dagen: geen rode tekst`).not.toContain(STATUS_KLEUR.fout.tekst);
+    }
+  });
   it('de wekelijkse back-up toont de dag als dd/mm/jjjj; bestandsnaam en commando houden de ISO-vorm', () => {
     const m = bouwBackupWeekkopieMail({ filename: 'vhb-backup-2026-09-27.json', exportedAt: '2026-09-27T01:30:00.000Z' });
     expect(m.onderwerp).toBe('Wekelijkse back-up 27/09/2026, versleuteld');

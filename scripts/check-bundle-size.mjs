@@ -229,7 +229,14 @@ import zlib from 'node:zlib';
 // weegt het totaal ±0,7 kB zwaarder: ±755,3 in CI, op de afrondingsrand.
 // Geen nieuwe dependency; de groei (+0,87) zit in de chunk van Dienstruil.
 // Budget = de meting plus de meerweging van de runner en ±0,5 kB marge.
-const BUDGET_KB = 756;
+// 14-11 (ronde 6, punt 1, de besliste verlofaanvraag blijft even staan):
+// 756 → 757. Op main 7b117800 meet het totaal lokaal 754,60, met deze PR
+// 756,11 (+1,51): de vasthoudstand zit in de luie chunk van LijstRij (+1,35)
+// en in LeaveManagementView (+0,23); index (+0,03) en de warmups (-0,02 en
+// -0,04) blijven gelijk. Geen nieuwe dependency. De runner weegt het totaal
+// ±0,7 kB zwaarder (±756,8, afgerond 757). Budget = de meting plus die
+// meerweging (keuze 14-11: een grens gaat per PR omhoog, met de meting).
+const BUDGET_KB = 757;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

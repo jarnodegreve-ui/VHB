@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
@@ -100,6 +100,22 @@ export function SlideOver({
       window.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus?.({ preventScroll: true });
     };
+  }, [open]);
+
+  // Een paneel dat sluit, schuift nog DUR.slow weg en bleef al die tijd
+  // bedienbaar: na een verlofbeslissing stond Goedkeuren weer aan, en een
+  // tweede tik op dezelfde plek raakte op een trage telefoon nog de net
+  // beslisten aanvraag (ronde 6, punt 1; e2e "390 echte tik"). Vanaf het
+  // sluiten is het paneel inert: een tik valt dan op de vervagende achtergrond
+  // (een `sluit` die niets meer verandert), het toetsenbord bereikt het niet
+  // meer. Gaat het opnieuw open terwijl het nog wegschuift (zelfde element),
+  // dan is het meteen weer bedienbaar. Modal doet hetzelfde met
+  // `pointerEvents: 'none'` in zijn exit.
+  useLayoutEffect(() => {
+    const paneel = panelRef.current;
+    if (!paneel) return;
+    if (open) paneel.removeAttribute('inert');
+    else paneel.setAttribute('inert', '');
   }, [open]);
 
   // iOS: het toetsenbord bedekt anders de voet met de opslaan-knop, want

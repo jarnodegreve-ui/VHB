@@ -90,6 +90,35 @@ const REGELS = [
   { naam: 'datumveld rechtstreeks in beeld (gebruik formatDatumDMJ/formatPeriodeDMJ/formatDateHuman uit lib/format)', re: /(?<![=$\w])\{[A-Za-z_$][\w$.?]*\.(?:startDate|endDate|shiftDate|returnDate|leaveStart|leaveEnd|validUntil|date|datum)\}/g, zonderCommentaar: true },
 ];
 
+// Datum, uur en getal in beeld gaan door src/lib/format.ts (ronde 6, punt 8):
+// losse toLocale-opmaak gaf tien schrijfwijzen van één tijdstip, en een
+// afkortingspunt of niet naargelang de motor. Fout: toLocaleDateString,
+// toLocaleTimeString of toLocaleString met 'nl-BE' (of een andere nl-taal) of
+// zonder taal, en Intl.DateTimeFormat of Intl.NumberFormat met 'nl-BE'. Vrij:
+// een andere taal voor rekenwerk ('en-CA', 'sv-SE', 'en-GB', 'en-US'),
+// Intl.Collator, tests, de printbladen en format.ts zelf. Ontsnapping voor een
+// waarde die geen weergave is: `opmaak: <reden>` op de regel of in de twee
+// regels erboven. Kijkt zonder commentaar (lib/datum.ts noemt toLocaleDateString
+// alleen in een opmerking).
+const OPMAAK_RE = /\.toLocale(?:Date|Time)?String\(\s*(?!['"](?!nl\b)[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*['"])|\bIntl\.(?:DateTimeFormat|NumberFormat)\(\s*['"]nl\b/g;
+// Tijdelijk: de bestanden die een later deel van punt 8 nog overzet, elk met
+// zijn deel. Elk ander bestand faalt meteen. De lijst mag alleen krimpen: een
+// bestand zonder treffer meer moet eruit (de lint zegt het).
+const DATUM_NOG_TE_DOEN = {
+  'views/admin/ManageSchedulesView.tsx': 3,
+  'components/EntityHistoryModal.tsx': 3,
+  'views/LeaveManagementView.tsx': 3,
+  'views/PlannerDashboardWidgets.tsx': 3,
+  'components/ZiekteInzicht.tsx': 3,
+  'lib/dagBriefing.ts': 3,
+  'lib/maandplanning.ts': 3,
+  'lib/verval.ts': 3,
+  'views/admin/DebugView.tsx': 4,
+  'views/admin/laadpalen/gedeeld.tsx': 4,
+  'lib/techniek.ts': 4,
+};
+const nogTeDoenGezien = new Set();
+
 // text-2xs (11 px) is sinds golf 2 alleen nog voor badges, tellers en de
 // text-micro-rol; lopende meta-tekst staat op text-xs (12). Toegestaan:
 // `rounded-full` op dezelfde regel (teller/badge), of een `2xs:`-toelichting
@@ -258,6 +287,18 @@ function loop(dir) {
         fouten++;
       });
     }
+    // Datum, uur of getal met toLocale/Intl buiten format.ts (zie OPMAAK_RE).
+    const relPad = rel.split(path.sep).join('/');
+    if (!PRINT.test(p) && relPad !== 'lib/format.ts') {
+      const ruw = bron.split('\n');
+      for (const m of zonderCommentaar(bron).matchAll(OPMAAK_RE)) {
+        const i = bron.slice(0, m.index).split('\n').length - 1;
+        if (/opmaak:/.test(ruw.slice(Math.max(0, i - 2), i + 1).join('\n'))) continue;
+        if (relPad in DATUM_NOG_TE_DOEN) { nogTeDoenGezien.add(relPad); continue; }
+        console.log(`src/${rel}:${i + 1}  datum, uur of getal met toLocale/Intl in nl-BE of zonder taal (gebruik src/lib/format.ts, of motiveer een waarde die geen weergave is met // opmaak: …)  →  ${m[0]}`);
+        fouten++;
+      }
+    }
     // Rauwe <button> buiten de primitieven: toegestaan mét een `rauw:`-toelichting op de regel(s) erboven.
     if (!PRIMITIVES.test(p)) {
       const lijnen = bron.split('\n');
@@ -272,6 +313,14 @@ function loop(dir) {
   }
 }
 loop(ROOT);
+
+// DATUM_NOG_TE_DOEN mag alleen krimpen: een bestand zonder treffer meer (of
+// dat niet meer bestaat) moet uit de lijst.
+for (const [bestand, deel] of Object.entries(DATUM_NOG_TE_DOEN)) {
+  if (nogTeDoenGezien.has(bestand)) continue;
+  console.log(`src/${bestand}  staat in DATUM_NOG_TE_DOEN (deel ${deel}) maar heeft geen toLocale/Intl-opmaak meer: haal het uit de lijst`);
+  fouten++;
+}
 
 // Typografie-rollen: `cn()` (src/lib/cn.ts) kent elke `.text-<rol>` uit
 // src/index.css als eigen tailwind-merge-groep. Een rol die daar ontbreekt
