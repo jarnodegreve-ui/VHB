@@ -1,7 +1,8 @@
 import fs from 'node:fs';
+import { resolve } from 'node:path';
 import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
-import { bouwMail, IPHONE_REGEL, VOET } from '../api/_lib/mailLayout';
+import { bouwMail, IPHONE_REGEL, type MailStatusToon, STATUS_KLEUR, VOET } from '../api/_lib/mailLayout';
 
 /**
  * De vaste mail-lay-out (mailtranche PR 2, nieuw kader 30-09): één opbouw,
@@ -31,8 +32,8 @@ describe('bouwMail', () => {
     expect(html).toContain('<h1');
     expect(html).toContain('Verlofaanvraag afgewezen');
     // Status als pil in de tint van de toon, met een stip in de statuskleur.
-    expect(html).toContain('background-color: #FAEEF1;');
-    expect(html).toMatch(/<span style="color: #C94F6D; font-size: 10px;">&#9679;<\/span>&nbsp;&nbsp;Afgewezen<\/span>/);
+    expect(html).toContain('background-color: #FBEFEF;');
+    expect(html).toMatch(/<span style="color: #D64545; font-size: 10px;">&#9679;<\/span>&nbsp;&nbsp;Afgewezen<\/span>/);
     expect(html).toContain('Periode</td>');
     expect(html).toContain('06/10/2026 t/m 10/10/2026');
     // Het blok houdt zijn vlak met de gouden streep (Jarno 30-09); regeleinden blijven.
@@ -210,6 +211,74 @@ describe('bouwMail', () => {
     expect(html).not.toContain('Op iPhone');
     expect(html).not.toContain('niet beantwoorden');
     expect(text.trim().split('\n')[0]).toBe('Testmail');
+  });
+});
+
+/**
+ * Eigen kleurwaarden volgen het palet (ronde 6, punt 10). Een mail kent geen
+ * CSS-variabelen, dus de pil draagt hexwaarden, en de arcering van de
+ * Maandplanning draagt vaste rgba-waarden (geen color-mix, zie index.css bij
+ * --selectie-vlak). Beide worden hier aan hun token in het lichte
+ * @theme-blok van src/index.css gebonden: drijft een van de twee af, dan faalt
+ * dit. Alleen @theme, want html.dark geeft dezelfde namen andere waarden.
+ */
+describe('eigen kleurwaarden volgen het palet in src/index.css', () => {
+  const css = fs.readFileSync(resolve(__dirname, 'index.css'), 'utf8');
+  const thema = (() => {
+    const zonderCommentaar = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const begin = zonderCommentaar.indexOf('@theme {');
+    let diepte = 0;
+    for (let i = zonderCommentaar.indexOf('{', begin); i < zonderCommentaar.length; i += 1) {
+      if (zonderCommentaar[i] === '{') diepte += 1;
+      if (zonderCommentaar[i] === '}' && (diepte -= 1) === 0) return zonderCommentaar.slice(begin, i + 1);
+    }
+    return '';
+  })();
+  /** De hexwaarde van een kleurtoken in @theme; faalt als het token er niet (één keer) staat. */
+  const token = (naam: string) => {
+    const treffers = [...thema.matchAll(new RegExp(`--color-${naam}:\\s*(#[0-9A-Fa-f]{6})\\s*;`, 'g'))];
+    expect(treffers, `--color-${naam} in @theme`).toHaveLength(1);
+    return treffers[0][1].toUpperCase();
+  };
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
+
+  it('leest het lichte @theme-blok, niet html.dark', () => {
+    expect(thema.startsWith('@theme {')).toBe(true);
+    expect(thema).not.toContain('html.dark');
+    expect(thema).toContain('--color-slate-100:');
+  });
+
+  it('elke toon van de statuspil is vlak 50/100, tekst 700/600 en stip 500/400 van zijn familie, zoals de Badge in het portaal', () => {
+    const VERWACHT: Record<MailStatusToon, Record<keyof (typeof STATUS_KLEUR)[MailStatusToon], string>> = {
+      neutraal: { vlak: 'slate-100', tekst: 'slate-600', stip: 'slate-400' },
+      goed: { vlak: 'emerald-50', tekst: 'emerald-700', stip: 'emerald-500' },
+      aandacht: { vlak: 'oker-50', tekst: 'oker-700', stip: 'oker-500' },
+      // Afgewezen is in het portaal de toon gevaar (Badge red, baksteen), niet rose (ziekte).
+      fout: { vlak: 'red-50', tekst: 'red-700', stip: 'red-500' },
+    };
+    expect(Object.keys(STATUS_KLEUR).sort()).toEqual(Object.keys(VERWACHT).sort());
+    for (const toon of Object.keys(VERWACHT) as MailStatusToon[]) {
+      for (const rol of ['vlak', 'tekst', 'stip'] as const) {
+        expect(STATUS_KLEUR[toon][rol].toUpperCase(), `${toon}.${rol} = --color-${VERWACHT[toon][rol]}`).toBe(token(VERWACHT[toon][rol]));
+      }
+    }
+  });
+
+  it('de lichte arcering van de Maandplanning is slate-100 en slate-500 uit het palet, met dezelfde dekking', () => {
+    // De standaardslate van Tailwind (#F1F5F9, #64748B) is blauwgrijs; het palet is neutraal grijs.
+    expect(css.match(/241, 245, 249/g) ?? [], 'slate-100 van Tailwind in index.css').toEqual([]);
+    expect(css.match(/100, 116, 139/g) ?? [], 'slate-500 van Tailwind in index.css').toEqual([]);
+    const vlak = rgb(token('slate-100'));
+    const lijn = rgb(token('slate-500'));
+    /** De rgba-waarden van de ene lichte regel met precies deze selector (een .dark-regel begint anders). */
+    const rgbas = (selector: string) => {
+      const regels = [...css.matchAll(new RegExp(`^${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`, 'gm'))];
+      expect(regels, selector).toHaveLength(1);
+      return [...regels[0][1].matchAll(/rgba\(([^)]*)\)/g)].map((m) => m[1].replace(/\s+/g, ' ').trim());
+    };
+    expect(rgbas('.mp-weekend')).toEqual([`${vlak}, 0.85`, `${lijn}, 0.09`, `${lijn}, 0.09`]);
+    expect(rgbas('.mp-leeg')).toEqual([`${lijn}, 0.32`]);
+    expect(rgbas('.mp-weekend.mp-leeg')).toEqual([`${lijn}, 0.09`, `${lijn}, 0.09`, `${lijn}, 0.32`]);
   });
 });
 

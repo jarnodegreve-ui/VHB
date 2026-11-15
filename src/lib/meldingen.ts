@@ -1,7 +1,7 @@
 import type { Melding, MeldingSoort } from '../types';
 import { MELDING_SOORTEN } from '../../shared/meldingSoorten';
 import { addDagen, isoDate } from './datum';
-import { formatDateHuman } from './format';
+import { formatDateHuman, formatUur } from './format';
 
 /**
  * Meldingencentrum — pure helpers voor de lijst: filteren, groeperen per dag
@@ -64,13 +64,5 @@ const ISO_DAG = /\b(\d{4})-(\d{2})-(\d{2})\b(?!T)/g;
 export const datumsLeesbaar = (tekst: string | null | undefined): string =>
   String(tekst ?? '').replace(ISO_DAG, (_, j, m, d) => `${d}/${m}/${j}`);
 
-/** 'HH:MM' in Belgische tijd voor de rij. */
-export const tijdVan = (createdAt: string): string => {
-  const d = new Date(createdAt);
-  if (Number.isNaN(d.getTime())) return '';
-  try {
-    return d.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Brussels' });
-  } catch {
-    return '';
-  }
-};
+/** 'HH:MM' in Belgische tijd voor de rij: het uur van een tijdstempel (lib/format). */
+export const tijdVan = (createdAt: string): string => formatUur(createdAt);

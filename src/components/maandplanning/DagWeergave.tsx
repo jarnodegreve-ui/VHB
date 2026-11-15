@@ -87,7 +87,7 @@ export function DagWeergave({ dag, acties }: { dag: DagGegevens; acties: DagActi
   }, [mobielDag, reduceMotion]);
 
   return (
-    <div className="md:hidden space-y-3">
+    <div className="space-y-3">
       <Card padding="none" className="p-2">
         {/* Maandwissel hoort hier bij de dagen — de venster-pijlen in de
             kop zijn op mobiel verborgen. */}

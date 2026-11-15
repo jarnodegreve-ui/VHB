@@ -160,7 +160,7 @@ export function MijnDagView({
 
   // "Nu" in minuten t.o.v. middernacht van vandaag (de peildag bij offset 0).
   const nuMin = now.getHours() * 60 + now.getMinutes() + (nachtdienstLoopt ? 1440 : 0);
-  const nuLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+  const nuLabel = formatSyncedTime(now.getTime());
   // Statuszin: "Dienst 2101 · 2 delen · tot 17:29" / "Vrij vandaag".
   const dagWoord = isVandaag ? 'vandaag' : 'morgen';
   // Het De Lijn-dagtype van de peildag (deel 2, 11-10, keuze Jarno): "Vandaag ·

@@ -70,7 +70,9 @@ export const STATUS_KLEUR = {
   neutraal: { vlak: "#F2F3F4", tekst: "#4F575F", stip: "#9AA1A9" },
   goed: { vlak: "#EEF6F1", tekst: "#1A6650", stip: "#2E9E78" },
   aandacht: { vlak: "#FCF7ED", tekst: "#8F5C17", stip: "#E2A323" },
-  fout: { vlak: "#FAEEF1", tekst: "#8B344A", stip: "#C94F6D" },
+  /** Afgewezen en dringend: de Badge red (toon gevaar) van het portaal, red-50/700/500; rose is daar ziekte.
+   *  src/mailLayout.test.ts bindt elke waarde van deze tabel aan zijn token in src/index.css. */
+  fout: { vlak: "#FBEFEF", tekst: "#962E2E", stip: "#D64545" },
 } as const;
 export type MailStatusToon = keyof typeof STATUS_KLEUR;
 
