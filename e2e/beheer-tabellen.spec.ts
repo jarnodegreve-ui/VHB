@@ -1,6 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ADMIN, AXE_TAGS, AXE_TIJDELIJK_UIT, CHAUFFEUR, seed, wachtOpAnimaties } from './helpers';
+import { ADMIN, AXE_TAGS, AXE_TIJDELIJK_UIT, CHAUFFEUR, seed, wachtOpAnimaties, type Fixture } from './helpers';
 import { dayOffset } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -340,6 +340,12 @@ const MEEKIJKERS = [
   { userId: '78', naam: 'Nele Claes', rol: 'planner', view: 'bezetting', sinds: '2026-11-11T08:00:00.000Z' },
 ];
 const metMeekijkers = (page: Page) => page.addInitScript((lijst) => window.localStorage.setItem('vhb-aanwezigheid-mock', JSON.stringify(lijst)), MEEKIJKERS);
+/** De chip zonder eigen breedte (de negen oudere schermen, ronde 6, punt 20):
+ *  zo breed als zijn tekst, dus geen grootste breedte en niets afgekapt. */
+const chipZonderGrens = (page: Page, tekst: string) => page.getByText(tekst).evaluate((span) => ({
+  grootsteBreedte: getComputedStyle(span.closest('[title]')!).maxWidth,
+  tekstPast: span.scrollWidth <= span.clientWidth,
+}));
 
 test('Kijkt ook mee: Dagadministratie en Maandplanning tonen de collega op hetzelfde scherm', async ({ page }) => {
   await metMeekijkers(page);
@@ -348,11 +354,13 @@ test('Kijkt ook mee: Dagadministratie en Maandplanning tonen de collega op hetze
   await expect(page.getByRole('heading', { name: 'Dagadministratie', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Pieter bekijkt dit ook')).toBeVisible();
   await expect(page.getByText('Nele bekijkt dit ook')).toHaveCount(0);
+  expect(await chipZonderGrens(page, 'Pieter bekijkt dit ook')).toEqual({ grootsteBreedte: 'none', tekstPast: true });
 
   await page.goto('/maandplanning');
   await expect(page.getByRole('heading', { name: 'Maandplanning', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Nele bekijkt dit ook')).toBeVisible();
   await expect(page.getByText('Pieter bekijkt dit ook')).toHaveCount(0);
+  expect(await chipZonderGrens(page, 'Nele bekijkt dit ook')).toEqual({ grootsteBreedte: 'none', tekstPast: true });
 });
 
 test('Kijkt ook mee: een chauffeur ziet op de Maandplanning niemand', async ({ page }) => {
@@ -364,6 +372,304 @@ test('Kijkt ook mee: een chauffeur ziet op de Maandplanning niemand', async ({ p
   await expect(page.getByRole('searchbox', { name: 'Zoek chauffeur of dienst' })).toBeVisible();
   await page.waitForTimeout(400);
   await expect(page.getByText(/bekijk(t|en) dit ook/)).toHaveCount(0);
+});
+
+/**
+ * "Kijkt ook mee" ook op Verlof en Dienstruil (ronde 6, punt 20, rest), alleen
+ * voor staf. Op deze twee schermen beslist de planner in de lijst onder de
+ * kop, en de chip verschijnt live zodra een collega binnenkomt: hij mag de kop
+ * dus nooit hoger maken en geen knop verplaatsen. Daarom een vaste grootste
+ * breedte (14rem, de namen kappen af, de stip blijft rond) en pas vanaf de
+ * breedte waarop hij met die volle breedte naast de uitleg past: Verlof vanaf
+ * xl (1280 px), Dienstruil met zijn lange uitleg vanaf 2xl (1536 px).
+ * Daaronder heeft hij geen box. Op Dienstruil (in de warmup van de chauffeur)
+ * laadt alleen de staf de chip, lui: mislukt dat, dan is er gewoon geen chip.
+ * De toetsen maken hun breedtes zelf en lopen eenmaal, in het desktopproject.
+ */
+const SINDS = '2026-11-11T08:00:00.000Z';
+const OP_VERLOF_EN_RUIL = [
+  { userId: '77', naam: 'Pieter Peeters', rol: 'planner', view: 'verlof', sinds: SINDS },
+  { userId: '78', naam: 'Nele Claes', rol: 'planner', view: 'ruil-verzoeken', sinds: SINDS },
+];
+/** Twee lange voornamen: de tekst is breder dan 14rem en kapt dus af. */
+const langeNamenOp = (view: string) => [
+  { userId: '77', naam: 'Maximiliaan Vandenbroucke', rol: 'planner', view, sinds: SINDS },
+  { userId: '78', naam: 'Anne-Sophie Peeters', rol: 'planner', view, sinds: SINDS },
+];
+const PLANNER = { id: '9', name: 'Els Goossens', role: 'planner', employeeId: 'VHB-000009', email: 'els@vhb.be', isActive: true };
+/** `null` = niemand: de sleutel gaat weg (pagina's van één context delen hun opslag). */
+const metAanwezigen = (page: Page, lijst: unknown[] | null) => page.addInitScript((l) => {
+  if (l) window.localStorage.setItem('vhb-aanwezigheid-mock', JSON.stringify(l));
+  else window.localStorage.removeItem('vhb-aanwezigheid-mock');
+}, lijst);
+const alleenDesktop = (project: string) => test.skip(project !== 'Desktop (chromium)', 'eenmaal per run, in het desktopproject; de breedtes maakt de test zelf');
+const chipTekst = (page: Page) => page.getByText(/bekijk(t|en) dit ook/);
+const CHIP_CHUNK = '**/assets/AanwezigOpScherm-*.js';
+
+type KopScherm = {
+  view: string; pad: string; titel: string;
+  /** Vanaf deze vensterbreedte (px) staat de chip in de kop. */
+  vanaf: number;
+  /** De knoppen in de kopacties van de staf, in volgorde. */
+  knoppen: string[];
+  /** De eerste plek in de lijst waar de staf beslist. */
+  eerste: (page: Page) => Locator;
+};
+const KOP_VERLOF: KopScherm = {
+  view: 'verlof', pad: '/verlof', titel: 'Verlof', vanaf: 1280, knoppen: ['Meer acties', 'Verlof registreren'],
+  // Het keuzevakje van de eerste wachtende aanvraag (fixture l1): het vak dat je aantikt, niet het verborgen invoerveld.
+  eerste: (page) => page.locator('label').filter({ has: page.getByRole('checkbox', { name: 'Selecteer Alex Du Priez' }) }),
+};
+const KOP_RUIL: KopScherm = {
+  view: 'ruil-verzoeken', pad: '/dienstruil', titel: 'Dienstruil', vanaf: 1536, knoppen: ['Dienstruil aanvragen'],
+  // Fixture sw1 wacht nog op de collega: een admin kan in de rij al goedkeuren.
+  eerste: (page) => page.getByRole('table', { name: 'Dienstruilen' }).getByRole('button', { name: 'Direct goedkeuren' }),
+};
+
+async function openKop(page: Page, scherm: KopScherm, user: Fixture, aanwezig: unknown[] | null) {
+  await metAanwezigen(page, aanwezig);
+  await seed(page, { user, view: scherm.view });
+  await page.goto(scherm.pad);
+  await expect(page.getByRole('heading', { name: scherm.titel, level: 1 })).toBeVisible({ timeout: 15_000 });
+}
+
+type KopMaat = {
+  kopHoogte: number;
+  /** Elke knop in de kopacties, in volgorde. */
+  knoppen: Array<{ naam: string; x: number; y: number }>;
+  /** Aantal kinderen van de kopacties. */
+  kinderen: number;
+  eersteY: number;
+  chip: null | { display: string; breedte: number; hoogte: number; grootsteBreedte: string; rem: number; stip: { breedte: number; hoogte: number }; afgekapt: boolean };
+};
+async function leesKop(page: Page, eerste: Locator): Promise<KopMaat> {
+  const eersteY = await eerste.evaluate((el) => el.getBoundingClientRect().y);
+  const kop = await page.evaluate(() => {
+    const kop = document.querySelector('h1')!.closest('header')!;
+    const acties = kop.lastElementChild!;
+    const chip = [...acties.children].find((el) => el.matches('span[title]') && /bekijk(t|en) dit ook/.test(el.textContent ?? ''));
+    const tekst = chip?.lastElementChild;
+    const stip = chip?.firstElementChild?.getBoundingClientRect();
+    const vak = chip?.getBoundingClientRect();
+    return {
+      kopHoogte: kop.getBoundingClientRect().height,
+      knoppen: [...acties.querySelectorAll('button')].map((knop) => {
+        const r = knop.getBoundingClientRect();
+        return { naam: knop.getAttribute('aria-label') ?? (knop.textContent ?? '').trim(), x: r.x, y: r.y };
+      }),
+      kinderen: acties.childElementCount,
+      chip: chip && tekst && stip && vak ? {
+        display: getComputedStyle(chip).display,
+        breedte: vak.width, hoogte: vak.height,
+        grootsteBreedte: getComputedStyle(chip).maxWidth,
+        rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+        stip: { breedte: stip.width, hoogte: stip.height },
+        afgekapt: tekst.scrollWidth > tekst.clientWidth,
+      } : null,
+    };
+  });
+  return { ...kop, eersteY };
+}
+/** Meet pas als de kop stilstaat: lettertypes geladen, inloop voorbij, twee gelijke metingen na elkaar. */
+async function meetKop(page: Page, eerste: Locator): Promise<KopMaat> {
+  await expect(eerste).toBeVisible({ timeout: 15_000 });
+  await page.evaluate(() => document.fonts.ready);
+  await wachtOpAnimaties(page);
+  let vorige = await leesKop(page, eerste);
+  for (let ronde = 0; ronde < 20; ronde++) {
+    await page.waitForTimeout(150);
+    const nu = await leesKop(page, eerste);
+    if (JSON.stringify(nu) === JSON.stringify(vorige)) return nu;
+    vorige = nu;
+  }
+  throw new Error('de kop staat na 3 s nog niet stil');
+}
+
+test('Kijkt ook mee: planner en admin zien op Verlof en Dienstruil de collega op hetzelfde scherm', async ({ browser, baseURL }, info) => {
+  alleenDesktop(info.project.name);
+  for (const user of [ADMIN, PLANNER]) {
+    const context = await browser.newContext({ baseURL, viewport: { width: 1600, height: 900 }, serviceWorkers: 'block' });
+    try {
+      const page = await context.newPage();
+      await openKop(page, KOP_VERLOF, user, OP_VERLOF_EN_RUIL);
+      await expect(page.getByText('Pieter bekijkt dit ook'), `${user.role} op Verlof`).toBeVisible();
+      await expect(page.getByText('Nele bekijkt dit ook')).toHaveCount(0);
+
+      await page.goto(KOP_RUIL.pad);
+      await expect(page.getByRole('heading', { name: KOP_RUIL.titel, level: 1 })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Nele bekijkt dit ook'), `${user.role} op Dienstruil`).toBeVisible();
+      await expect(page.getByText('Pieter bekijkt dit ook')).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+test('Kijkt ook mee: een chauffeur ziet op Verlof en Dienstruil niemand en haalt de chip op Dienstruil niet op', async ({ browser, baseURL }, info) => {
+  alleenDesktop(info.project.name);
+  // 1600 px: breed genoeg voor de chip op beide schermen, als hij er zou zijn.
+  const context = await browser.newContext({ baseURL, viewport: { width: 1600, height: 900 }, serviceWorkers: 'block' });
+  try {
+    for (const scherm of [{ ...KOP_VERLOF, knoppen: ['Verlof aanvragen'] }, KOP_RUIL]) {
+      const kinderen: number[] = [];
+      for (const aanwezig of [null, OP_VERLOF_EN_RUIL]) {
+        const page = await context.newPage();
+        const chipVerzoeken: string[] = [];
+        page.on('request', (verzoek) => { if (/\/assets\/AanwezigOpScherm-/.test(verzoek.url())) chipVerzoeken.push(verzoek.resourceType()); });
+        await openKop(page, scherm, CHAUFFEUR, aanwezig);
+        await expect(page.getByRole('button', { name: scherm.knoppen[0], exact: true })).toBeVisible();
+        // De kop staat er; een luie import zou nu al lang vertrokken zijn.
+        await page.waitForTimeout(600);
+        await expect(chipTekst(page)).toHaveCount(0);
+        const acties = await page.evaluate(() => {
+          const el = document.querySelector('h1')!.closest('header')!.lastElementChild!;
+          return { kinderen: el.childElementCount, knoppen: [...el.querySelectorAll('button')].map((knop) => (knop.textContent ?? '').trim()) };
+        });
+        expect(acties.knoppen, `${scherm.titel}: de knoppen van de chauffeur`).toEqual(scherm.knoppen);
+        kinderen.push(acties.kinderen);
+        // Dienstruil zit in de warmup van de chauffeur: die betaalt de chip niet.
+        if (scherm.view === 'ruil-verzoeken') expect(chipVerzoeken, 'een chauffeur vraagt de chip niet op').toEqual([]);
+        await page.close();
+      }
+      expect(kinderen, `${scherm.titel}: geen extra element in de kopacties`).toEqual([1, 1]);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+for (const scherm of [KOP_VERLOF, KOP_RUIL]) {
+  test(`Kijkt ook mee: de chip maakt de kop van ${scherm.titel} niet hoger en verplaatst geen knop`, async ({ browser, baseURL }, info) => {
+    alleenDesktop(info.project.name);
+    test.setTimeout(150_000);
+    const dicht = (a: number, b: number) => Math.abs(a - b) <= 0.5;
+    const fouten: string[] = [];
+    const metMetChip: number[] = [];
+    for (const breedte of [768, 1024, 1280, 1440, 1536, 1920]) {
+      const waar = `${scherm.titel} op ${breedte}px`;
+      const context = await browser.newContext({ baseURL, viewport: { width: breedte, height: 900 }, hasTouch: breedte < 1024, serviceWorkers: 'block' });
+      try {
+        // Twee keer laden: eerst zonder collega, dan met twee lange namen.
+        let page = await context.newPage();
+        await openKop(page, scherm, ADMIN, null);
+        const zonder = await meetKop(page, scherm.eerste(page));
+        await page.close();
+        page = await context.newPage();
+        await openKop(page, scherm, ADMIN, langeNamenOp(scherm.view));
+        // De chip staat in de DOM (op Dienstruil pas na zijn luie import), ook waar hij geen box heeft.
+        await expect(chipTekst(page)).toHaveCount(1, { timeout: 15_000 });
+        const met = await meetKop(page, scherm.eerste(page));
+        await page.close();
+
+        if (zonder.chip) fouten.push(`${waar}: een chip zonder collega`);
+        if (met.kinderen !== zonder.kinderen + 1) fouten.push(`${waar}: ${zonder.kinderen} kinderen zonder, ${met.kinderen} met chip`);
+        for (const [soort, maat] of [['zonder', zonder], ['met', met]] as const) {
+          const namen = maat.knoppen.map((k) => k.naam);
+          if (JSON.stringify(namen) !== JSON.stringify(scherm.knoppen)) fouten.push(`${waar}, ${soort} chip: knoppen ${JSON.stringify(namen)}`);
+        }
+        if (!dicht(met.kopHoogte, zonder.kopHoogte)) fouten.push(`${waar}: kop ${zonder.kopHoogte.toFixed(2)} hoog zonder, ${met.kopHoogte.toFixed(2)} met chip`);
+        zonder.knoppen.forEach((knop, i) => {
+          const na = met.knoppen[i];
+          if (na && (!dicht(na.x, knop.x) || !dicht(na.y, knop.y))) fouten.push(`${waar}: ${knop.naam} van ${knop.x.toFixed(2)},${knop.y.toFixed(2)} naar ${na.x.toFixed(2)},${na.y.toFixed(2)}`);
+        });
+        if (!dicht(met.eersteY, zonder.eersteY)) fouten.push(`${waar}: eerste beslisknop van y ${zonder.eersteY.toFixed(2)} naar ${met.eersteY.toFixed(2)}`);
+
+        const chip = met.chip;
+        if (!chip) { fouten.push(`${waar}: geen chip in de kopacties`); continue; }
+        if (breedte < scherm.vanaf) {
+          // Onder het breekpunt: geen box, dus ook geen extra tussenruimte.
+          if (chip.display !== 'none' || chip.breedte !== 0 || chip.hoogte !== 0) fouten.push(`${waar}: chip heeft een box (${chip.display}, ${chip.breedte} x ${chip.hoogte})`);
+          continue;
+        }
+        metMetChip.push(breedte);
+        const grens = 14 * chip.rem;
+        if (chip.display === 'none') fouten.push(`${waar}: chip niet getoond`);
+        if (!dicht(parseFloat(chip.grootsteBreedte), grens)) fouten.push(`${waar}: grootste breedte ${chip.grootsteBreedte}, verwacht ${grens}px`);
+        if (!chip.afgekapt) fouten.push(`${waar}: de lange namen zijn niet afgekapt`);
+        if (!dicht(chip.breedte, grens)) fouten.push(`${waar}: chip ${chip.breedte.toFixed(2)} breed, verwacht ${grens}`);
+        if (!dicht(chip.stip.breedte, 6) || !dicht(chip.stip.hoogte, 6)) fouten.push(`${waar}: stip ${chip.stip.breedte.toFixed(2)} x ${chip.stip.hoogte.toFixed(2)}, verwacht 6 x 6`);
+      } finally {
+        await context.close();
+      }
+    }
+    expect(fouten, 'de chip verandert de kop').toEqual([]);
+    expect(metMetChip, 'breedtes waarop de chip getoond en gemeten is').toEqual([768, 1024, 1280, 1440, 1536, 1920].filter((b) => b >= scherm.vanaf));
+  });
+}
+
+test('Kijkt ook mee: mislukt het ophalen van de chip, dan blijft Dienstruil gewoon staan, zonder chip', async ({ browser, baseURL }, info) => {
+  alleenDesktop(info.project.name);
+  const context = await browser.newContext({ baseURL, viewport: { width: 1600, height: 900 }, serviceWorkers: 'block' });
+  try {
+    const page = await context.newPage();
+    const paginafouten: string[] = [];
+    page.on('pageerror', (e) => paginafouten.push(e.message));
+    let ladingen = 0;
+    page.on('load', () => { ladingen += 1; });
+    // Elk verzoek naar de chunk van de chip breekt af: de import van het scherm zelf
+    // (een script) en de stille prefetch van de warmup (via de Maandplanning).
+    const afgebroken: string[] = [];
+    await page.route(CHIP_CHUNK, (route) => { afgebroken.push(route.request().resourceType()); return route.abort(); });
+    await openKop(page, KOP_RUIL, ADMIN, OP_VERLOF_EN_RUIL);
+    await page.evaluate(() => { (window as unknown as { __nietHerladen?: boolean }).__nietHerladen = true; });
+    await expect.poll(() => afgebroken.includes('script'), { message: 'het scherm vroeg de chip op' }).toBe(true);
+    // Het vangnet van de luie schermen (lazyRetry) probeert na 0,8 s opnieuw en
+    // herlaadt dan de schil. Dat mag hier niet: ruim daarna staat alles er nog.
+    await page.waitForTimeout(2500);
+    await expect(page.getByRole('heading', { name: 'Dienstruil', level: 1 })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Dienstruil aanvragen' })).toBeVisible();
+    await expect(KOP_RUIL.eerste(page)).toBeVisible();
+    await expect(chipTekst(page)).toHaveCount(0);
+    await expect(page.getByText('Dit scherm kon niet geladen worden')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __nietHerladen?: boolean }).__nietHerladen), 'geen herlaadbeurt').toBe(true);
+    expect(ladingen, 'geen herlaadbeurt').toBe(1);
+    expect(await page.evaluate(() => window.sessionStorage.getItem('vhb-chunk-reload')), 'het vangnet van de luie schermen kwam niet in actie').toBeNull();
+    expect(paginafouten).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
+test('Kijkt ook mee: komt de chip pas binnen na het verlaten van Dienstruil, dan verschijnt hij nergens', async ({ browser, baseURL }, info) => {
+  alleenDesktop(info.project.name);
+  const context = await browser.newContext({ baseURL, viewport: { width: 1600, height: 900 }, serviceWorkers: 'block' });
+  try {
+    const page = await context.newPage();
+    const fouten: string[] = [];
+    page.on('pageerror', (e) => fouten.push(e.message));
+    // Netwerkruis van de testomgeving (geen realtime-server) is geen fout van de app; al de rest wel.
+    const ruis = /^(Failed to load resource|WebSocket connection to )/;
+    page.on('console', (m) => { if (m.type() === 'error' && !ruis.test(m.text())) fouten.push(m.text()); });
+    // De chunk van de chip blijft onderweg tot de test hem loslaat.
+    const vast: Route[] = [];
+    let los = false;
+    await page.route(CHIP_CHUNK, (route) => {
+      if (los) return route.continue();
+      vast.push(route);
+    });
+    // Ook op het dashboard zit een collega: zou de late chip daar toch landen, dan staat hij er.
+    await openKop(page, KOP_RUIL, ADMIN, [...OP_VERLOF_EN_RUIL, { userId: '79', naam: 'Koen Maes', rol: 'planner', view: 'dashboard', sinds: SINDS }]);
+    await expect.poll(() => vast.some((route) => route.request().resourceType() === 'script'), { message: 'het scherm vroeg de chip op' }).toBe(true);
+    await expect(chipTekst(page)).toHaveCount(0);
+
+    // Weg van Dienstruil, binnen de app: een herlaadbeurt zou de wachtende import weggooien.
+    await page.getByRole('navigation', { name: 'Zijbalk' }).getByRole('button', { name: 'Dashboard', exact: true }).click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/');
+    await expect(page.getByRole('heading', { name: 'Dienstruil', level: 1 })).toHaveCount(0);
+
+    const binnen = page.waitForEvent('requestfinished', (verzoek) => /\/assets\/AanwezigOpScherm-/.test(verzoek.url()) && verzoek.resourceType() === 'script');
+    los = true;
+    await Promise.all(vast.map((route) => route.continue().catch(() => undefined)));
+    await binnen;
+    // De module is binnen en uitgevoerd; haar antwoord vindt geen scherm meer.
+    await page.waitForTimeout(500);
+    await expect(chipTekst(page)).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe('/');
+    await expect(page.getByText('Dit scherm kon niet geladen worden')).toHaveCount(0);
+    expect(fouten, `fouten:\n${fouten.join('\n')}`).toEqual([]);
+  } finally {
+    await context.close();
+  }
 });
 
 /**

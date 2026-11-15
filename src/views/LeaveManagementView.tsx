@@ -18,6 +18,7 @@ import { brengRecordInBeeld } from '../lib/recordLink';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { ActieMenu } from '../components/ActieMenu';
+import { AanwezigOpScherm } from '../components/AanwezigOpScherm';
 import { Checkbox } from '../components/Table';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { VerlofBereikRaster } from '../components/VerlofBereikRaster';
@@ -890,6 +891,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           // grote knoppen op een rij; instellingen (feestdagen, limieten,
           // saldo's) open je zelden en horen in het menu.
           <>
+            {/* "Kijkt ook mee" (ronde 6, punt 20): alleen voor staf. De chip
+                verschijnt live en mag de kop niet hoger maken of een knop
+                verplaatsen terwijl de planner beslist: daarom een vaste
+                grootste breedte (14rem) en pas vanaf xl. Gemeten op 15-11:
+                smaller (tot ±1130 px) duwt hij de uitleg naar een tweede
+                regel en zakt alles eronder 23 px. */}
+            {isPlanner && <AanwezigOpScherm className="hidden xl:inline-flex max-w-56" />}
             {isPlanner && (
               <ActieMenu
                 label="Meer acties"
