@@ -236,7 +236,25 @@ import zlib from 'node:zlib';
 // -0,04) blijven gelijk. Geen nieuwe dependency. De runner weegt het totaal
 // ±0,7 kB zwaarder (±756,8, afgerond 757). Budget = de meting plus die
 // meerweging (keuze 14-11: een grens gaat per PR omhoog, met de meting).
-const BUDGET_KB = 757;
+// 15-11 (ronde 6, plafond voor de rest van de ronde): 757 → 763, samen met
+// index 80,5 → 82, warmup chauffeur 86,5 → 88 en warmup staf 158,5 → 161.
+// Keuze Jarno 15-11 op de vraag "hoe groot mag de app worden": één plafond
+// voor de hele ronde in plaats van bij bijna elke PR een regel. Op main
+// 00a83a3f meet de runner totaal 757 (lokaal 756,6), index 80,11, chauffeur
+// 85,87 en staf 157,98: het totaal stond op de afrondingsrand, en er komen nog
+// ±25 PR's. De schatting voor het einde van de ronde (r6/plan-rest.md, sectie
+// 5, zoals de runner meet) is totaal ±762,6, index ±82,1 met "één ronde
+// minder" en ±81,7 zonder, chauffeur ±87,6, staf ±160,7.
+// Wat erbij hoort, en dat is de eigenlijke bewaker:
+//  - binnen het plafond krijgt een PR geen eigen budgetregel meer; ze blijft
+//    wel binnen de schatting van haar opdracht en meldt de vier cijfers
+//    tegenover haar basis;
+//  - haalt een bewaker in CI het plafond, dan stopt de bouw en kiest Jarno:
+//    schrappen, besparen of verhogen. Niet zelf verhogen;
+//  - de score van het inlogscherm in Lighthouse (hard, ≥ 0,87) blijft de
+//    echte grens van de startbundel: zakt ze op een PR, dan eerst meten
+//    (CLAUDE.md › Prestaties), geen drempelwerk.
+const BUDGET_KB = 763;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -319,7 +337,8 @@ const DEELBUDGET_KB = {
   // index) noemt de nieuwe gedeelde chunks (ToonMeer, archief). Lokaal
   // 78,63 → 78,77; de CI-runner meet de index ±0,4 kB zwaarder, dat kwam
   // op de grens. Budget = de meting plus ±0,8 kB.
-  index: 80.5,
+  // 15-11 (ronde 6, plafond voor de rest van de ronde, zie BUDGET_KB): 80,5 → 82.
+  index: 82,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
@@ -667,6 +686,11 @@ if (!kaartMatch) {
   // 60083e5c), dus ±86,0 in CI, zonder marge. Budget = de meting plus
   // ±0,5 kB. Staf 157,93 blijft binnen 158,5.
   WARMUP_BUDGET_KB.chauffeur = 86.5;
+  // 15-11 (ronde 6, plafond voor de rest van de ronde, zie BUDGET_KB):
+  // chauffeur 86,5 → 88 en staf 158,5 → 161. De runner meet op main 00a83a3f
+  // 85,87 en 157,98. De warmup start pas na LCP + 2 s.
+  WARMUP_BUDGET_KB.chauffeur = 88;
+  WARMUP_BUDGET_KB.staf = 161;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
