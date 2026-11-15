@@ -336,9 +336,14 @@ test.describe('de staf op desktop, met de muis', () => {
     await zetZichtbaarheid(page, 'visible');
     await expect(page.locator(DAG_EN_UUR)).toHaveText('woensdag 10 maart · 06:00');
     // Het verzoek van de terugkeer en, 600 ms later, de herkansing van apiFetch.
+    // Die wachttijd begint pas als de pagina de afbreking zag, en dat is later
+    // dan het ogenblik waarop de proef het verzoek noteert: de klok schuift
+    // daarom door tot de herkansing er is (ver onder de 50 s tot de tik van 06:01).
     await expect.poll(() => verzoeken.slice(bijTerugkeer)).toEqual(['afgebroken']);
-    await page.clock.runFor(700);
-    await expect.poll(() => verzoeken.slice(bijTerugkeer)).toEqual(['afgebroken', 'afgebroken']);
+    await expect(async () => {
+      await page.clock.runFor(700);
+      await expect.poll(() => verzoeken.slice(bijTerugkeer), { timeout: 1000 }).toEqual(['afgebroken', 'afgebroken']);
+    }).toPass({ timeout: 10_000 });
     await expect(tegel).toContainText('iedereen inzetbaar');
 
     // Het netwerk is terug. De volgende minuuttik (06:01) probeert opnieuw.
