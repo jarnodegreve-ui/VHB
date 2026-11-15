@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { LeaveRequest, User } from '../types';
-import { formatUpdateDate, MONTH_NAMES } from '../lib/format';
+import { formatGetal, formatUpdateDate, MONTH_NAMES } from '../lib/format';
 import { beschikbareZiekteJaren, berekenZiekteInzicht } from '../lib/ziekteInzicht';
 import { Avatar } from './Avatar';
 import { Card, CardHeader } from './Card';
@@ -11,7 +11,6 @@ import { TableShell, Td, Th } from './TabelBasis';
 import { EmptyState } from './ui';
 
 const naamVolgorde = new Intl.Collator('nl-BE', { sensitivity: 'base', numeric: true });
-const getal = (waarde: number) => waarde.toLocaleString('nl-BE');
 const PER_PAGINA = 6;
 
 export function ZiekteInzicht({ leaveRequests, users, vandaag }: {
@@ -67,17 +66,17 @@ export function ZiekteInzicht({ leaveRequests, users, vandaag }: {
       <dl aria-label="Jaartotalen" className="grid grid-cols-2 gap-5 rounded-2xl bg-surface-muted p-4 sm:grid-cols-3">
         <div className="min-w-0 [overflow-wrap:anywhere]">
           <dt className="text-label text-slate-600">Kalenderdagen</dt>
-          <dd className="mt-1 text-stat text-slate-900">{getal(inzicht.totaalKalenderdagen)}</dd>
+          <dd className="mt-1 text-stat text-slate-900">{formatGetal(inzicht.totaalKalenderdagen)}</dd>
           <dd className="mt-0.5 text-xs text-slate-500">Inclusief weekends</dd>
         </div>
         <div className="min-w-0 [overflow-wrap:anywhere]">
           <dt className="text-label text-slate-600">Chauffeurs</dt>
-          <dd className="mt-1 text-stat text-slate-900">{getal(chauffeurs.length)}</dd>
+          <dd className="mt-1 text-stat text-slate-900">{formatGetal(chauffeurs.length)}</dd>
           <dd className="mt-0.5 text-xs text-slate-500">Met een registratie</dd>
         </div>
         <div className="col-span-2 min-w-0 [overflow-wrap:anywhere] sm:col-span-1">
           <dt className="text-label text-slate-600">Geregistreerde meldingen</dt>
-          <dd className="mt-1 text-stat text-slate-900">{getal(inzicht.aantalMeldingen)}</dd>
+          <dd className="mt-1 text-stat text-slate-900">{formatGetal(inzicht.aantalMeldingen)}</dd>
         </div>
       </dl>
 
@@ -99,7 +98,7 @@ export function ZiekteInzicht({ leaveRequests, users, vandaag }: {
                   <span aria-hidden="true" className="h-3 overflow-hidden rounded-full bg-surface-muted">
                     <span className="block h-full rounded-full bg-slate-500" style={{ width: `${maand.kalenderdagen / maximum * 100}%` }} />
                   </span>
-                  <span aria-hidden="true" className="text-right font-medium text-slate-800">{toekomst ? '—' : getal(maand.kalenderdagen)}</span>
+                  <span aria-hidden="true" className="text-right font-medium text-slate-800">{toekomst ? '—' : formatGetal(maand.kalenderdagen)}</span>
                 </li>
               );
             })}
@@ -147,8 +146,8 @@ export function ZiekteInzicht({ leaveRequests, users, vandaag }: {
                             <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{chauffeur.naam}</span>
                           </div>
                         </Td>
-                        <Td num>{getal(chauffeur.kalenderdagen)}</Td>
-                        <Td num>{getal(chauffeur.meldingen)}</Td>
+                        <Td num>{formatGetal(chauffeur.kalenderdagen)}</Td>
+                        <Td num>{formatGetal(chauffeur.meldingen)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -164,11 +163,11 @@ export function ZiekteInzicht({ leaveRequests, users, vandaag }: {
                     <dl className="grid grid-cols-2 gap-4 text-body-sm [overflow-wrap:anywhere]">
                       <div className="min-w-0">
                         <dt className="text-slate-500">Kalenderdagen</dt>
-                        <dd className="mt-0.5 font-semibold text-slate-800">{getal(chauffeur.kalenderdagen)}</dd>
+                        <dd className="mt-0.5 font-semibold text-slate-800">{formatGetal(chauffeur.kalenderdagen)}</dd>
                       </div>
                       <div className="min-w-0">
                         <dt className="text-slate-500">Geregistreerde meldingen</dt>
-                        <dd className="mt-0.5 font-semibold text-slate-800">{getal(chauffeur.meldingen)}</dd>
+                        <dd className="mt-0.5 font-semibold text-slate-800">{formatGetal(chauffeur.meldingen)}</dd>
                       </div>
                     </dl>
                   </li>

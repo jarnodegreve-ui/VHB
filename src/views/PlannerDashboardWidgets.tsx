@@ -23,7 +23,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { RuilIcoon } from '../components/RuilIcoon';
-import { EXPIRY_SOORT_LABELS, formatDatumDMJ, formatDayLong, formatPeriodeDMJ, formatShortDay, serviceNumberOf } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDatumDMJ, formatDayLong, formatPeriodeDMJ, formatShortDay, formatSyncedTime, serviceNumberOf, WEEKDAY_SHORT_SUN } from '../lib/format';
 import type { ActivityLogEntry, LeaveRequest, Shift, User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { getDaypartGreeting } from '../lib/interactive';
@@ -924,7 +924,7 @@ export function PlannerDashboardWidgets({
                 title={ok ? `${formatDay(d.date)} · gedekt` : `${formatDay(d.date)} · open: ${d.missing.join(', ')}`}
                 className={cn('flex flex-col items-center gap-1 rounded-xl px-1 py-2 ring-1 ring-hairline', ok ? 'bg-surface-row' : 'bg-red-500/8')}
               >
-                <span className="text-micro">{dag.toLocaleDateString('nl-BE', { weekday: 'short' }).replace('.', '')}</span>
+                <span className="text-micro">{WEEKDAY_SHORT_SUN[dag.getDay()]}</span>
                 <span className="font-mono text-sm font-semibold tabular-nums text-slate-800">{dag.getDate()}</span>
                 {ok ? (
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-label="gedekt" />
@@ -957,7 +957,7 @@ export function PlannerDashboardWidgets({
           </h1>
           <p className="mt-0.5 text-md font-normal text-slate-500">
             {formatDayLong(isoDate(now))} ·{' '}
-            {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+            {formatSyncedTime(now.getTime())}
           </p>
         </div>
         <div className="flex w-fit items-center gap-2">

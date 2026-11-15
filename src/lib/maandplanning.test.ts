@@ -38,7 +38,9 @@ describe('datumrekenwerk', () => {
   });
 
   it('formatDayMonth geeft dag en korte maand', () => {
-    expect(formatDayMonth('2026-10-09')).toMatch(/^9 okt/);
+    // De vorm van src/lib/format.ts: geen afkortingspunt, geen voorloopnul, geen jaar.
+    expect(formatDayMonth('2026-10-09')).toBe('9 okt');
+    expect(formatDayMonth('2026-03-01')).toBe('1 mrt');
   });
 });
 

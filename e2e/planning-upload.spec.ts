@@ -342,3 +342,67 @@ test('Opnieuw proberen van een mislukte herberekening raakt het voorbeeld van ee
   await expect(venster(page).getByLabel('Van', { exact: true })).toHaveValue('01/09/2030');
   await expect(importKnop(page)).toBeEnabled();
 });
+
+// --- Het herstel van een import noemt overal hetzelfde moment (ronde 6, punt 8, deel 3) ---
+//
+// De importlijst, de bevestiging van "Zet terug" en de melding erna noemen de
+// import waarnaar de planning teruggaat. Ze schreven dat moment elk anders
+// ("05/11/2026, 00:30" in de lijst en de bevestiging, "05/11, 00:30" in de
+// melding) en de laatste import stond er als "9/11/2026, 08:15". Nu overal het
+// ene tijdstip van src/lib/format.ts op dezelfde createdAt: de Brusselse dag
+// en het Brusselse uur, ook voor een import om 23:30 UTC (bij ons al de
+// volgende dag).
+
+const importRij = (id: string, createdAt: string, filename: string) => ({
+  id, createdAt, importedDays: 61, detectedDrivers: 24, generatedShifts: 1349, matchedServices: 1349, skippedAbsences: 0,
+  unknownCodes: [], unmatchedDrivers: [], filename, importedBy: 'Jarno De Greve', periodStart: null, periodEnd: null,
+  snapshotPath: `herstel/${id}.json`,
+});
+// De vorm van de server (PostgREST: microseconden en +00:00), het nieuwste eerst.
+const IMPORTS = [
+  importRij('i3', '2026-11-09T07:15:00.123456+00:00', 'november v2.xlsx'),
+  importRij('i2', '2026-11-04T23:30:00.000000+00:00', 'november v1.xlsx'),
+  importRij('i1', '2026-10-08T12:02:00.123456+00:00', 'oktober.xlsx'),
+];
+
+test('herstel: de importlijst, de bevestiging en de melding erna noemen hetzelfde moment, ook voor een import rond middernacht', async ({ page }) => {
+  // Vaste klok in 2026: het jaartal staat er alleen buiten het lopende jaar bij.
+  await page.clock.setFixedTime(new Date('2026-11-12T08:00:00Z'));
+  const herstelVerzoeken: unknown[] = [];
+  await seed(page, {
+    user: ADMIN,
+    extra: (pad, request) => {
+      if (pad.endsWith('/api/planning-matrix/history')) return IMPORTS;
+      if (pad.endsWith('/api/planning-matrix/changes-since-import')) return { lastImport: { createdAt: IMPORTS[0].createdAt, importedDays: 61 }, approvedLeave: [], approvedSwaps: [] };
+      if (pad.endsWith('/api/planning-matrix/restore')) { herstelVerzoeken.push(request.postDataJSON()); return { ok: true }; }
+      return undefined;
+    },
+  });
+  await page.goto('/beheer/planning');
+  await expect(page.getByRole('heading', { name: 'Beheer planning', level: 1 })).toBeVisible({ timeout: 15_000 });
+
+  // De laatste import staat in dezelfde vorm, niet meer als "9/11/2026, 08:15".
+  await expect(page.getByText(/Laatste import: /)).toContainText('Laatste import: ma 9 nov, 08:15.');
+
+  // De importlijst: één rij per import, elk met haar moment.
+  const rij = (bestand: string) => page.locator('div.surface-muted').filter({ hasText: bestand }).filter({ has: page.getByRole('button', { name: 'Zet terug' }) }).last();
+  const momentVan = (bestand: string) => rij(bestand).locator('p.tabular-nums').first();
+  await expect(momentVan('oktober.xlsx')).toHaveText('do 8 okt, 14:02');
+  // 23:30 UTC op woensdag 4 november is in Brussel donderdag 5 november, 00:30.
+  await expect(momentVan('november v1.xlsx')).toHaveText('do 5 nov, 00:30');
+  const moment = (await momentVan('november v1.xlsx').innerText()).trim();
+
+  // De bevestiging noemt de import waarnaar de planning teruggaat: exact dat moment.
+  await rij('november v1.xlsx').getByRole('button', { name: 'Zet terug' }).click();
+  const bevestiging = page.getByRole('dialog').filter({ hasText: 'Planning terugzetten?' });
+  await expect(bevestiging).toContainText(`de stand van vóór de import van ${moment} (november v1.xlsx).`);
+  await expect(bevestiging).toContainText('de import van do 5 nov, 00:30 (november v1.xlsx)');
+
+  // En de melding na het herstel ook.
+  await bevestiging.getByRole('button', { name: 'Zet terug' }).click();
+  const melding = page.getByRole('status').filter({ hasText: 'Planning teruggezet' });
+  await expect(melding).toContainText(`Planning teruggezet naar de stand van vóór de import van ${moment}.`);
+  await expect(melding).toContainText('de import van do 5 nov, 00:30.');
+  expect(herstelVerzoeken).toEqual([{ historyId: 'i2' }]);
+  await expect(bevestiging).toHaveCount(0);
+});

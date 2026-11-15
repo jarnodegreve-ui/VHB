@@ -165,6 +165,7 @@ const opDag = (iso: string | undefined | null, vorm: DagVorm, metJaar?: boolean)
 
 /** De weekdag uit de kalenderdag zelf, nooit uit een tijdstempel. */
 const weekdag: DagVorm = (j, m, d) => WEEKDAY_SHORT_SUN[new Date(j, m - 1, d).getDay()];
+const weekdagLang: DagVorm = (j, m, d) => WEEKDAG_LANG[new Date(j, m - 1, d).getDay()];
 const dagMaand: DagVorm = (j, m, d, metJaar) => `${d} ${MAAND_KORT[m - 1]}${metJaar ? ` ${j}` : ''}`;
 const kortDag: DagVorm = (j, m, d, metJaar) => `${weekdag(j, m, d)} ${dagMaand(j, m, d, metJaar)}`;
 
@@ -180,6 +181,11 @@ export const formatDagMaand = (iso: string | undefined | null, metJaar?: boolean
 /** Alleen de korte weekdag 'do', voor wie dag en datum apart zet (de
  *  roosterkaart); de rest van de datum is formatDagMaand. */
 export const formatWeekdag = (iso: string | undefined | null): string => opDag(iso, weekdag);
+
+/** Alleen de lange weekdag 'donderdag', voor een kop die de dag bij naam noemt
+ *  (Vandaag: "Donderdag" voor een dag na morgen). Uit een vaste tabel, zoals
+ *  de korte weekdag: elke motor toont hetzelfde. */
+export const formatWeekdagLang = (iso: string | undefined | null): string => opDag(iso, weekdagLang);
 
 /** Volledig dag-label 'vrijdag 18 juli' — voor koppen en detailvensters, waar
  *  de korte vorm te krap aanvoelt. Het jaar alleen op vraag ('vrijdag 18 juli
@@ -211,6 +217,9 @@ export const WEEKDAY_SHORT_MON = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 
 /** Weekdag-afkortingen in JS-volgorde (index = Date#getDay(), 0 = zo). */
 export const WEEKDAY_SHORT_SUN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+
+/** Volledige weekdagnamen in JS-volgorde (index = Date#getDay(), 0 = zondag). */
+const WEEKDAG_LANG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 
 /** Korte maandnamen (index 0 = jan), zonder afkortingspunt: wat Node 22 voor
  *  nl-BE geeft, maar vast, zodat elke motor hetzelfde toont. Eén tabel (stond

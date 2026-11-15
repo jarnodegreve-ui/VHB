@@ -1341,7 +1341,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   dát de vraag die telt (push bereikt weinigen). */}
                               {swap.status === 'approved' && swap.targetDriverId && (
                                 swap.targetSeenAt
-                                  ? <Badge tone="emerald" stil icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>Gezien</Badge>
+                                  ? <Badge tone="emerald" stil icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt)}`}>Gezien</Badge>
                                   : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">Niet bevestigd</Badge>
                               )}
                               {teWeinigRust && <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge>}

@@ -32,7 +32,11 @@ describe('vervalregels', () => {
   });
 
   it('korte datum dag-maand-jaar, onleesbaar blijft zoals het was', () => {
-    expect(kortVervalDatum('2027-11-27')).toMatch(/^27 nov\.? 2027$/);
+    // De vorm van src/lib/format.ts: geen afkortingspunt, geen voorloopnul, in elke motor.
+    expect(kortVervalDatum('2027-11-27')).toBe('27 nov 2027');
+    expect(kortVervalDatum('2026-10-08')).toBe('8 okt 2026');
+    // Een tijdstempel telt als zijn Brusselse dag, niet als de eerste tien tekens.
+    expect(kortVervalDatum('2026-11-04T23:30:00Z')).toBe('5 nov 2026');
     expect(kortVervalDatum('onzin')).toBe('onzin');
   });
 

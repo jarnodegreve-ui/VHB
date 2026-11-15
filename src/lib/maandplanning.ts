@@ -1,6 +1,6 @@
 import { isoDate } from './availability';
 import { KIND_LABEL } from './planningKind';
-import { WEEKDAY_LETTER_MON } from './format';
+import { formatDagMaand, WEEKDAY_LETTER_MON } from './format';
 import type { CellKind, MonthCell, MonthPlanning } from './monthPlanning';
 
 /**
@@ -52,11 +52,9 @@ export const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Ruil op papie
 /** Sleutel van een dienstnotitie: chauffeur en dag. */
 export const noteKey = (driverId: string, iso: string) => `${driverId}:${iso}`;
 
-export const formatDayMonth = (iso: string) => {
-  const d = new Date(`${iso}T00:00:00`);
-  try { return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' }); }
-  catch { return iso; }
-};
+/** Dag en korte maand ("8 okt") voor het venster van de Maandplanning: de
+ *  vorm van src/lib/format.ts onder de naam die de aanroepers kennen. */
+export const formatDayMonth = (iso: string) => formatDagMaand(iso);
 
 /** Dagkop van het raster: weekdagletter, dagnummer, weekend en maandag. */
 export const dayHeader = (iso: string) => {

@@ -4,7 +4,7 @@ import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { isoDate, addDagen } from '../../lib/datum';
-import { formatDatumDMJ, formatDayLong, formatRelatief, formatShortDay, formatSyncedTime, WEEKDAY_SHORT_SUN } from '../../lib/format';
+import { formatDayLong, formatRelatief, formatShortDay, formatTijdstip, formatUur, hoofdletter, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { EmptyState, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, FilterChip, Segmented, Switch } from '../../components/primitives';
@@ -81,13 +81,14 @@ const BUNDEL_VENSTER_MS = 10 * 60 * 1000;
 /** Automatische hartslagen (crons) zijn geen menselijke actie: standaard verborgen. */
 const isRuis = (e: ActivityLogEntry) => e.category === 'system' && /^Cron /i.test(e.action);
 
-/** 'UU:MM' en 'dd/mm/jjjj UU:MM' in lokale tijd, via de gedeelde datumhelpers. */
-const uur = (iso: string) => formatSyncedTime(new Date(iso).getTime());
-const moment = (iso: string) => `${formatDatumDMJ(isoDate(new Date(iso)))} ${uur(iso)}`;
+/** Het uur ("14:02") en het tijdstip ("do 8 okt, 14:02") van een regel: de
+ *  vormen van src/lib/format.ts zelf, in Brusselse tijd. */
+const uur = formatUur;
+const moment = formatTijdstip;
 const dagKop = (dag: string, vandaag: string): string => {
   if (dag === vandaag) return 'Vandaag';
   if (dag === addDagen(vandaag, -1)) return 'Gisteren';
-  return formatDayLong(dag).replace(/^./, (c) => c.toUpperCase());
+  return hoofdletter(formatDayLong(dag));
 };
 const dagKort = (dag: string, vandaag: string): string => {
   if (dag === vandaag) return 'vandaag';
