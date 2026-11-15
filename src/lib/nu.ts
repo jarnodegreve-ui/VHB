@@ -69,14 +69,17 @@ const plan = () => {
   timer = setTimeout(tik, Math.max(MIN_TIK_MS, MINUUT_MS - (Date.now() % MINUUT_MS)));
 };
 
+// Eerst plannen, dan melden: een luisteraar die zich in de melding afmeldt
+// (de laatste weg = timer weg) laat zo geen timer achter, en een luisteraar
+// die gooit houdt de volgende tik niet tegen.
 const tik = () => {
-  meld();
   plan();
+  meld();
 };
 
 const opTerugkeer = () => {
-  if (document.visibilityState !== 'hidden') meld();
   plan();
+  if (document.visibilityState !== 'hidden') meld();
 };
 
 const gebeurtenissen = (doe: 'addEventListener' | 'removeEventListener') => {

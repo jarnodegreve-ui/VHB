@@ -1,4 +1,5 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { createElement, StrictMode, useLayoutEffect, useState } from 'react';
+import { act, cleanup, render, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abonneerNu, leesNu, leesVandaag, useNu, useVandaag } from './nu';
 
@@ -131,6 +132,39 @@ describe('de tik', () => {
     expect(l).not.toHaveBeenCalled();
     focus();
     expect(l).toHaveBeenCalledTimes(1);
+  });
+
+  for (const [naam, meldt] of [
+    ['de tik', () => { vi.advanceTimersByTime(40_000); }],
+    ['focus na een tijdsprong', () => { vi.setSystemTime(om(11, 0, 20)); focus(); }],
+  ] as const) {
+    it(`een luisteraar die zich in de melding zelf afmeldt laat geen timer achter (${naam})`, () => {
+      const bij = [vi.spyOn(document, 'addEventListener'), vi.spyOn(window, 'addEventListener')];
+      const weg = [vi.spyOn(document, 'removeEventListener'), vi.spyOn(window, 'removeEventListener')];
+      let af: () => void = () => {};
+      const l = vi.fn(() => af());
+      af = abonneerNu(l);
+      afmelders.push(af);
+      expect(vi.getTimerCount()).toBe(1);
+
+      meldt();
+      expect(l).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount(), 'zonder luisteraars geen timer, ook niet na de melding zelf').toBe(0);
+      expect(weg.flatMap((s) => s.mock.calls).length).toBe(bij.flatMap((s) => s.mock.calls).length);
+
+      vi.advanceTimersByTime(5 * 60_000);
+      expect(l).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  }
+
+  it('een luisteraar die gooit houdt de volgende tik niet tegen', () => {
+    const stuk = vi.fn(() => { throw new Error('stuk'); });
+    afmelders.push(abonneerNu(stuk));
+    expect(() => vi.advanceTimersByTime(40_000)).toThrow('stuk');
+    expect(vi.getTimerCount(), 'de volgende tik staat al gepland').toBe(1);
+    expect(() => vi.advanceTimersByTime(60_000)).toThrow('stuk');
+    expect(stuk).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -266,6 +300,97 @@ describe('in een scherm', () => {
       return dag;
     });
     expect(new Set(gezien)).toEqual(new Set(['2026-11-16']));
+  });
+
+  it('onder StrictMode (zo draait main.tsx): één timer, één stel gebeurtenisluisteraars, niets meer na de unmount', () => {
+    vi.setSystemTime(om(10, 0, 20));
+    const KLOK = ['visibilitychange', 'pageshow', 'focus'];
+    const spionnen = (soort: 'addEventListener' | 'removeEventListener') => [vi.spyOn(document, soort), vi.spyOn(window, soort)];
+    const tel = (s: ReturnType<typeof spionnen>) => s.flatMap((x) => x.mock.calls).filter((c) => KLOK.includes(String(c[0]))).length;
+    const bij = spionnen('addEventListener');
+    const weg = spionnen('removeEventListener');
+    let getekend = 0;
+    const scherm = () => { getekend += 1; return [useNu(), useVandaag()] as const; };
+    const a = renderHook(scherm, { wrapper: StrictMode });
+    const b = renderHook(scherm, { wrapper: StrictMode });
+
+    expect(vi.getTimerCount()).toBe(1);
+    expect(tel(bij) - tel(weg), 'het dubbele effect van StrictMode laat geen tweede stel hangen').toBe(3);
+
+    const voor = getekend;
+    act(() => { vi.advanceTimersByTime(30_000); });
+    expect(getekend, 'binnen de minuut tekent niemand opnieuw').toBe(voor);
+    act(() => { vi.advanceTimersByTime(10_000); });
+    expect(getekend).toBeGreaterThan(voor);
+    expect(a.result.current[0].getTime()).toBe(om(10, 1).getTime());
+    expect(b.result.current[0]).toBe(a.result.current[0]);
+    expect(vi.getTimerCount()).toBe(1);
+
+    a.unmount();
+    expect(vi.getTimerCount(), 'het tweede scherm houdt de klok aan').toBe(1);
+    b.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(tel(bij) - tel(weg)).toBe(0);
+  });
+
+  it('een scherm dat door zijn eigen tik verdwijnt: de klok van de ouder tikt door', () => {
+    vi.setSystemTime(om(10, 0, 20));
+    const Kind = () => createElement('span', { 'data-testid': 'kind' }, useNu().getMinutes());
+    const Ouder = () => {
+      const nu = useNu();
+      return createElement('div', null, nu.getMinutes() === 0 ? createElement(Kind) : null, createElement('b', { 'data-testid': 'ouder' }, nu.getMinutes()));
+    };
+    const { getByTestId, queryByTestId, unmount } = render(createElement(Ouder));
+    expect(getByTestId('kind').textContent).toBe('0');
+
+    act(() => { vi.advanceTimersByTime(40_000); });
+    expect(queryByTestId('kind')).toBeNull();
+    expect(getByTestId('ouder').textContent).toBe('1');
+    expect(vi.getTimerCount()).toBe(1);
+
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(getByTestId('ouder').textContent).toBe('2');
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('het enige scherm verdwijnt door zijn eigen tik: er blijft geen timer achter', () => {
+    vi.setSystemTime(om(10, 0, 20));
+    const Kind = ({ opMinuut }: { opMinuut: (m: number) => void }) => {
+      const nu = useNu();
+      useLayoutEffect(() => { opMinuut(nu.getMinutes()); }, [nu, opMinuut]);
+      return createElement('span', { 'data-testid': 'kind' }, nu.getMinutes());
+    };
+    const Ouder = () => {
+      const [toon, setToon] = useState(true);
+      const [op] = useState(() => (m: number) => { if (m !== 0) setToon(false); });
+      return toon ? createElement(Kind, { opMinuut: op }) : createElement('i', { 'data-testid': 'weg' }, 'weg');
+    };
+    const { getByTestId, queryByTestId } = render(createElement(Ouder));
+    expect(getByTestId('kind').textContent).toBe('0');
+    expect(vi.getTimerCount()).toBe(1);
+
+    act(() => { vi.advanceTimersByTime(40_000); });
+    expect(queryByTestId('kind')).toBeNull();
+    expect(getByTestId('weg').textContent).toBe('weg');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('de minuut en de dag verspringen tussen het tekenen en het abonneren: het scherm eindigt op de nieuwe, zonder tik', () => {
+    vi.setSystemTime(om(23, 59, 59, 990));
+    const gezien: string[] = [];
+    const { result } = renderHook(() => {
+      const nu = useNu();
+      const dag = useVandaag();
+      // Na het tekenen, vóór het abonnement (een passief effect): de klok springt.
+      useLayoutEffect(() => { vi.setSystemTime(om(0, 0, 0, 20, 16)); }, []);
+      const tekst = `${dag} ${nu.getHours()}:${nu.getMinutes()}`;
+      gezien.push(tekst);
+      return tekst;
+    });
+    expect(gezien[0]).toBe('2026-11-15 23:59');
+    expect(result.current).toBe('2026-11-16 0:0');
+    expect(vi.getTimerCount()).toBe(1);
   });
 });
 
