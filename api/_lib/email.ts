@@ -344,6 +344,10 @@ export const bouwUitnodigingMail = (ctx: { naam: string; email: string; link: st
  * De push op de mijlpalen (90/30/7/0 dagen) bereikt alleen wie meldingen aan
  * heeft — dat zijn er nauwelijks — dus dit is het kanaal dat wél aankomt.
  * De planner ziet de vervaldata sowieso al in het ochtenddigest.
+ *
+ * De pil is altijd amber (toon aandacht), ook bij "Dringend" (7 dagen of
+ * minder): het portaal toont een document dat nog geldig is in amber en houdt
+ * rood voor wat verlopen is (VervalPil, src/lib/verval.ts). Keuze Jarno 15-11.
  */
 export const bouwVervaldatumMail = (ctx: { name: string; soortLabel: string; validUntil: string; dagen: number }): MailTekst => {
   const wanneer =
@@ -358,7 +362,7 @@ export const bouwVervaldatumMail = (ctx: { name: string; soortLabel: string; val
   const { html, text } = mailOpbouw({
     kicker: "Herinnering",
     titel: `Je ${soort} ${wanneer}`,
-    status: { label: dringend ? "Dringend" : "Tijdig regelen", toon: dringend ? "fout" : "aandacht" },
+    status: { label: dringend ? "Dringend" : "Tijdig regelen", toon: "aandacht" },
     aanhef: `Hallo ${ctx.name},`,
     alineas: ["Regel de vernieuwing tijdig en geef de nieuwe datum door aan de planning, dan blijf je zonder onderbreking inzetbaar."],
     feiten: [
