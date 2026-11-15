@@ -45,6 +45,7 @@ import { bezettingCelTekst, verlofDagStand } from '../lib/verlofDagStand';
 import { useMinWidth } from '../lib/useMinWidth';
 import { aanvragerNaam, BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
 import { ookAangevraagd, volgendeWachtende } from '../lib/verlofWachtrij';
+import { LijstAnimatie, LijstRij, useBeslisteRijen } from '../components/LijstRij';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -513,6 +514,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     if (isBeheerder && !isMe) return false;
     return true;
   }) : []), [isPlanner, verlofRequests, users, user.id]);
+  // Wat de lijst tekent (ronde 6, punt 1): `plannerPending`, met een net
+  // beslist record nog even op zijn plaats met zijn nieuwe status
+  // (`houdVast` na een geslaagde beslissing, in het paneel en per aanvraag in
+  // de bulk). Alleen de lijst zelf leest dit; het doorschakelen, "Ook
+  // aangevraagd", "Selecteer alles" en de tellers blijven op plannerPending.
+  const beslist = useBeslisteRijen(plannerPending, { sleutel: (r) => r.id, zoek: (id) => verlofRequests.find((r) => r.id === id) });
   // De verse stand voor ná het antwoord van de server: wat er dan nog wacht
   // en welke aanvraag het paneel dan toont (de render van de klik is dan oud).
   const wachtendRef = useRef(plannerPending);
@@ -543,7 +550,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       // die intussen al behandeld is, geeft een melding en slaat over. Eén
       // samenvattende toast na afloop i.p.v. n stiltes.
       void (async () => {
-        const resultaat = await bulkUitvoeren(ids, (id) => onDecide(id, status, 'pending', weigerReden));
+        // Elke aanvraag krijgt de vasthoudstand op het moment dat haar eigen
+        // PATCH slaagt; een mislukte blijft gewoon in de lijst staan.
+        const resultaat = await bulkUitvoeren(ids, (id) => onDecide(id, status, 'pending', weigerReden).then((ok) => {
+          if (ok === true) beslist.houdVast(id);
+          return ok;
+        }));
         meldBulkResultaat(notify, resultaat, {
           item: ['aanvraag', 'aanvragen'],
           gedaan: status === 'approved' ? 'goedgekeurd' : 'afgewezen',
@@ -849,6 +861,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         onDecide={async (id, status, seenStatus, reden) => {
           const volgorde = plannerPending.map((r) => r.id);
           const ok = await handleStatusUpdate(id, status, seenStatus, reden);
+          // Dezelfde tik als de nieuwe collectie: de rij staat nog even met
+          // haar nieuwe status in de lijst. De klik viel in het paneel, dus
+          // alleen de tijd telt.
+          if (ok === true) beslist.houdVast(id);
           const breed = (px: number) => window.matchMedia(`(min-width: ${px}px)`).matches;
           const kopVrij = !breed(768) || breed(1195);
           const volgende = ok === true && hierRef.current && getoondRef.current === id && kopVrij
@@ -1080,14 +1096,49 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     </div>
                   </Card>
                 )}
-                <div className="space-y-1.5">
-                  {plannerPending.length > 0 ? plannerPending.map((req) => {
+                {/* Na een beslissing blijft de rij een halve tel staan met haar
+                    nieuwe status (inert, zonder keuzevakje en zonder knop) en
+                    klapt dan dicht (LijstRij); de lijst zelf krijgt de focus
+                    als die in de rij stond. "Alles beoordeeld" pas als ook de
+                    laatste vastgehouden rij de lijst verliet. */}
+                <div ref={beslist.lijstRef} tabIndex={-1} className="space-y-1.5 focus-stil">
+                  <LijstAnimatie aantal={beslist.getoond.length}>
+                  {beslist.getoond.map(({ record: req, vast }) => {
                     const requester = users.find((u) => u.id === req.userId);
-                    const isSelected = selectedPendingIds.has(req.id);
+                    const naam = requester?.name ?? 'Onbekend';
                     const conflictShifts = shiftsConflictingWithLeave(shifts, req);
+                    const naamEnPeriode = (
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-md font-semibold text-slate-800">{naam}</span>
+                          {conflictShifts.length > 0 && (
+                            <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`} aria-label={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
+                              <AlertTriangle size={14} className="shrink-0 text-red-500" />
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">
+                          {formatPeriodeDMJ(req.startDate, req.endDate)} · {formatLeaveType(req.type)}
+                        </span>
+                      </span>
+                    );
+                    if (vast) {
+                      return (
+                        <LijstRij as="div" key={req.id} {...beslist.vak(req.id, true)}>
+                          <div className="flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5">
+                            {/* De plaats van het keuzevakje (zelfde maat): de naam schuift niet. */}
+                            <span aria-hidden="true" className="inline-flex min-h-11 min-w-11 shrink-0 sm:pointer-fine:min-h-6 sm:pointer-fine:min-w-6" />
+                            <Avatar naam={naam} size="md" />
+                            {naamEnPeriode}
+                            <StatusBadge status={req.status} className="shrink-0" />
+                          </div>
+                        </LijstRij>
+                      );
+                    }
+                    const isSelected = selectedPendingIds.has(req.id);
                     return (
+                      <LijstRij as="div" key={req.id} {...beslist.vak(req.id, false)}>
                       <div
-                        key={req.id}
                         className={cn(
                           'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-[background-color,box-shadow] hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1',
                           isSelected && 'bg-slate-100/60 ring-hairline-strong',
@@ -1105,25 +1156,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           onClick={() => setReviewLeave(req)}
                           className="flex min-w-0 flex-1 items-center gap-3 text-left"
                         >
-                          <Avatar naam={requester?.name ?? 'Onbekend'} size="md" />
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-2">
-                              <span className="truncate text-md font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
-                              {conflictShifts.length > 0 && (
-                                <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`} aria-label={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
-                                  <AlertTriangle size={14} className="shrink-0 text-red-500" />
-                                </span>
-                              )}
-                            </span>
-                            <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">
-                              {formatPeriodeDMJ(req.startDate, req.endDate)} · {formatLeaveType(req.type)}
-                            </span>
-                          </span>
+                          <Avatar naam={naam} size="md" />
+                          {naamEnPeriode}
                           <ChevronRightSmall size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                         </button>
                       </div>
+                      </LijstRij>
                     );
-                  }) : (
+                  })}
+                  </LijstAnimatie>
+                  {beslist.getoond.length === 0 && (
                     <Card tone="success" padding="none" className="px-4 py-3.5">
                       <p className="text-md font-semibold text-slate-800">Alles beoordeeld</p>
                       <p className="text-xs font-normal text-slate-500">Geen openstaande verlofaanvragen.</p>

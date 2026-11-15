@@ -1,6 +1,7 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { AnimatePresence, motion, useReducedMotion, type HTMLMotionProps } from 'motion/react';
 import { DUR, EASE } from '../lib/motion';
+import { startStand, toonBeslist } from '../lib/beslisteRijen';
 
 /**
  * Lijstmutaties met een lichaam (golf 4, punt 10). De datalaag is
@@ -76,4 +77,100 @@ export function LijstRij<T extends Tag = 'li'>({ as, children, style, ...rest }:
       {children}
     </Comp>
   );
+}
+
+/**
+ * De vasthoudstand na een beslissing (ronde 6, punt 1; rekenkern en
+ * loslaatregel in src/lib/beslisteRijen.ts). Een view roept na een GESLAAGDE
+ * beslissing (`ok === true`, nooit bij een fout, 409 of 500) `houdVast(id,
+ * klik?)` aan, in dezelfde tik als de nieuwe collectie: React tekent ze samen,
+ * er is dus geen beeld waarin de rij al weg is. Zolang de stand duurt, staat
+ * dat vak (een rij, of een vak dat geen rij is, zoals de voet van een paneel)
+ * er met het record zoals het nu in de collectie staat, inert en zonder
+ * knoppen; daarna laat het los.
+ *
+ * `klik` is het event van de beslissing (een React- of DOM-event volstaat,
+ * gelezen op het moment van houdVast). Viel het met de aanwijzer (`detail >
+ * 0`) in het vak zelf, dan duurt de stand ook tot de aanwijzer dat vak
+ * verliet of de vinger ergens anders neerkwam (`startStand`). Met het
+ * toetsenbord (`detail` 0), of als de klik in een paneel of een bevestiging
+ * viel: alleen de tijd. Stond de focus in het vak (een knop die nu
+ * verdwijnt), dan gaat ze naar `bereik` (de lijst zelf, `tabIndex={-1}`),
+ * nooit naar een beslisknop; een focus elders blijft waar ze is.
+ *
+ * Verlaat de gebruiker het scherm, dan stopt elke stand stil: geen klok of
+ * luisteraar die doorloopt, geen state na het afbreken, en een houdVast die
+ * daarna nog binnenkomt (een antwoord dat te laat kwam) doet niets.
+ */
+export type BeslisKlik = { detail: number; target: EventTarget | null };
+
+const VAK = 'data-vasthoud-vak';
+const GEEN: ReadonlySet<string> = new Set();
+
+export function useVasthouden({ bereik }: {
+  /** Waar de focus heen gaat als ze in een vastgehouden vak stond, en waarbinnen het vak gezocht wordt. */
+  bereik?: RefObject<HTMLElement | null>;
+} = {}) {
+  const [vast, setVast] = useState<ReadonlySet<string>>(GEEN);
+  const standen = useRef(new Map<string, () => void>());
+  const levend = useRef(false);
+  useEffect(() => {
+    levend.current = true;
+    const lopend = standen.current;
+    return () => {
+      levend.current = false;
+      for (const stop of lopend.values()) stop();
+      lopend.clear();
+    };
+  }, []);
+
+  const houdVast = useCallback((sleutel: string, klik?: BeslisKlik) => {
+    if (!levend.current) return;
+    const wortel = bereik?.current ?? null;
+    const metSleutel = (el: Element | null) => (el instanceof HTMLElement && el.getAttribute(VAK) === sleutel ? el : null);
+    const viaKlik = klik?.target instanceof Element ? metSleutel(klik.target.closest(`[${VAK}]`)) : null;
+    const vak = viaKlik ?? [...(wortel ?? document).querySelectorAll(`[${VAK}]`)].map(metSleutel).find((el) => el) ?? null;
+    const actief = document.activeElement;
+    if (vak && actief && vak.contains(actief)) wortel?.focus({ preventScroll: true });
+    standen.current.get(sleutel)?.();
+    standen.current.set(sleutel, startStand({
+      aanwijzer: !!viaKlik && (klik?.detail ?? 0) > 0,
+      vak: () => (vak && vak.isConnected ? vak.getBoundingClientRect() : null),
+      klaar: () => {
+        standen.current.delete(sleutel);
+        setVast((v) => { const n = new Set(v); n.delete(sleutel); return n; });
+      },
+    }));
+    setVast((v) => (v.has(sleutel) ? v : new Set(v).add(sleutel)));
+  }, [bereik]);
+
+  return {
+    houdVast,
+    /** De sleutels die nu vastgehouden worden. */
+    vast,
+    isVast: (sleutel: string) => vast.has(sleutel),
+    /** Op het element van het vak: herkenning voor de aanwijzerregel, en inert zolang de stand duurt. */
+    vak: (sleutel: string, isVast = vast.has(sleutel)) => ({ [VAK]: sleutel, inert: isVast || undefined }),
+  };
+}
+
+/**
+ * De vasthoudstand voor een lijst. `getoond` is wat de lijst tekent: `lijst`
+ * (de bron waarop al de rest rekent, ongewijzigd), met elke vastgehouden rij
+ * op haar plaats van vóór de beslissing en met het record uit `zoek` (de
+ * collectie). Na de stand verlaat ze `getoond`: wat er niet meer in hoort
+ * klapt dicht (`LijstRij`), wat elders hoort schuift erheen (`layout`).
+ */
+export function useBeslisteRijen<T>(lijst: readonly T[], { sleutel, zoek }: {
+  sleutel: (record: T) => string;
+  zoek: (id: string) => T | undefined;
+}) {
+  const lijstRef = useRef<HTMLDivElement | null>(null);
+  const stand = useVasthouden({ bereik: lijstRef });
+  // De ids van de laatst GETEKENDE lijst: daar staat een vastgehouden rij.
+  const vorige = useRef<string[]>([]);
+  const getoond = toonBeslist({ huidig: lijst, sleutel, vorige: vorige.current, vast: stand.vast, zoek });
+  const ids = getoond.map(({ record }) => sleutel(record));
+  useLayoutEffect(() => { vorige.current = ids; });
+  return { getoond, houdVast: stand.houdVast, lijstRef, vak: stand.vak };
 }
