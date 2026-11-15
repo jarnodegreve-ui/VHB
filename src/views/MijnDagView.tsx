@@ -29,6 +29,7 @@ import { MededelingStrook } from '../components/MededelingStrook';
 import { MijnWeek } from '../components/MijnWeek';
 import { MIJN_WEEK_DAGEN, bouwMijnWeek } from '../lib/mijnWeek';
 import { dagtypeWoord, useDagtypes } from '../lib/dagtypes';
+import { useNu } from '../lib/nu';
 
 // Defect melden (techniek, 13-09): pas laden bij de klik, de chunk van Mijn dag blijft licht.
 const LazyDefectMeldenModal = lazyWithRetry(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
@@ -74,7 +75,7 @@ export function MijnDagView({
   isInitialLoad?: boolean;
   onNavigate?: (view: View) => void;
 }) {
-  const [now, setNow] = useState(new Date());
+  const now = useNu();
   // Vandaag | Morgen — 's avonds is "wanneer moet ik morgen beginnen" dé vraag.
   const [dagOffset, setDagOffset] = useState<0 | 1>(0);
   // Richting van de laatste dagwissel: naar Morgen schuift de inhoud naar
@@ -88,11 +89,6 @@ export function MijnDagView({
   // Ritblad per dienst: de viewer zoekt de pagina's van het dienstnummer in de bundel.
   const [ritbladOpen, setRitbladOpen] = useState(false);
   const [defectMelden, setDefectMelden] = useState(false);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Startscherm-voorkeur naar de lokale kopie (de router leest die bij het
   // opstarten, vóór het profiel binnen is; src/lib/startscherm.ts).

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, CalendarClock, CalendarDays, IdCard, ShieldCheck, Smartphone, UserX } from 'lucide-react';
 import { RuilIcoon } from '../components/RuilIcoon';
 import type { User, View } from '../types';
@@ -9,6 +9,7 @@ import {
   type WerkItem, type WerkSoort,
 } from '../lib/werkvoorraad';
 import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
+import { useNu } from '../lib/nu';
 import { apiJson } from '../lib/api';
 import { cn, notify } from '../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -73,11 +74,7 @@ export function WerkvoorraadView({
   const isAdmin = currentUser.role === 'admin';
 
   // Minuutklok voor "12 min geleden" en de dagdrempels; zelfde ritme als de cockpit.
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const now = useNu();
 
   const werkvoorraad = useMemo(
     () => berekenWerkvoorraad({ users, shifts, leaveRequests, swaps, matrixHistory: planningMatrixHistory, coverageDays, vervaldata, pendingDevices, now }),

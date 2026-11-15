@@ -14,6 +14,7 @@ import { navigeer } from '../app/router';
 import { ruilenDieOpMijWachten } from '../lib/ruilWachtOpMij';
 import { ruilWachtRegels } from '../lib/ruilWachtRegels';
 import { getDaypartGreeting } from '../lib/interactive';
+import { useNu } from '../lib/nu';
 import { cn } from '../lib/ui';
 import { formatDayLong, formatShortDay, formatSyncedTime, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
@@ -74,18 +75,13 @@ export function DashboardView({ notes = [],
   isInitialLoad?: boolean;
   onNavigate?: (view: View) => void;
 }) {
-  const [now, setNow] = useState(new Date());
+  const now = useNu();
   // Detailvenster voor een omleiding — opent als side panel, geen paginawissel.
   const [openDiversion, setOpenDiversion] = useState<Diversion | null>(null);
   // Dashboard op maat (06-09): verborgen tegels + volgorde per gebruiker.
   const { voorkeuren, opslaan: bewaarVoorkeuren } = useDashboardVoorkeuren(user);
   const [aanpassen, setAanpassen] = useState(false);
   const [defectMelden, setDefectMelden] = useState(false);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
 
   const myShifts = shifts.filter((s) => s.driverId === user.id);
   // Lokale dag (isoDate) i.p.v. toISOString(): die laatste gaf 's nachts in

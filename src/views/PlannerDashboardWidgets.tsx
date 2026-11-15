@@ -27,6 +27,7 @@ import { EXPIRY_SOORT_LABELS, formatDatumDMJ, formatDayLong, formatPeriodeDMJ, f
 import type { ActivityLogEntry, LeaveRequest, Shift, User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { getDaypartGreeting } from '../lib/interactive';
+import { useNu } from '../lib/nu';
 import { addDays, isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
 import { berekenWerkvoorraad } from '../lib/werkvoorraad';
 import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
@@ -96,11 +97,7 @@ export function PlannerDashboardWidgets({
     ]);
   };
   // Klok voor de header (60s-tick is ruim voldoende voor een dagdeel-groet).
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useNu();
 
   // Afwezigheden uit de planning-matrix (Excel-codes bv/ziek/ta/tk…): de
   // verlof-module kent alleen aanvragen die vía het portaal liepen, dus

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useRouteParam } from '../app/router';
 import { AlertTriangle, ChevronRight, MapPin, Phone, UserX } from 'lucide-react';
 import { RuilIcoon } from '../components/RuilIcoon';
@@ -6,6 +6,7 @@ import type { LeaveRequest, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { SkeletonRow } from '../components/Skeleton';
 import { addDays, isoDate } from '../lib/availability';
+import { useVandaag } from '../lib/nu';
 import { WEEKSTROOK_DAGEN, bouwDagBriefing, bouwWeekPunten, briefingKop, dagWoordVoor, type BriefingAfwezige, type BriefingRuil, type WeekDagPunt } from '../lib/dagBriefing';
 import { MONTH_NAMES, WEEKDAY_SHORT_MON, formatDatumDMJ, formatDayLong } from '../lib/format';
 import { cn } from '../lib/ui';
@@ -115,12 +116,8 @@ function Weekstrook({ week, vandaag, gekozen, onKies }: {
 
 export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: string[]) => void }) {
   const { users, shifts, leaveRequests, swaps, diversions, diversionsGeladen, coverageDays } = useAppDataContext();
-  // De dag verspringt om middernacht; een tik per minuut volstaat.
-  const [vandaag, setVandaag] = useState(() => isoDate(new Date()));
-  useEffect(() => {
-    const timer = setInterval(() => setVandaag(isoDate(new Date())), 60000);
-    return () => clearInterval(timer);
-  }, []);
+  // De dag verspringt om middernacht; de gedeelde klok tekent alleen dan opnieuw.
+  const vandaag = useVandaag();
   // Gekozen dag uit de URL; alleen een dag binnen de week vanaf vandaag telt,
   // al de rest (ongeldig, verleden, verder weg) is vandaag.
   const [dagParam, zetDagParam] = useRouteParam(0);
