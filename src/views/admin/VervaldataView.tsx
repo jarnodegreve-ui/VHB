@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, IdCard, UserX } from 'lucide-react';
 import type { User } from '../../types';
 import { useRecordParam } from '../../app/router';
@@ -10,6 +10,7 @@ import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../
 import { apiFetch } from '../../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { useZelfLadend } from '../../lib/zelfLadend';
+import { begin, bewaar, lees, type Lezing } from '../../lib/schermGeheugen';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVuil } from '../../lib/formulier';
@@ -32,13 +33,26 @@ const GEEN_DATUM_TOON = TOON_NAAR_BADGE[VERVAL_STATUS.geen_datum.toon];
 type ExpiryRow = { userId: string; soort: string; validUntil: string };
 type Filter = 'all' | 'verlopen' | 'binnen30' | 'binnen90' | 'zonder';
 
+/** Sleutel in het geheugen van de schermen (src/lib/schermGeheugen.ts). */
+const GEHEUGEN = 'vervaldata';
+/** Na een geheugentreffer waarvan de verversing mislukte. */
+const NIET_BIJGEWERKT = 'Kon de vervaldata niet bijwerken. Bewerken kan zodra dat gelukt is.';
+
 /** Overzicht + beheer van de vervaldata (Code 95 / medische schifting),
  *  gesorteerd op wie het eerst vervalt — zodat de planner het
  *  zelf kan raadplegen in plaats van op de herinneringen te wachten
  *  (verzoek Jarno 07-08). Zelfde PUT-API als Gebruikersbeheer, maar dan
  *  bereikbaar voor planners (Gebruikersbeheer is admin-only). */
 export function VervaldataView({ users }: { users: User[] }) {
-  const [expiries, setExpiries] = useState<ExpiryRow[]>([]);
+  // Terug binnen vijf minuten (ronde 6, punt 22): het laatste antwoord uit
+  // het geheugen staat er meteen, de verversing loopt erachter.
+  const [onthouden] = useState(() => lees<ExpiryRow[]>(GEHEUGEN));
+  const [expiries, setExpiries] = useState<ExpiryRow[]>(() => onthouden?.antwoord ?? []);
+  // Een geslaagde lezing in dit bezoek. Pas dan start een bewerking: een
+  // draft uit onthouden datums zou een datum die een collega intussen
+  // wijzigde bij het opslaan terugzetten.
+  const [versDitBezoek, setVersDitBezoek] = useState(false);
+  const laatsteLezing = useRef<Lezing | null>(null);
   // Bewerken: per chauffeur een draft met de bewaakte datums.
   const [bewerkt, setBewerkt] = useState<User | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -54,11 +68,25 @@ export function VervaldataView({ users }: { users: User[] }) {
   const voorkeur = useTabelVoorkeur('vervaldata', KOLOMMEN);
 
   const zl = useZelfLadend(async () => {
+    const lezing = begin(GEHEUGEN);
+    laatsteLezing.current = lezing;
     const res = await apiFetch('/api/user-expiries');
     if (!res.ok) throw new Error(String(res.status));
-    const rows = await res.json();
-    setExpiries(Array.isArray(rows) ? rows : []);
-  }, { boodschap: 'Kon de vervaldata niet laden.' });
+    const rows: unknown = await res.json();
+    // Een antwoord in een andere vorm is een laadfout, geen lege lijst: die
+    // toonde elke chauffeur als "nog in te vullen".
+    if (!Array.isArray(rows)) throw new Error('vorm');
+    bewaar(lezing, rows);
+    // Een nieuwere lezing is intussen vertrokken: die beslist.
+    if (laatsteLezing.current !== lezing) return;
+    // Samen, zodat het venster uit het adres opent met de verse datums.
+    setExpiries(rows as ExpiryRow[]);
+    setVersDitBezoek(true);
+  }, { boodschap: 'Kon de vervaldata niet laden.', onthoudenOm: onthouden?.om ?? null });
+  // Gegevens van de server: uit het geheugen of van dit bezoek. Zonder
+  // gegevens het skelet en geen telling in de tegels (een lege lijst is wel
+  // een geldig antwoord, dus nooit op de lengte afgaan).
+  const heeftGegevens = !!onthouden || versDitBezoek;
 
   const vandaagIso = useMemo(() => vandaagLokaal(), []);
   const dagenTot = (d: string) => dagenTotVerval(d, vandaagIso);
@@ -155,19 +183,24 @@ export function VervaldataView({ users }: { users: User[] }) {
   };
   // Onbewaarde datums (tranche 3A): momentopname bij het openen per chauffeur.
   const { vuil } = useVuil(draft, !!bewerkt, bewerkt?.id);
-  const openBewerken = (u: User) => { toonBewerken(u); zetUserParam(String(u.id)); };
+  // Zonder verse lezing alleen het adres: het effect hieronder opent het
+  // venster zodra die er is (een klik op een andere naam vervangt het adres,
+  // een schermwissel annuleert). Zo opent nooit een venster met onthouden
+  // datums.
+  const openBewerken = (u: User) => { if (versDitBezoek) toonBewerken(u); zetUserParam(String(u.id)); };
   const sluitBewerken = () => { setBewerkt(null); zetUserParam(null); };
 
-  // URL → modal, pas zodra de vervaldata geladen zijn: de draft komt uit
-  // perUser, en een lege draft opslaan zou bestaande datums wissen. Een
+  // URL → modal, pas met een geslaagde lezing van dit bezoek: de draft komt
+  // uit perUser, en een lege draft opslaan zou bestaande datums wissen, een
+  // draft uit het geheugen een intussen gewijzigde datum terugzetten. Een
   // onbekend id doet niets (lijst zonder selectie).
   useEffect(() => {
-    if (!userParam || !zl.laatstGeladen) return;
+    if (!userParam || !versDitBezoek) return;
     if (bewerkt && String(bewerkt.id) === userParam) return;
     const u = users.find((x) => String(x.id) === userParam);
     if (u) toonBewerken(u);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userParam, users, zl.laatstGeladen]);
+  }, [userParam, users, versDitBezoek]);
 
   const opslaan = async () => {
     if (!bewerkt || isSaving) return;
@@ -199,7 +232,13 @@ export function VervaldataView({ users }: { users: User[] }) {
     <VervalPil key={soort} datum={rij.datums[soort]} dagen={rij.dagen[soort]} label={metLabel ? label : undefined} />
   );
 
-  const foutZonderData = !!zl.fout && expiries.length === 0;
+  const foutZonderData = !!zl.fout && !heeftGegevens;
+
+  // Zonder gegevens van de server geen telling, geen kleur en geen oordeel
+  // ("niets verlopen", "nog in te vullen"): het leegteken met "vervaldata
+  // laden", zoals de tegel Omleidingen op het dashboard.
+  const tegel = (n: number, sub: string) => (heeftGegevens ? { value: n, sub } : { text: '—', sub: 'vervaldata laden' });
+  const metToon = (n: number) => heeftGegevens && n > 0;
 
   return (
     <PageShell>
@@ -209,7 +248,7 @@ export function VervaldataView({ users }: { users: User[] }) {
         actions={<VersheidRegel {...zl.versheid} />}
       />
 
-      {zl.fout && expiries.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
+      {zl.fout && heeftGegevens && <Foutkaart compact boodschap={versDitBezoek ? zl.fout : NIET_BIJGEWERKT} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
       {/* Laadfout zonder gegevens: de fout bovenaan en geen tegels, want "0 ·
           niets verlopen" stelde ten onrechte gerust terwijl de Foutkaart onder
           de vouw stond (P6, 24-09). */}
@@ -222,43 +261,39 @@ export function VervaldataView({ users }: { users: User[] }) {
       <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat
           icon={<AlertTriangle size={16} />}
-          tone={tellers.verlopen > 0 ? 'red' : 'slate'}
+          tone={metToon(tellers.verlopen) ? 'red' : 'slate'}
           label="Verlopen"
-          value={tellers.verlopen}
-          sub={tellers.verlopen > 0 ? 'direct actie nodig' : 'niets verlopen'}
+          {...tegel(tellers.verlopen, tellers.verlopen > 0 ? 'direct actie nodig' : 'niets verlopen')}
           onClick={() => kiesFilter('verlopen')}
           actief={filter === 'verlopen'}
         />
         <OpsStat
           icon={<IdCard size={16} />}
-          tone={tellers.binnen30 > 0 ? 'amber' : 'slate'}
+          tone={metToon(tellers.binnen30) ? 'amber' : 'slate'}
           label="Binnen 30 dagen"
-          value={tellers.binnen30}
-          sub="vernieuwing plannen"
+          {...tegel(tellers.binnen30, 'vernieuwing plannen')}
           onClick={() => kiesFilter('binnen30')}
           actief={filter === 'binnen30'}
         />
         <OpsStat
           icon={<IdCard size={16} />}
-          tone={tellers.binnen90 > 0 ? 'amber' : 'slate'}
+          tone={metToon(tellers.binnen90) ? 'amber' : 'slate'}
           label="Binnen 90 dagen"
-          value={tellers.binnen90}
-          sub="komt eraan"
+          {...tegel(tellers.binnen90, 'komt eraan')}
           onClick={() => kiesFilter('binnen90')}
           actief={filter === 'binnen90'}
         />
         <OpsStat
           icon={<UserX size={16} />}
-          tone={tellers.zonder > 0 ? 'amber' : 'slate'}
+          tone={metToon(tellers.zonder) ? 'amber' : 'slate'}
           label="Zonder datums"
-          value={tellers.zonder}
-          sub={tellers.zonder > 0 ? 'nog in te vullen' : 'alles ingevuld'}
+          {...tegel(tellers.zonder, tellers.zonder > 0 ? 'nog in te vullen' : 'alles ingevuld')}
           onClick={() => kiesFilter('zonder')}
           actief={filter === 'zonder'}
         />
       </div>
 
-      {zl.laden && expiries.length === 0 ? (
+      {zl.laden && !heeftGegevens ? (
         <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" role="status" aria-busy="true" aria-label="Vervaldata worden geladen">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
