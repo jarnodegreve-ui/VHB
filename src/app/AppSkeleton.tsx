@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { BrandLogo } from '../components/BrandLogo';
 import { Skeleton } from '../components/Skeleton';
-import { DashboardSkelet, ViewLoader } from '../components/ui';
+import { DashboardSkelet } from '../components/ui';
 import { cn } from '../lib/ui';
 import { routeUitUrl } from './router';
 import { isBreed, sectieLabel } from './routes';
+import { skeletVoor } from './skeletten';
 
 /**
  * Skeleton-schil voor de eerste seconden ná een warme start: er is een
@@ -19,6 +20,13 @@ import { isBreed, sectieLabel } from './routes';
  * desktop, dezelfde kolombreedte (`breed`), dezelfde rijhoogte via
  * --topbar-h, het dashboardraster op `/` en de dock op smal scherm. Bij het
  * omwisselen naar de echte app verschuift er zo niets.
+ *
+ * Eén skelet per scherm (ronde 6, punt 3): op elk ander scherm dan `/` staat
+ * hier hetzelfde skelet als in de Suspense-terugval en in het scherm zelf
+ * (`skeletVoor`), met één verschil: de rol is hier nog onbekend (vóór
+ * `/api/me`), dus titel en eyebrow zijn skeletregels in hetzelfde vak, geen
+ * tekst. Een chauffeur op een stafpad (oude bladwijzer, gedeeld toestel)
+ * leest zo geen schermtitel die daarna het dashboard blijkt.
  */
 export function AppSkeleton() {
   const [lang, setLang] = useState(false);
@@ -71,7 +79,7 @@ export function AppSkeleton() {
         </header>
         <div className="flex-1 overflow-hidden px-gutter md:px-7 pt-5">
           <div className={cn('mx-auto w-full', kolomClass)}>
-            {view === 'dashboard' ? <DashboardSkelet /> : <ViewLoader />}
+            {view === 'dashboard' ? <DashboardSkelet /> : skeletVoor(view, true)}
             {lang && (
               <p className="mt-6 text-center text-xs font-medium text-slate-500">
                 Dit duurt langer dan normaal,{' '}

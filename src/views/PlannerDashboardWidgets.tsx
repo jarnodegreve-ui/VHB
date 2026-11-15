@@ -35,18 +35,18 @@ import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, mi
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { useBordCellen } from '../lib/bordCellen';
 import { apiFetch } from '../lib/api';
-import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
+import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { Verwissel } from '../components/Verwissel';
 import { Modal } from '../components/Modal';
 import { Formulier } from '../components/Formulier';
 import { useVeldfouten, useVuil } from '../lib/formulier';
-import { EmptyState, ModalHeader } from '../components/ui';
+import { EmptyState, KpiTegelSkelet, ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
 import { Button, Chip, microLabelClass, Segmented } from '../components/primitives';
 import { ActieMenu } from '../components/ActieMenu';
 import { DashboardAanpassen } from '../components/DashboardAanpassen';
-import { PLANNER_TEGELS, pasVoorkeurenToe, stripSpans, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
+import { PLANNER_TEGELS, pasVoorkeurenToe, stripKlassen, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
 import { Card } from '../components/Card';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { cn, telHref } from '../lib/ui';
@@ -249,17 +249,35 @@ export function PlannerDashboardWidgets({
     [users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, todayKey, dagenSindsImportSleutel],
   );
 
+  // --- Dashboard op maat: tegels op id, in de volgorde van de voorkeuren ---
+  // Zichtbare striptegels + gat-vrije verdeling (de laadplein-tegel is 08-09
+  // vervallen op vraag van Jarno: vijf tegels, meer ruimte per tegel). Vóór de
+  // skeleton-return (geen hook): het laadskelet tekent dezelfde strip, evenveel
+  // tegels met dezelfde klassen (`stripKlassen`), zodat elk skeletvak op
+  // de plek van zijn tegel staat (ronde 6, punt 3).
+  const zichtbareTegels = pasVoorkeurenToe(PLANNER_TEGELS, dashboardVoorkeuren);
+  const stripZichtbaar = zichtbareTegels.filter((t) => t.groep === 'tegels');
+  const strip = stripKlassen(stripZichtbaar.length);
+
   // LET OP: geen hooks meer onder deze regel — de skeleton-return hieronder
   // betekent dat álle hooks vóór dit punt moeten staan (React #310).
   if (isInitialLoad) {
     return (
       <section className="space-y-5">
-        <div className="px-1 pt-1 space-y-2">
-          <Skeleton className="h-7 w-72" />
-          <Skeleton className="h-3 w-56" />
+        {/* Zelfde opbouw en maten als de kop hieronder: groet (text-greeting,
+            1,15 × 20/24 px) en datumregel (text-md, 22 px) links; rechts de
+            rij met de dagschakelaar (rail p-1 + rand rond min-h-11, met de
+            muis vanaf sm min-h-8), onder lg op een eigen rij. Zo staat de
+            strip al op haar plek. */}
+        <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="flex h-[1.4375rem] items-center md:h-[1.725rem]"><Skeleton className="h-5 w-56 md:h-6 md:w-72" /></div>
+            <div className="mt-0.5 flex h-5.5 items-center"><Skeleton className="h-3 w-44" /></div>
+          </div>
+          <Skeleton rounded="2xl" className="h-[calc(3.25rem+2px)] w-80 max-w-full sm:pointer-fine:h-[calc(2.5rem+2px)]" />
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile />
+        <div className={strip.raster}>
+          {strip.tegels.map((klassen, i) => <KpiTegelSkelet key={i} className={klassen} />)}
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card padding="md" className="lg:col-span-2">
@@ -602,10 +620,8 @@ export function PlannerDashboardWidgets({
   const geenVerwachtingen = coverageDays !== null && (weekDagen.length === 0 || weekDagen.every((d) => d.expected === 0));
   const weekOpen = weekDagen.reduce((n, d) => n + d.missing.length, 0);
 
-  // --- Dashboard op maat: tegels op id, in de volgorde van de voorkeuren ---
   // Status-strip: elke tegel als functie van zijn rasterklassen, zodat de
-  // gat-vrije verdeling (stripSpans) per aantal zichtbare tegels klopt.
-  const zichtbareTegels = pasVoorkeurenToe(PLANNER_TEGELS, dashboardVoorkeuren);
+  // gat-vrije verdeling (stripKlassen, hierboven) per aantal zichtbare tegels klopt.
   const STRIP_TEGEL: Record<string, (className: string) => ReactNode> = {
     'chauffeurs-actief': (className) => dagOffset === 1 ? (
       // Morgen: "nu aan het rijden" is een vandaag-cijfer — het bleef staan
@@ -683,11 +699,6 @@ export function PlannerDashboardWidgets({
       />
     ),
   };
-  // Zichtbare striptegels + gat-vrije verdeling (de laadplein-tegel is 08-09
-  // vervallen op vraag van Jarno: vijf tegels, meer ruimte per tegel).
-  const stripZichtbaar = zichtbareTegels.filter((t) => t.groep === 'tegels');
-  const stripLayout = stripSpans(stripZichtbaar.length);
-
   // Operations Center: het eerste zichtbare paneel staat links, de rest
   // stapelt rechts (zoals de vaste indeling Open taken | activiteit + week).
   const paneelOpenTaken = (
@@ -1026,16 +1037,12 @@ export function PlannerDashboardWidgets({
           ) : undefined}
         />
       )}
-      <div className={cn('kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6', stripLayout.xl)}>
+      {/* Raster en tegelklassen uit `stripKlassen` (src/lib/dashboardVoorkeuren.ts),
+          dezelfde als het laadskelet hierboven. */}
+      <div className={strip.raster}>
         {stripZichtbaar.map((t, i) => (
           <Fragment key={t.id}>
-            {STRIP_TEGEL[t.id]?.(cn(
-              stripLayout.md[i],
-              'xl:col-span-1',
-              // Oneven aantal op de telefoon (2 kolommen): de laatste tegel
-              // over de volle breedte, geen half gat.
-              i === stripZichtbaar.length - 1 && stripZichtbaar.length % 2 === 1 && 'col-span-2',
-            ))}
+            {STRIP_TEGEL[t.id]?.(strip.tegels[i])}
           </Fragment>
         ))}
       </div>

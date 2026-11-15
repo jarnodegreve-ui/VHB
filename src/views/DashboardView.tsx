@@ -22,8 +22,8 @@ import { warmRitbladCache } from '../lib/ritbladCache';
 import { isOnlineNu } from '../lib/useOnline';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, parseHHMM, shiftWindowMinutes } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
-import { SkeletonRow, SkeletonTile } from '../components/Skeleton';
-import { DashboardSkelet } from '../components/ui';
+import { SkeletonRow } from '../components/Skeleton';
+import { DashboardSkelet, KpiTegelSkelet } from '../components/ui';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
 import { Badge } from '../components/primitives';
@@ -268,7 +268,7 @@ export function DashboardView({ notes = [],
       />
     ),
     'gele-boek': (
-      <Suspense fallback={<SkeletonTile />}>
+      <Suspense fallback={<KpiTegelSkelet className={kleinKlassen('gele-boek')} />}>
         <LazyGeleBoekTegel className={kleinKlassen('gele-boek')} onClick={onNavigate ? () => onNavigate('defecten') : undefined} />
       </Suspense>
     ),
