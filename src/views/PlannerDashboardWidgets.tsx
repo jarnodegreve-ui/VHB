@@ -133,8 +133,17 @@ export function PlannerDashboardWidgets({
   const [showAbsent, setShowAbsent] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
   const [showDriving, setShowDriving] = useState(false);
+  // Mislukte de laatste lezing van het maandbord, dan probeert de volgende
+  // minuuttik opnieuw (15-11). De gedeelde klok meldt de nieuwe dag meteen bij
+  // de terugkeer, dus het verzoek vertrekt op het ogenblik dat de laptop
+  // openklapt en het netwerk er soms nog niet is; zonder nieuwe poging bleef
+  // de tegel de rest van de dag op "0 · iedereen inzetbaar" staan.
+  const matrixMislukt = useRef(false);
+  const [matrixHerkansing, setMatrixHerkansing] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    // Onderweg telt niet als mislukt: één poging tegelijk.
+    matrixMislukt.current = false;
     // Peildag i.p.v. vandaag: de Vandaag|Morgen-schakelaar kijkt naar de
     // matrixcellen van de gekozen dag (morgen kan in de volgende maand vallen).
     fetchMonthPlanning(peilDag.slice(0, 7))
@@ -161,10 +170,17 @@ export function PlannerDashboardWidgets({
       // afwezigheden zouden anders iemand blijven wegfilteren uit
       // "Beschikbaar" (en als afwezige blijven tonen).
       .catch(() => {
-        if (!cancelled) setMatrix({ absent: [], busyNames: [] });
+        if (cancelled) return;
+        setMatrix({ absent: [], busyNames: [] });
+        matrixMislukt.current = true;
       });
     return () => { cancelled = true; };
-  }, [peilDag]);
+  }, [peilDag, matrixHerkansing]);
+  // Na het effect hierboven: wisselt met de minuut ook de peildag, dan loopt
+  // de nieuwe lezing al en komt er geen tweede bij.
+  useEffect(() => {
+    if (matrixMislukt.current) setMatrixHerkansing((n) => n + 1);
+  }, [now]);
 
   // Ziekmelding registreren (planner/admin). Komt telefonisch binnen, dus de
   // planner moet hem vanuit de cockpit kunnen invoeren zonder van scherm te

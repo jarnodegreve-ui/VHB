@@ -29,7 +29,7 @@ type Terugkeer = 'visibilitychange' | 'pageshow' | 'focus';
 /** Sessie, vaste testdata en een aanmeldserver die een verlopen token ververst:
  *  na een tijdsprong van uren is het token verlopen, en zonder dit antwoord
  *  eindigt de test op het inlogscherm in plaats van op de klok. */
-async function open(page: Page, opties: { user: Fixture; view: string; nu: Date; planning?: Dienst[]; verlof?: unknown[] }) {
+async function open(page: Page, opties: { user: Fixture; view: string; nu: Date; planning?: Dienst[]; verlof?: unknown[]; bord?: (maand: string) => unknown }) {
   const fouten: string[] = [];
   // De e2e blokkeert de service worker: `register()` geeft dan niets terug, en
   // de update-check in index.html (op visibilitychange en focus) valt daarover.
@@ -44,7 +44,8 @@ async function open(page: Page, opties: { user: Fixture; view: string; nu: Date;
     user: opties.user,
     view: opties.view,
     thema: 'light',
-    extra: (pad) => {
+    extra: (pad, request) => {
+      if (opties.bord && pad.endsWith('/api/month-planning')) return opties.bord(new URL(request.url()).searchParams.get('month') ?? '');
       if (pad.endsWith('/api/planning')) return opties.planning ?? [];
       if (pad.endsWith('/api/leave')) return opties.verlof ?? [];
       if (pad.endsWith('/api/swaps')) return [];
@@ -81,6 +82,17 @@ async function terugkeer<S extends Record<string, string>>(page: Page, soort: Te
     return Object.fromEntries(Object.entries(lees).map(([naam, selector]) => [naam, document.querySelector(selector)?.textContent ?? null]));
   }, { soort, lees }) as Promise<Record<keyof S, string | null>>;
 }
+
+/**
+ * Het tabblad verbergen of weer tonen zoals de browser het meldt: de stand én
+ * de gebeurtenis. Verborgen houdt de klok geen timer aan; zichtbaar leest ze
+ * opnieuw en lijnt ze de tik opnieuw uit.
+ */
+const zetZichtbaarheid = (page: Page, stand: 'hidden' | 'visible') => page.evaluate((stand) => {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => stand });
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => stand === 'hidden' });
+  document.dispatchEvent(new Event('visibilitychange'));
+}, stand);
 
 /** Het uur van de pagina zoals het portaal het toont (zelfde opmaak als formatSyncedTime). */
 const paginaUur = (page: Page) => page.evaluate(() => new Date().toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }));
@@ -292,6 +304,57 @@ test.describe('de staf op desktop, met de muis', () => {
 
     await page.clock.resume();
     await expect(page.locator(DAG_EN_UUR)).toHaveText('woensdag 10 maart · 06:00');
+    expect(fouten, `page errors:\n${fouten.join('\n')}`).toEqual([]);
+  });
+
+  test('cockpit: mislukt het maandbord op het ogenblik van de terugkeer, dan staat de afwezige er bij de volgende minuuttik', async ({ page }) => {
+    // De laptop klapt 's morgens open en het netwerk is er de eerste seconde
+    // nog niet: het maandbord van de nieuwe dag wordt nu meteen gevraagd (de
+    // klok meldt de dag bij de terugkeer) en dat verzoek mislukt, ook de ene
+    // herkansing van apiFetch. Zonder een nieuwe poging bleef de tegel de
+    // rest van de dag op "0 · iedereen inzetbaar" staan.
+    const cel = { code: 'bv', kind: 'leave', label: 'Betaald verlof', segments: [] };
+    const bord = (maand: string) => ({ month: maand, dates: [D, D1], drivers: [{ id: 'mx1', name: 'Matrix Afwezige' }], cells: { mx1: { [D]: cel, [D1]: cel } } });
+    const { fouten } = await open(page, { user: ADMIN, view: 'dashboard', nu: om(D, 22, 30, 5), bord });
+    const verzoeken: string[] = [];
+    let bereik = true;
+    await page.route('**/api/month-planning**', async (route) => {
+      verzoeken.push(bereik ? 'door' : 'afgebroken');
+      if (bereik) await route.fallback();
+      else await route.abort('internetdisconnected');
+    });
+    await page.goto('/dashboard');
+    const tegel = page.getByRole('button', { name: /^Vandaag afwezig/ });
+    await expect(tegel).toContainText('0 ziek · 1 verlof', { timeout: 15_000 });
+    await zetStil(page);
+
+    // De nacht: het tabblad is verborgen, de klok van de pagina staat stil.
+    await zetZichtbaarheid(page, 'hidden');
+    await page.clock.setSystemTime(om(D1, 6, 0, 10));
+    const bijTerugkeer = verzoeken.length;
+    bereik = false;
+    await zetZichtbaarheid(page, 'visible');
+    await expect(page.locator(DAG_EN_UUR)).toHaveText('woensdag 10 maart · 06:00');
+    // Het verzoek van de terugkeer en, 600 ms later, de herkansing van apiFetch.
+    await expect.poll(() => verzoeken.slice(bijTerugkeer)).toEqual(['afgebroken']);
+    await page.clock.runFor(700);
+    await expect.poll(() => verzoeken.slice(bijTerugkeer)).toEqual(['afgebroken', 'afgebroken']);
+    await expect(tegel).toContainText('iedereen inzetbaar');
+
+    // Het netwerk is terug. De volgende minuuttik (06:01) probeert opnieuw.
+    bereik = true;
+    await page.clock.runFor(60_000);
+    await expect(tegel).toContainText('0 ziek · 1 verlof');
+    await expect(page.locator(DAG_EN_UUR)).toHaveText('woensdag 10 maart · 06:01');
+    expect(verzoeken.slice(bijTerugkeer)).toEqual(['afgebroken', 'afgebroken', 'door']);
+
+    // Gelukt is gelukt: de minuten daarna vraagt de cockpit het bord niet opnieuw.
+    await page.clock.runFor(3 * 60_000);
+    await expect(page.locator(DAG_EN_UUR)).toHaveText('woensdag 10 maart · 06:04');
+    expect(verzoeken.slice(bijTerugkeer)).toEqual(['afgebroken', 'afgebroken', 'door']);
+    await expect(tegel).toContainText('0 ziek · 1 verlof');
+
+    await page.clock.resume();
     expect(fouten, `page errors:\n${fouten.join('\n')}`).toEqual([]);
   });
 
