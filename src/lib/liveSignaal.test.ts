@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { EIGEN_ACTIE_VENSTER_MS, LIVE_THROTTLE_MS, markeerEigenSchrijfactie, meldLive, resetLiveSignaal } from './liveSignaal';
+import { EIGEN_ACTIE_VENSTER_MS, LIVE_THROTTLE_MS, laatsteEigenSchrijfactie, markeerEigenSchrijfactie, meldLive, resetLiveSignaal } from './liveSignaal';
 
 /** Vangt de `vhb-toast`-events op die notify() op window afvuurt. */
 const vang = () => {
@@ -42,6 +42,18 @@ describe('liveSignaal', () => {
     expect(meldLive('verlof', t0 + 1500)).toBe(false);
     expect(meldLive('verlof', t0 + EIGEN_ACTIE_VENSTER_MS)).toBe(true);
     expect(toasts).toHaveLength(1);
+  });
+});
+
+describe('laatsteEigenSchrijfactie', () => {
+  it('geeft het tijdstip van de laatste markering, -Infinity zolang er geen is', () => {
+    resetLiveSignaal();
+    expect(laatsteEigenSchrijfactie()).toBe(Number.NEGATIVE_INFINITY);
+    markeerEigenSchrijfactie(1_000);
+    expect(laatsteEigenSchrijfactie()).toBe(1_000);
+    markeerEigenSchrijfactie(2_500);
+    expect(laatsteEigenSchrijfactie()).toBe(2_500);
+    resetLiveSignaal();
   });
 });
 
