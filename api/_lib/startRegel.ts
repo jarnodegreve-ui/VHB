@@ -15,41 +15,18 @@
  * komt uit de meting en niet uit de aanmelding: op een gedeeld toestel kan de
  * meting van de vorige gebruiker met de ping van de volgende meereizen.
  */
-const ROLLEN = ["chauffeur", "technieker", "planner", "admin"];
-const SCHERMEN = ["dashboard", "mijn-dag", "ander"];
-const FASEN = ["js", "sessie", "profiel", "gegevens", "beeld"] as const;
-const CONTEXT: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ["bron", ["cache", "vers"]],
-  ["toestel", ["ios", "android", "desktop"]],
-  ["weergave", ["app", "browser"]],
-];
-const MAX_MS = 120_000;
-/** Een meting heeft hoogstens 12 velden; wat er veel meer draagt is geen meting. */
-const MAX_VELDEN = 20;
-
-const uitLijst = (waarde: unknown, lijst: readonly string[]): string | null =>
-  typeof waarde === "string" && lijst.includes(waarde) ? waarde : null;
-
-const geldigeMs = (waarde: unknown): waarde is number =>
-  typeof waarde === "number" && Number.isInteger(waarde) && waarde >= 0 && waarde <= MAX_MS;
+import { schoneStartMeting, START_FASEN } from "../../shared/startMeting.js";
 
 export function startRegel(start: unknown): string | null {
-  if (!start || typeof start !== "object" || Array.isArray(start)) return null;
-  if (Object.keys(start).length > MAX_VELDEN) return null;
-  const s = start as Record<string, unknown>;
-  const rol = uitLijst(s.rol, ROLLEN);
-  const scherm = uitLijst(s.scherm, SCHERMEN);
-  if (!rol || !scherm || !geldigeMs(s.gegevens)) return null;
+  const s = schoneStartMeting(start);
+  if (!s) return null;
 
-  const fasen = FASEN.filter((f) => geldigeMs(s[f])).map((f) => `${f} ${s[f]}`);
-  const context = CONTEXT.map(([veld, lijst]) => uitLijst(s[veld], lijst)).filter((w): w is string => w !== null);
-  if (s.vroeg === true) context.push("vroeg");
-  const release = typeof s.release === "string" && /^[0-9a-f]{7,12}$/.test(s.release) ? s.release : null;
-
+  const fasen = START_FASEN.filter((f) => s[f] !== undefined).map((f) => `${f} ${s[f]}`);
+  const context = [s.bron, s.toestel, s.weergave, s.vroeg ? "vroeg" : undefined].filter(Boolean);
   return [
-    `[start] ${rol} ${scherm}`,
+    `[start] ${s.rol} ${s.scherm}`,
     fasen.join(" · "),
     ...(context.length > 0 ? [context.join(" · ")] : []),
-    ...(release ? [`release ${release}`] : []),
+    ...(s.release ? [`release ${s.release}`] : []),
   ].join(" | ");
 }

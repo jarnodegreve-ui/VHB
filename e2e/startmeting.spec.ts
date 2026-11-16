@@ -351,6 +351,12 @@ test.describe('startmeting', () => {
     const log = await opzet(page, { ...CHAUFFEUR_MIJN_DAG, user: opvallend });
     await page.goto('/mijn-dag?zoek=geheim');
     const eerste = await nieuweMeting(page, null);
+    await page.evaluate(({ sleutel, email }) => {
+      const bewaard = JSON.parse(localStorage.getItem(sleutel)!);
+      bewaard.m.email = email;
+      bewaard.m.release = email;
+      localStorage.setItem(sleutel, JSON.stringify(bewaard));
+    }, { sleutel: SLEUTEL, email: opvallend.email });
     await page.reload();
     await nieuweMeting(page, eerste);
     const tekst = await page.evaluate((k) => window.localStorage.getItem(k), SLEUTEL);

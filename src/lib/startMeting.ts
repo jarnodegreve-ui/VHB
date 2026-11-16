@@ -28,23 +28,13 @@
 import { RELEASE } from './appVersion';
 import { deriveDeviceName } from './device';
 import { UITNODIGING_HASH } from '../../shared/uitnodigingHash';
+import { schoneStartMeting, START_RELEASE, type StartFase, type StartMeting } from '../../shared/startMeting';
 
 const SLEUTEL = 'vhb-startmeting';
 /** Een meting die zo lang blijft liggen, gaat weg zonder mee te reizen. */
 const MAX_LEEFTIJD_MS = 7 * 864e5;
 /** Zo lang na `gegevens` wacht de meting op `beeld`, daarna zonder. */
 const BEELD_WACHT_MS = 10_000;
-
-type Fase = 'js' | 'sessie' | 'profiel' | 'gegevens' | 'beeld';
-/** Wat bewaard en meegestuurd wordt: fasen en context uit vaste lijsten. */
-export type StartMeting = { [F in Fase]?: number } & {
-  rol?: string;
-  scherm?: 'dashboard' | 'mijn-dag' | 'ander';
-  bron?: 'cache' | 'vers';
-  toestel?: 'ios' | 'android' | 'desktop';
-  weergave?: 'app' | 'browser';
-  release?: string;
-};
 
 /** De lopende meting; null = geen (meer): bewaard, onderbroken of nooit begonnen. */
 let meting: StartMeting | null = null;
@@ -70,7 +60,7 @@ try {
 
 /** Eén fase zetten: alleen na `vorige` en alleen de eerste keer. Gooit nooit:
  *  de aanroepers staan in de init en vlak vóór `setIsInitialLoad(false)`. */
-const stap = (fase: Fase, vorige: Fase, extra?: Partial<StartMeting>): StartMeting | null => {
+const stap = (fase: StartFase, vorige: StartFase, extra?: Partial<StartMeting>): StartMeting | null => {
   const m = meting;
   if (!m || m[fase] !== undefined || m[vorige] === undefined) return null;
   try {
@@ -93,10 +83,12 @@ function bewaar(): void {
     const naam = deriveDeviceName();
     m.toestel = /^iP/.test(naam) ? 'ios' : /^Android/.test(naam) ? 'android' : 'desktop';
     m.weergave = /app$/.test(naam) ? 'app' : 'browser';
-    if (/^[0-9a-f]{7,12}$/.test(RELEASE)) m.release = RELEASE;
+    if (START_RELEASE.test(RELEASE)) m.release = RELEASE;
+    const schoon = schoneStartMeting(m);
+    if (!schoon) return;
     // De tijd van bewaren: voor de 7 dagen, en twee metingen zijn zo nooit
     // dezelfde tekst (zie `wis` in vorigeStart).
-    localStorage.setItem(SLEUTEL, JSON.stringify({ t: Date.now(), m }));
+    localStorage.setItem(SLEUTEL, JSON.stringify({ t: Date.now(), m: schoon }));
   } catch { /* geen opslag: geen meting */ }
 }
 
@@ -139,8 +131,9 @@ export function markeerBeeld(el: Element | null): void {
  *  meting van deze start (intussen bewaard) blijft staan; een fout daarin
  *  vangt de `.catch` van de ping. Ouder dan 7 dagen = weg zonder meesturen.
  *  Een onleesbare of te lange waarde reist niet mee en wordt door de volgende
- *  meting overschreven; wat er wel meereist, keurt de server nog veld per
- *  veld. De lengtegrens: een meting is ±200 tekens; iets diep genests of
+ *  meting overschreven. Wat er meereist, gaat eerst door de gedeelde lezer,
+ *  zodat ook een korte, geknoeide sleutel geen vrije tekst kan meesturen.
+ *  De lengtegrens: een meting is ±200 tekens; iets diep genests of
  *  groots (met de hand of door vreemde code gezet) zou JSON.stringify van de
  *  ping laten gooien, en dus de start, of de ping een 413 geven en nooit
  *  gewist worden. */
@@ -150,8 +143,12 @@ export function vorigeStart(): { start: StartMeting; wis: () => void } | undefin
     // beide gevallen valt het in de catch.
     const tekst = localStorage.getItem(SLEUTEL);
     const { t, m } = JSON.parse(tekst!.length < 2e3 ? tekst! : '');
-    if (Date.now() - t < MAX_LEEFTIJD_MS && m) {
-      return { start: m, wis: () => { if (localStorage.getItem(SLEUTEL) === tekst) localStorage.removeItem(SLEUTEL); } };
+    const leeftijd = typeof t === 'number' ? Date.now() - t : NaN;
+    if (leeftijd >= 0 && leeftijd < MAX_LEEFTIJD_MS) {
+      const start = schoneStartMeting(m);
+      if (start) {
+        return { start, wis: () => { if (localStorage.getItem(SLEUTEL) === tekst) localStorage.removeItem(SLEUTEL); } };
+      }
     }
     localStorage.removeItem(SLEUTEL);
   } catch { /* geen opslag of onleesbaar: niets mee */ }

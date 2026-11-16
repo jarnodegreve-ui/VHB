@@ -1,6 +1,6 @@
 import { CircleHelp, ClipboardCheck, Clock } from 'lucide-react';
 import { persoonsVerloop, type RuilVoorVerloop, type VerloopRegel } from '../../shared/ruilVerloop';
-import { formatMomentKort, formatShortDay } from '../lib/format';
+import { formatShortDay, formatTijdstip } from '../lib/format';
 import { Avatar } from './Avatar';
 import { Badge, MicroLabel } from './primitives';
 
@@ -35,7 +35,7 @@ export function RuilVerloop({ swap, naamVan, kijkerId, compact = false, classNam
         {regels.filter((r) => r.rol !== 'aanvrager' || r.status !== 'Aangevraagd').map((r) => (
           <li key={r.rol} className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-slate-500">
             <span>{r.rol === 'planner' ? 'Planner' : r.rolLabel}</span>
-            <StatusPil regel={r} kaal titel={r.op ? formatMomentKort(r.op) : undefined} />
+            <StatusPil regel={r} kaal titel={r.op ? formatTijdstip(r.op) : undefined} />
           </li>
         ))}
       </ul>
@@ -68,12 +68,12 @@ export function RuilVerloop({ swap, naamVan, kijkerId, compact = false, classNam
                 </div>
                 <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs font-medium text-slate-500">
                   <span className="min-w-0">{r.rol === 'planner' && r.naam ? 'Planner' : r.rolLabel}</span>
-                  {r.op && <time dateTime={r.op} className="shrink-0 whitespace-nowrap">{formatMomentKort(r.op)}</time>}
+                  {r.op && <time dateTime={r.op} className="shrink-0 whitespace-nowrap">{formatTijdstip(r.op)}</time>}
                 </div>
                 {krijgt && <p className="mt-0.5 text-xs font-medium text-slate-600">{krijgt}</p>}
                 {r.extra && (
                   <p className="mt-0.5 text-xs font-medium text-slate-500">
-                    {r.extra.label}{r.extra.op ? ` ${formatMomentKort(r.extra.op)}` : ''}
+                    {r.extra.label}{r.extra.op ? ` ${formatTijdstip(r.extra.op)}` : ''}
                   </p>
                 )}
               </div>

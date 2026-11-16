@@ -213,7 +213,12 @@ test.describe('afmelden op een gedeeld toestel', () => {
     // op een melding stuurt een POST, die loopt daar als eerste tegenaan.
     await page.route('**/api/**', (route) => route.fulfill({ status: 401, json: { error: 'Sessie verlopen' } }));
     await page.route('**/auth/v1/token**', (route) => route.fulfill({ status: 400, json: { error: 'invalid_grant', error_description: 'Invalid Refresh Token' } }));
-    await bel(page, 'Meldingen (2 ongelezen)').click();
+    // Een verzoek dat het portaal zelf op de achtergrond stuurt, kan de tik
+    // voor zijn: dan is de sessie al op en de bel al weg, en dat is precies
+    // wat hieronder getoetst wordt. Wachten op een bel die niet terugkomt
+    // liet de proef op een trage runner tot haar tijdslimiet hangen (op main
+    // in 4 van 14 rondes; lokaal onder belasting 4 op 40).
+    await bel(page, 'Meldingen (2 ongelezen)').click({ timeout: 3000 }).catch(() => undefined);
     // Het paneel haalt bij het openen zelf al op; staat het er nog, dan de tik.
     await page.getByRole('menu', { name: 'Meldingen' }).getByRole('menuitem', { name: /Verlof goedgekeurd/ }).click({ timeout: 3000 }).catch(() => undefined);
 

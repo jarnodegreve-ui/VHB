@@ -7,7 +7,7 @@ import { Button, IconButton } from './primitives';
 import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
 import { openRitbladExtern } from '../lib/ritblad';
-import { formatDatumDMJ, metEenheid } from '../lib/format';
+import { formatDagMaand, formatDatumDMJ, metEenheid } from '../lib/format';
 import { isRitbladOpgeslagen, verwijderRitbladUitCache } from '../lib/ritbladCache';
 import { reportHandledError } from '../lib/monitoring';
 import { isOnlineNu, useOnline } from '../lib/useOnline';
@@ -59,14 +59,8 @@ type Staat =
 const ZOOM_STAPPEN = [1, 1.5, 2, 3];
 const RAND = 12; // px rondom de pagina's in de scroller (p-3)
 
-const formatBundelDatum = (iso: string | undefined): string => {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' }).replace(/\.$/, '');
-  } catch {
-    return '';
-  }
-};
+// Dag en korte maand van het portaal (src/lib/format.ts): "1 sep".
+const formatBundelDatum = (iso: string | undefined): string => formatDagMaand(iso);
 
 /** Naam en melding van een fout voor het foutrapport ("TypeError: Load failed"). */
 const beschrijfFout = (err: unknown): string => {

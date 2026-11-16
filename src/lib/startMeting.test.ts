@@ -308,13 +308,36 @@ describe('meesturen met de aanwezigheidsping', () => {
 
   it('een nieuwere meting (van deze start) blijft staan na het antwoord op de ping', async () => {
     const m = await laad();
-    zet({ t: Date.now() - 1000, m: { js: 1, gegevens: 4 } });
+    zet({ t: Date.now() - 1000, m: { js: 1, gegevens: 4, rol: 'chauffeur', scherm: 'ander' } });
     const vorige = m.vorigeStart()!;
     // Intussen bewaarde deze start zijn eigen meting.
     totGegevens(m, 'rooster');
     const nieuw = window.localStorage.getItem(SLEUTEL);
     vorige.wis();
     expect(window.localStorage.getItem(SLEUTEL)).toBe(nieuw);
+  });
+
+  it('neemt alleen geldige meetvelden over uit een korte, geknoeide sleutel', async () => {
+    const m = await laad();
+    const vreemd = {
+      rol: 'chauffeur', scherm: 'ander', bron: 'vers', gegevens: 4, js: 1,
+      beeld: 'test@example.test', release: 'test@example.test', email: 'test@example.test',
+      toestel: { naam: 'test@example.test' }, weergave: 'desktop',
+    };
+    zet({ t: Date.now(), m: vreemd });
+    expect(JSON.parse(JSON.stringify(m.vorigeStart()?.start))).toEqual({
+      rol: 'chauffeur', scherm: 'ander', bron: 'vers', gegevens: 4, js: 1,
+    });
+    zet({ t: Date.now(), m: { ...vreemd, rol: 'test@example.test' } });
+    expect(m.vorigeStart()).toBeUndefined();
+  });
+
+  it('bewaart een start met een ongeldige profielrol niet', async () => {
+    const m = await laad();
+    klok = 420; m.markeerSessie();
+    klok = 780; m.markeerProfiel('test@example.test');
+    klok = 1130; m.markeerGegevens('rooster', false);
+    expect(window.localStorage.getItem(SLEUTEL)).toBeNull();
   });
 
   it('ouder dan 7 dagen: weg zonder meesturen', async () => {

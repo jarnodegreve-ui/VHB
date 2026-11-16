@@ -129,6 +129,114 @@ describe('useZelfLadend', () => {
   });
 });
 
+describe('useZelfLadend met gegevens uit het geheugen (onthoudenOm)', () => {
+  // Het scherm toont bij de mount een lezing van 14:29:30 uit het geheugen.
+  const ONTHOUDEN = new Date('2026-09-15T14:29:30').getTime();
+  const uitgesteld = () => {
+    let los!: () => void;
+    let faal!: (e: unknown) => void;
+    const belofte = new Promise<void>((r, f) => { los = r; faal = f; });
+    return { belofte, los: () => act(async () => { los(); await belofte; }), faal: (e: unknown) => act(async () => { faal(e); await belofte.catch(() => undefined); }) };
+  };
+
+  it('geen skelet: laden staat nooit aan, de regel noemt de onthouden tijd tijdens het verversen en daarna de nieuwe', async () => {
+    const bezig = uitgesteld();
+    const laad = vi.fn().mockReturnValueOnce(bezig.belofte).mockResolvedValue(undefined);
+    const { result } = renderHook(() => useZelfLadend(laad, { onthoudenOm: ONTHOUDEN }));
+    expect(result.current.laden).toBe(false);
+    expect(result.current.laatstGeladen).toBe(ONTHOUDEN);
+    expect(laad).toHaveBeenCalledTimes(1);
+    // De verversing loopt (stil), maar de regel verbergt de leeftijd niet.
+    expect(result.current.verversen).toBe(true);
+    expect(versheidTekst(result.current.versheid)).toBe('Bijgewerkt om 14:29');
+
+    await bezig.los();
+    expect(result.current.laden).toBe(false);
+    expect(result.current.verversen).toBe(false);
+    expect(result.current.fout).toBeNull();
+    expect(result.current.laatstGeladen).toBe(Date.now());
+    expect(versheidTekst(result.current.versheid)).toBe('Bijgewerkt om 14:32');
+
+    // Daarna is het een gewoon scherm: een stille verversing zegt "Bijwerken…".
+    const tweede = uitgesteld();
+    laad.mockReturnValueOnce(tweede.belofte);
+    let klaar!: Promise<void>;
+    act(() => { klaar = result.current.ververs(); });
+    expect(versheidTekst(result.current.versheid)).toBe('Bijwerken…');
+    await tweede.los();
+    await act(async () => { await klaar; });
+  });
+
+  it('een fout van die eerste verversing wordt getoond; de onthouden tijd blijft in de regel', async () => {
+    const laad = vi.fn().mockRejectedValueOnce(new Error('500'));
+    const { result } = renderHook(() => useZelfLadend(laad, { onthoudenOm: ONTHOUDEN, boodschap: 'Kon de vervaldata niet laden.' }));
+    await flush();
+    expect(result.current.laden).toBe(false);
+    expect(result.current.fout).toBe('Kon de vervaldata niet laden.');
+    expect(result.current.laatstGeladen).toBe(ONTHOUDEN);
+    expect(versheidTekst(result.current.versheid)).toBe('Bijgewerkt om 14:29');
+  });
+
+  it('zolang de gegevens uit het geheugen komen, toont ook een latere stille verversing haar fout; Opnieuw herstelt', async () => {
+    // De eerste verversing blijft hangen; een tweede, stille (bv. bereik
+    // terug) neemt het over en mislukt: ook die fout staat er, want de
+    // gegevens zijn nog altijd niet van dit bezoek.
+    const hangt = uitgesteld();
+    const laad = vi.fn().mockReturnValueOnce(hangt.belofte).mockRejectedValueOnce(new Error('500')).mockResolvedValue(undefined);
+    const { result } = renderHook(() => useZelfLadend(laad, { onthoudenOm: ONTHOUDEN, boodschap: 'Kapot.' }));
+    expect(result.current.fout).toBeNull();
+    await act(async () => { await result.current.ververs(); });
+    expect(laad).toHaveBeenCalledTimes(2);
+    expect(result.current.fout).toBe('Kapot.');
+    expect(result.current.laden).toBe(false);
+    expect(result.current.laatstGeladen).toBe(ONTHOUDEN);
+    expect(versheidTekst(result.current.versheid)).toBe('Bijgewerkt om 14:29');
+    // Het antwoord van de eerste komt te laat: het raakt niets meer.
+    await hangt.los();
+    expect(result.current.fout).toBe('Kapot.');
+    expect(result.current.laatstGeladen).toBe(ONTHOUDEN);
+
+    await act(async () => { await result.current.opnieuw(); });
+    expect(result.current.fout).toBeNull();
+    expect(result.current.laatstGeladen).toBe(Date.now());
+
+    // Nu van dit bezoek: een mislukte stille verversing zwijgt weer, zoals altijd.
+    laad.mockRejectedValueOnce(new Error('500'));
+    await act(async () => { await result.current.ververs(); });
+    expect(result.current.fout).toBeNull();
+  });
+
+  it('een deps-wissel laadt zichtbaar, en onthoudenOm telt alleen bij de mount', async () => {
+    const laad = vi.fn().mockResolvedValue(undefined);
+    const { result, rerender } = renderHook(
+      ({ filter, om }: { filter: string; om: number | null }) => useZelfLadend(laad, { deps: [filter], onthoudenOm: om }),
+      { initialProps: { filter: 'open', om: ONTHOUDEN as number | null } },
+    );
+    expect(result.current.laden).toBe(false);
+    await flush();
+    rerender({ filter: 'alles', om: ONTHOUDEN });
+    expect(result.current.laden).toBe(true);
+    await flush();
+    expect(result.current.laden).toBe(false);
+    // Een andere waarde na de mount verandert niets aan wat al geladen is.
+    const tijd = result.current.laatstGeladen;
+    rerender({ filter: 'alles', om: ONTHOUDEN - 60_000 });
+    expect(result.current.laatstGeladen).toBe(tijd);
+    expect(laad).toHaveBeenCalledTimes(2);
+  });
+
+  it('zonder de optie (of met null) precies zoals vroeger: eerst laden, dan de tijd', async () => {
+    const laad = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useZelfLadend(laad, { onthoudenOm: null }));
+    expect(result.current.laden).toBe(true);
+    expect(result.current.laatstGeladen).toBeNull();
+    expect(versheidTekst(result.current.versheid)).toBe('');
+    await flush();
+    expect(result.current.laden).toBe(false);
+    expect(versheidTekst(result.current.versheid)).toBe('Bijgewerkt om 14:32');
+  });
+});
+
 describe('foutTekst en versheidTekst', () => {
   it('kiest de boodschap: vast, functie, Error-message of algemeen', () => {
     expect(foutTekst(new Error('x'), 'Vast.')).toBe('Vast.');

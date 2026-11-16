@@ -37,6 +37,10 @@ export function markeerEigenSchrijfactie(nu = Date.now()) {
   laatsteEigenActie = nu;
 }
 
+/** Tijdstip van de laatste markering (-Infinity: nog geen). Het geheugen van
+ *  de schermen (schermGeheugen.ts) telt een lezing van daarvoor niet meer. */
+export const laatsteEigenSchrijfactie = () => laatsteEigenActie;
+
 /** Geeft terug of er een toast is getoond. */
 export function meldLive(collectie: LiveCollectie, nu = Date.now()): boolean {
   if (nu - laatsteEigenActie < EIGEN_ACTIE_VENSTER_MS) return false;

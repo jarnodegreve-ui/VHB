@@ -3,7 +3,7 @@ import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
 import { isStaf, type User } from '../types';
 import { notify } from '../lib/ui';
 import { openRitblad } from '../lib/ritblad';
-import { formatDatumDMJ, prettySize, serviceNumberOf } from '../lib/format';
+import { formatDatumDMJ, formatTijdstip, prettySize, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/datum';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -45,27 +45,15 @@ const SYNCED_AT_KEY = 'vhb-ritbladen-synced';
 // De sleutels van vóór 13-10 (één bundel): opruimen bij de eerste lading.
 const OUDE_SLEUTELS = ['vhb-ritblaadje-meta', 'vhb-ritblaadje-synced'];
 
-const formatSyncedAt = (iso: string | null) => {
-  if (!iso) return null;
-  try {
-    return new Date(iso).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return null;
-  }
-};
+// Het tijdstip van het portaal (src/lib/format.ts): "do 8 okt, 14:02".
+const formatSyncedAt = (iso: string | null) => formatTijdstip(iso) || null;
 
 /** "2101 / 2304", "2101, 2304" of "2101 2304" → ['2101', '2304']; alleen
  *  cijfers en letters blijven over, zodat een typfout geen lege zoekterm wordt. */
 export const parseDienstnummers = (invoer: string): string[] =>
   [...new Set(invoer.split(/[\s,;/]+/).map((n) => n.trim()).filter(Boolean))];
 
-const formatUploadedAt = (iso: string) => {
-  try {
-    return new Date(iso).toLocaleString('nl-BE', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return iso;
-  }
-};
+const formatUploadedAt = (iso: string) => formatTijdstip(iso);
 
 const regelSleutel = (regel: RitbladRegel): string => regel.versie?.id ?? 'huidig';
 
