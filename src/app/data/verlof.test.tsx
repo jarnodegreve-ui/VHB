@@ -11,11 +11,11 @@ import type { LeaveRequest } from '../../types';
  * verversing na de beslissing binnen, dan stond de net goedgekeurde aanvraag
  * weer als "in behandeling" in de lijst, tot de volgende verversing.
  *
- * De late lijst telt nog altijd volledig (ook haar revisie, zoals vroeger);
- * alleen een aanvraag die ze nog toont in de status van vóór de eigen
- * beslissing, houdt het antwoord van die beslissing. Geen extra verzoek.
+ * Een nog bruikbare late lijst behoudt het antwoord van een eigen beslissing
+ * zolang ze die aanvraag in de oude status toont. De samengestelde lijst
+ * mag niet als basis dienen om de volledige collectie op te slaan.
  */
-type Antwoord = { status?: number; body: unknown; revisie?: string };
+type Antwoord = { status?: number; body: unknown; revisie?: string; uitCache?: boolean };
 const net = vi.hoisted(() => ({
   verzoeken: [] as Array<{ url: string; method: string; revisie: string | null }>,
   antwoord: (_url: string, _method: string): Antwoord | Promise<Antwoord> => ({ body: [] }),
@@ -26,8 +26,11 @@ vi.mock('../../lib/api', () => {
     const method = init.method ?? 'GET';
     const kop = Object.entries(init.headers ?? {}).find(([naam]) => naam.toLowerCase() === 'x-collection-revision');
     net.verzoeken.push({ url, method, revisie: kop ? kop[1] : null });
-    const { status = 200, body, revisie } = await net.antwoord(url, method);
-    return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...(revisie ? { 'x-collection-revision': revisie } : {}) } });
+    const { status = 200, body, revisie, uitCache } = await net.antwoord(url, method);
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (revisie) headers['x-collection-revision'] = revisie;
+    if (uitCache) headers['x-vhb-bron'] = 'cache';
+    return new Response(JSON.stringify(body), { status, headers });
   };
   const apiJson = async () => [];
   return { apiFetch, apiJson };
@@ -51,12 +54,20 @@ describe('fetchLeave en een eigen beslissing onderweg', () => {
   let root: Root;
   let el: HTMLDivElement;
   let data: ReturnType<typeof useVerlofData> | null;
+  let ctx: ReturnType<typeof useDataKern>;
+  let wisselAccount: () => Promise<void>;
+  const toon = vi.fn();
+  const meldLaadfout = vi.fn();
+  const fetchActivityLog = vi.fn(async () => {});
+  const refreshCoverageGaps = vi.fn(async () => {});
   /** De stand op de server. */
   let server: LeaveRequest[];
   /** Elke status van w3 die ooit getekend werd, in volgorde (zonder herhaling). */
   let w3InBeeld: Array<string | undefined>;
 
   const gets = () => net.verzoeken.filter((v) => v.method === 'GET' && v.url === '/api/leave');
+  const posts = () => net.verzoeken.filter((v) => v.method === 'POST' && v.url === '/api/leave');
+  const revisie = () => ctx.revisionHeader('leave')['x-collection-revision'];
   const status = (id: string) => data!.leaveRequests.find((r) => r.id === id)?.status;
   const patch = (url: string): Antwoord => {
     const id = url.split('/').pop()!;
@@ -75,21 +86,34 @@ describe('fetchLeave en een eigen beslissing onderweg', () => {
     server = [aanvraag('w1'), aanvraag('w2'), aanvraag('w3')];
     net.verzoeken = [];
     net.antwoord = (url, method) => (method === 'GET' ? { body: server, revisie: 'begin' } : patch(url));
+    let account = 'a';
+    toon.mockClear();
+    meldLaadfout.mockClear();
+    fetchActivityLog.mockClear();
+    refreshCoverageGaps.mockClear();
     function Proef() {
-      const ctx = useDataKern({
+      ctx = useDataKern({
         session: null,
-        currentUser: { id: 'u-planner', role: 'planner' },
-        showToast: () => {},
-        meldLaadfout: () => {},
-        fetchActivityLog: async () => {},
+        currentUser: { id: account, role: 'admin' },
+        showToast: toon,
+        meldLaadfout,
+        fetchActivityLog,
       } as unknown as Parameters<typeof useDataKern>[0]);
-      data = useVerlofData({ ...ctx, refreshCoverageGaps: async () => {} });
+      data = useVerlofData({ ...ctx, refreshCoverageGaps });
       const nu = data.leaveRequests.find((r) => r.id === 'w3')?.status;
       if (w3InBeeld.at(-1) !== nu) w3InBeeld.push(nu);
       return null;
     }
     await act(async () => { root.render(<Proef />); });
     await act(async () => { await data!.fetchLeave(); });
+    wisselAccount = async () => {
+      await act(async () => {
+        ctx.clearLoadedCollections();
+        data!.resetVerlof();
+        account = 'b';
+        root.render(<Proef />);
+      });
+    };
     net.verzoeken = [];
     w3InBeeld = [status('w3')];
   });
@@ -135,13 +159,50 @@ describe('fetchLeave en een eigen beslissing onderweg', () => {
     expect(status('w3')).toBe('cancelled');
   });
 
-  it('de revisie volgt de late lijst, zoals vroeger: een opslag daarna stuurt de oudere revisie mee', async () => {
+  it('een samengestelde lijst neemt de revisie niet over en ververst vóór een volledige opslag', async () => {
     const { los } = await lezingKruistBeslissing();
-    await los({ body: [aanvraag('w1'), aanvraag('w2'), aanvraag('w3')], revisie: 'oud' });
-    net.antwoord = (_url, method) => (method === 'GET' ? { body: server, revisie: 'vers' } : { body: { success: true }, revisie: 'na-opslag' });
-    await act(async () => { await data!.saveLeave(data!.leaveRequests); });
-    const post = net.verzoeken.find((v) => v.method === 'POST' && v.url === '/api/leave');
-    expect(post?.revisie).toBe('oud');
+    const vers = uitgesteld();
+    const exact = [aanvraag('w1'), aanvraag('w2'), aanvraag('w3')];
+    // De server mag w3 intussen hebben teruggezet. Zelfs wanneer de revisie
+    // nog echt geldt, past die niet bij de getoonde (samengestelde) lijst.
+    await los({ body: exact, revisie: 'actueel-op-server' });
+    expect(status('w3')).toBe('approved');
+    expect(revisie()).toBe('na-patch');
+    net.antwoord = (_url, method) => (method === 'GET' ? vers.belofte : { body: { success: true }, revisie: 'na-opslag' });
+    let opslag!: Promise<boolean>;
+    act(() => { opslag = data!.saveLeave(data!.leaveRequests); });
+    expect(posts()).toHaveLength(0);
+    expect(gets()).toHaveLength(2);
+    expect(toon).toHaveBeenCalledWith('De verlofaanvragen worden ververst. Probeer je wijziging opnieuw.', 'info');
+    await act(async () => {
+      vers.los({ body: exact, revisie: 'actueel-op-server' });
+      expect(await opslag).toBe(false);
+    });
+    expect(status('w3')).toBe('pending');
+    expect(revisie()).toBe('actueel-op-server');
+    await act(async () => { expect(await data!.saveLeave(data!.leaveRequests)).toBe(true); });
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0]?.revisie).toBe('actueel-op-server');
+    expect(revisie()).toBe('na-opslag');
+  });
+
+  it('een opslag uit de vorige render mag haar samengestelde lijst niet sturen met de verse revisie', async () => {
+    const voor = kopie();
+    const { los } = await lezingKruistBeslissing();
+    await los({ body: voor, revisie: 'oud' });
+    const opslaanUitOudeRender = data!.saveLeave;
+    const oudeLijst = data!.leaveRequests;
+    net.antwoord = (_url, method) => (method === 'GET' ? { body: voor, revisie: 'vers' } : { body: { success: true } });
+    await act(async () => {
+      await data!.fetchLeave();
+      expect(revisie()).toBe('vers');
+      // React heeft de verse lijst nog niet getekend. De oude knop kan nog
+      // de oude lijst aanbieden, hoewel de nieuwe revisie al bekend is.
+      expect(data!.leaveRequests).toBe(oudeLijst);
+      expect(await opslaanUitOudeRender(oudeLijst)).toBe(false);
+    });
+    expect(posts()).toHaveLength(0);
+    expect(status('w3')).toBe('pending');
   });
 
   it('een lezing die ná de beslissing vertrok, telt zoals ze is', async () => {
@@ -208,17 +269,126 @@ describe('fetchLeave en een eigen beslissing onderweg', () => {
     expect(w3InBeeld).toEqual(['pending', 'approved']);
   });
 
-  it('hangt er nog een oudere lezing, dan telt een lezing die ná de beslissing vertrok toch zoals ze is', async () => {
+  it.each(['oud eerst', 'nieuw eerst'])('een jongere lezing mag een echte terugzetting tonen (%s), en bepaalt de revisie', async (volgorde) => {
     const oud = uitgesteld();
-    net.antwoord = (url, method) => (method === 'GET' ? oud.belofte : patch(url));
-    let hangend!: Promise<void>;
-    act(() => { hangend = data!.fetchLeave(); });
+    const nieuw = uitgesteld();
+    const wachtrij = [oud, nieuw];
+    net.antwoord = (url, method) => (method === 'GET' ? wachtrij.shift()!.belofte : patch(url));
+    let lezingOud!: Promise<void>;
+    let lezingNieuw!: Promise<void>;
+    act(() => { lezingOud = data!.fetchLeave(); });
     await act(async () => { await data!.decideLeave('w3', 'approved', 'pending'); });
-    // Vertrekt na de beslissing; de server zegt "in behandeling" (iemand zette ze terug).
-    net.antwoord = (_url, method) => (method === 'GET' ? { body: [aanvraag('w1'), aanvraag('w2'), aanvraag('w3')], revisie: 'later' } : { body: {} });
-    await act(async () => { await data!.fetchLeave(); });
+    act(() => { lezingNieuw = data!.fetchLeave(); });
+    const geefOud = () => act(async () => { oud.los({ body: [aanvraag('w3'), aanvraag('w4')], revisie: 'oud' }); await lezingOud; });
+    const geefNieuw = () => act(async () => { nieuw.los({ body: [aanvraag('w3'), aanvraag('w5')], revisie: 'later' }); await lezingNieuw; });
+    if (volgorde === 'oud eerst') {
+      await geefOud();
+      expect(status('w3')).toBe('approved');
+      expect(status('w4')).toBe('pending');
+      expect(revisie()).toBe('na-patch');
+      await geefNieuw();
+    } else {
+      await geefNieuw();
+      expect(status('w3')).toBe('pending');
+      await geefOud();
+    }
     expect(status('w3')).toBe('pending');
-    await act(async () => { oud.los({ body: [], revisie: 'x' }); await hangend; });
+    expect(status('w4')).toBeUndefined();
+    expect(status('w5')).toBe('pending');
+    expect(w3InBeeld).toEqual(['pending', 'approved', 'pending']);
+    expect(revisie()).toBe('later');
+  });
+
+  it.each([
+    { status: 500, body: [aanvraag('w5')], revisie: 'fout' },
+    { status: 200, body: [null], revisie: 'onbruikbaar' },
+  ])('na een onbruikbare nieuwere lezing telt een oudere geldige lezing ($revisie)', async (antwoord) => {
+    const oud = uitgesteld();
+    const nieuw = uitgesteld();
+    const wachtrij = [oud, nieuw];
+    net.antwoord = (url, method) => (method === 'GET' ? wachtrij.shift()!.belofte : patch(url));
+    let lezingOud!: Promise<void>;
+    let lezingNieuw!: Promise<void>;
+    act(() => { lezingOud = data!.fetchLeave(); });
+    await act(async () => { await data!.decideLeave('w3', 'approved', 'pending'); });
+    act(() => { lezingNieuw = data!.fetchLeave(); });
+    await act(async () => { nieuw.los(antwoord); await lezingNieuw; });
+    expect(status('w3')).toBe('approved');
+    expect(status('w5')).toBeUndefined();
+    expect(revisie()).toBe('na-patch');
+    await act(async () => { oud.los({ body: [aanvraag('w3'), aanvraag('w4')], revisie: 'oud' }); await lezingOud; });
+    expect(status('w3')).toBe('approved');
+    expect(status('w4')).toBe('pending');
+    expect(revisie()).toBe('na-patch');
+  });
+
+  it('een jongere cachelezing maakt een eerder gestarte verse lezing niet achterhaald', async () => {
+    const vers = uitgesteld();
+    net.antwoord = () => vers.belofte;
+    let lezingVers!: Promise<void>;
+    act(() => { lezingVers = data!.fetchLeave(); });
+    net.antwoord = () => ({ body: [aanvraag('w3', 'rejected')], revisie: 'cache', uitCache: true });
+    await act(async () => { await data!.fetchLeave(); });
+    expect(status('w3')).toBe('rejected');
+    expect(revisie()).toBe('cache');
+    await act(async () => {
+      vers.los({ body: [aanvraag('w3', 'approved')], revisie: 'vers' });
+      await lezingVers;
+    });
+    expect(status('w3')).toBe('approved');
+    expect(revisie()).toBe('vers');
+  });
+
+  it.each([200, 409, 500])('lezing en beslissing van vóór de accountwissel raken de nieuwe gebruiker niet (PATCH %i)', async (httpStatus) => {
+    const lezingVanA = uitgesteld();
+    const besluitVanA = uitgesteld();
+    net.antwoord = (_url, method) => (method === 'GET' ? lezingVanA.belofte : besluitVanA.belofte);
+    let lezing!: Promise<void>;
+    let beslissing!: Promise<boolean>;
+    act(() => {
+      lezing = data!.fetchLeave();
+      beslissing = data!.decideLeave('w3', 'approved', 'pending');
+    });
+    await wisselAccount();
+    expect(revisie()).toBeUndefined();
+    expect(data!.leaveRequests).toEqual([]);
+    net.antwoord = () => ({ body: [aanvraag('w3'), aanvraag('wB')], revisie: 'b' });
+    await act(async () => { await data!.fetchLeave(); });
+    await act(async () => {
+      lezingVanA.los({ body: [aanvraag('wA')], revisie: 'a-laat' });
+      await lezing;
+      besluitVanA.los({
+        status: httpStatus,
+        body: httpStatus === 200 ? { leave: aanvraag('w3', 'approved') } : { error: 'Fout van het vorige account' },
+        revisie: 'a-besluit',
+      });
+      expect(await beslissing).toBe(false);
+    });
+    expect(data!.leaveRequests.map((r) => r.id)).toEqual(['w3', 'wB']);
+    expect(status('w3')).toBe('pending');
+    expect(revisie()).toBe('b');
+    expect(gets()).toHaveLength(2);
+    expect(toon).not.toHaveBeenCalled();
+    expect(meldLaadfout).not.toHaveBeenCalled();
+    expect(fetchActivityLog).not.toHaveBeenCalled();
+    expect(refreshCoverageGaps).not.toHaveBeenCalled();
+  });
+
+  it('een ziekmelding die pas na de accountwissel antwoordt, start geen verversing en geeft geen melding', async () => {
+    const meldingVanA = uitgesteld();
+    net.antwoord = (_url, method) => (method === 'POST' ? meldingVanA.belofte : { body: [aanvraag('wB')], revisie: 'b' });
+    let melding!: Promise<boolean>;
+    act(() => { melding = data!.reportSick({ userId: 'a' }); });
+    await wisselAccount();
+    await act(async () => { await data!.fetchLeave(); });
+    await act(async () => {
+      meldingVanA.los({ body: { success: true } });
+      expect(await melding).toBe(false);
+    });
+    expect(gets()).toHaveLength(1);
+    expect(revisie()).toBe('b');
+    expect(toon).not.toHaveBeenCalled();
+    expect(refreshCoverageGaps).not.toHaveBeenCalled();
   });
 
   it('het hele antwoord van de beslissing blijft over de late lijst staan, niet alleen de status', async () => {
