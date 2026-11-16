@@ -341,6 +341,7 @@ test('chauffeur met een stafscherm als laatst geopende pagina: de schil toont ge
   expect(schil.regels).toHaveLength(2);
   expect(schil.h1).toBeNull();
   expect(schil.tekst).toBe('');
+  await expect(page.getByRole('status', { name: 'Portaal wordt geladen' }).locator('header.topbar')).toHaveText('');
   await expect(page.getByText('Beheer planning', { exact: true })).toHaveCount(0);
 
   me.laatLos();

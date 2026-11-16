@@ -4,7 +4,7 @@ import { Skeleton } from '../components/Skeleton';
 import { DashboardSkelet } from '../components/ui';
 import { cn } from '../lib/ui';
 import { routeUitUrl } from './router';
-import { isBreed, sectieLabel } from './routes';
+import { isBreed } from './routes';
 import { skeletVoor } from './skeletten';
 
 /**
@@ -16,17 +16,17 @@ import { skeletVoor } from './skeletten';
  *
  * Layout-getrouw (next-level 2, punt 7): de schil leest de startroute uit de
  * URL (die is al genormaliseerd door useRoute) en spiegelt de echte schil
- * element voor element: beeldmerk in de mobiele topbar, sectiewoord op
- * desktop, dezelfde kolombreedte (`breed`), dezelfde rijhoogte via
+ * element voor element: beeldmerk in de mobiele topbar, dezelfde
+ * kolombreedte (`breed`), dezelfde rijhoogte via
  * --topbar-h, het dashboardraster op `/` en de dock op smal scherm. Bij het
  * omwisselen naar de echte app verschuift er zo niets.
  *
  * Eén skelet per scherm (ronde 6, punt 3): op elk ander scherm dan `/` staat
  * hier hetzelfde skelet als in de Suspense-terugval en in het scherm zelf
  * (`skeletVoor`), met één verschil: de rol is hier nog onbekend (vóór
- * `/api/me`), dus titel en eyebrow zijn skeletregels in hetzelfde vak, geen
- * tekst. Een chauffeur op een stafpad (oude bladwijzer, gedeeld toestel)
- * leest zo geen schermtitel die daarna het dashboard blijkt.
+ * `/api/me`), dus titel en eyebrow zijn skeletregels in hetzelfde vak. De
+ * topbar houdt haar plek zonder sectiewoord. Een chauffeur op een stafpad
+ * (oude bladwijzer, gedeeld toestel) krijgt zijn eigen dashboard na het laden.
  */
 export function AppSkeleton() {
   const [lang, setLang] = useState(false);
@@ -36,7 +36,6 @@ export function AppSkeleton() {
   }, []);
   const view = (typeof window !== 'undefined' && routeUitUrl(window.location.href)?.view) || 'dashboard';
   const kolomClass = isBreed(view) ? 'max-w-[var(--content-max-breed)]' : 'max-w-[var(--content-max)]';
-  const sectie = sectieLabel(view);
   return (
     <div className="flex h-dvh w-full overflow-hidden" role="status" aria-busy="true" aria-label="Portaal wordt geladen">
       <aside className="hidden lg:flex w-zijbalk shrink-0 flex-col panel-dark" aria-hidden="true">
@@ -65,7 +64,6 @@ export function AppSkeleton() {
                 <BrandLogo tone="licht" variant="beeldmerk" laden className="h-6 w-auto select-none block dark:hidden" />
                 <BrandLogo tone="donker" variant="beeldmerk" laden className="h-6 w-auto select-none hidden dark:block" />
               </span>
-              {sectie && <span className="hidden lg:inline text-micro shrink-0 whitespace-nowrap">{sectie}</span>}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {/* Bel (IconButton sm) en de avatar-trigger van het accountmenu (py-1 + h-8 + pijltje). */}
