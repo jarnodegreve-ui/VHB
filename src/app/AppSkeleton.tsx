@@ -52,7 +52,9 @@ export function AppSkeleton() {
           ))}
         </div>
       </aside>
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      {/* De bovenbalk en inhoud reserveren samen dezelfde klassieke
+          schuifbalkgoot als de scroll-root van AppSchil. */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden [scrollbar-gutter:stable]">
         <div className="statusbalk-strook" aria-hidden="true" />
         <header className="topbar px-gutter md:px-7">
           {/* Zelfde rij als App.tsx: py-2.5 + min-h op --topbar-h (min de haarlijn). */}
