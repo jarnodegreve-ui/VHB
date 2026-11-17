@@ -34,6 +34,7 @@ import { ActieMenu } from '../components/ActieMenu';
 import { DashboardAanpassen } from '../components/DashboardAanpassen';
 import { MededelingStrook } from '../components/MededelingStrook';
 import { kleineTegelSpan, pasVoorkeurenToe, tegelsVoorRol, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
+import { markeerBeeld } from '../lib/startMeting';
 
 // Techniek (13-09): de defectmelding en de gele-boek-tegel laden pas bij
 // gebruik, zodat de chauffeurschunk niets van de techniekmodule draagt.
@@ -430,7 +431,7 @@ export function DashboardView({ notes = [],
               er vlak onder. Vanaf md blijft de kop zoals hij was. */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-greeting">
+              <h1 ref={markeerBeeld} className="text-greeting">
                 {greeting}, {firstName}
               </h1>
               <p className="mt-0.5 text-md font-normal text-slate-500">

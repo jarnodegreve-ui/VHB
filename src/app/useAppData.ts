@@ -10,6 +10,7 @@ import { useMensenData } from './data/mensen';
 import { useCommunicatieData } from './data/communicatie';
 import { useMeldingenData } from './data/meldingen';
 import { UITGESTELD_PER_VIEW, uitgesteldVoor, type Uitgesteld } from './data/poort';
+import { markeerGegevens } from '../lib/startMeting';
 
 /**
  * De datalaag van het portaal — de compositiewortel. De collecties, hun
@@ -153,6 +154,9 @@ export function useAppData({
     const nuNodig = (UITGESTELD_PER_VIEW[currentViewRef.current] ?? []).filter((k) => uitgesteld.includes(k));
     const vroeg = nuNodig.map((k) => laadUitgesteld(k, accessToken));
     let laat: Promise<void>[] = [];
+    // Startmeting: of een antwoord van de poort uit de cache kwam; null = de
+    // poort ging niet dicht (src/lib/startMeting.ts).
+    let poortUitCache: boolean | null = null;
     try {
       // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
       // Planner/admin: alle shifts (nodig voor beheer-views).
@@ -182,10 +186,16 @@ export function useAppData({
       const bron = ctx.sluitBronMeting();
       const nu = Date.now();
       setLastSyncedAt((vorige) => syncTijdNa(bron, vorige, nu));
+      // De fetchers vangen hun fouten zelf: een mislukte poort zie je aan
+      // planning en verlof die niet als geladen gemarkeerd zijn.
+      if (ctx.isGeladen('planning') && ctx.isGeladen('leave')) poortUitCache = bron.uitCache > 0;
     } catch (error) {
       console.error('Error loading app data:', error);
       meldLaadfout('de gegevens', error);
     } finally {
+      // Startmeting: `gegevens` vlak vóór de poort opengaat; alleen de eerste
+      // laadbeurt telt, een latere doet niets.
+      markeerGegevens(currentViewRef.current, poortUitCache);
       setIsInitialLoad(false);
       // Ná de poort: de rest op de achtergrond. De fetchers vangen hun eigen
       // fouten (laadfout-toast waar dat al zo was) en zetten hun vlag altijd.

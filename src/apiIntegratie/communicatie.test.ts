@@ -430,6 +430,89 @@ describe('aanmeldingen (login-activiteit)', () => {
   });
 });
 
+// Startmeting (ronde 6, punt 21a): de meting van de vorige warme start reist
+// mee met de resume-ping als `start` en wordt één regel `[start] …` in de log
+// (api/_lib/startRegel.ts). Het antwoord verandert er nooit door.
+describe('startmeting mee met de resume-ping', () => {
+  const START = {
+    js: 380, sessie: 420, profiel: 780, gegevens: 1130, beeld: 1490,
+    rol: 'chauffeur', scherm: 'mijn-dag', bron: 'vers', toestel: 'ios', weergave: 'app', release: '1a2b3c4',
+  };
+  let regels: string[] = [];
+  beforeEach(() => {
+    regels = [];
+    vi.spyOn(console, 'info').mockImplementation((...args: unknown[]) => { regels.push(String(args[0])); });
+  });
+  afterEach(() => { vi.mocked(console.info).mockRestore(); });
+  const startRegels = () => regels.filter((r) => r.startsWith('[start]'));
+  const zonderTijd = (json: Record<string, unknown>) => ({ ...json, lastLogin: undefined });
+
+  it('een geldige meting geeft precies één regel in het afgesproken formaat', async () => {
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume', start: START } });
+    expect(res.status).toBe(200);
+    expect(startRegels()).toEqual(['[start] chauffeur mijn-dag | js 380 · sessie 420 · profiel 780 · gegevens 1130 · beeld 1490 | vers · ios · app | release 1a2b3c4']);
+  });
+
+  it('drie voorbeelden: zonder beeld, met cache en vroeg, en een staf-start met de rol uit de meting', async () => {
+    const { beeld: _b, release: _r, ...zonderBeeld } = START;
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume', start: { ...zonderBeeld, scherm: 'ander' } } });
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume', start: { ...START, bron: 'cache', toestel: 'android', weergave: 'browser', vroeg: true } } });
+    // De rol komt uit de meting, niet uit de aanmelding (tok-a is een chauffeur):
+    // op een gedeeld toestel reist de meting van A mee met de ping van B.
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume', start: { ...START, rol: 'admin', scherm: 'dashboard', toestel: 'desktop', weergave: 'browser', release: '9f8e7d6c5b4a' } } });
+    expect(startRegels()).toEqual([
+      '[start] chauffeur ander | js 380 · sessie 420 · profiel 780 · gegevens 1130 | vers · ios · app',
+      '[start] chauffeur mijn-dag | js 380 · sessie 420 · profiel 780 · gegevens 1130 · beeld 1490 | cache · android · browser · vroeg | release 1a2b3c4',
+      '[start] admin dashboard | js 380 · sessie 420 · profiel 780 · gegevens 1130 · beeld 1490 | vers · desktop · browser | release 9f8e7d6c5b4a',
+    ]);
+  });
+
+  it('ongeldige velden vallen weg; geen naam, id of e-mail in de regel', async () => {
+    await api('POST', '/api/auth/session', {
+      token: 'tok-a',
+      body: { action: 'resume', start: { ...START, js: -3, beeld: 2.5, bron: 'Chauffeur A', release: 'lokaal-1.2.3', toestel: 'a@vhb.be', naam: 'Chauffeur A', id: '3' } },
+    });
+    const regels = startRegels();
+    expect(regels).toEqual(['[start] chauffeur mijn-dag | sessie 420 · profiel 780 · gegevens 1130 | app']);
+    expect(regels[0]).not.toMatch(/Chauffeur A|a@vhb\.be|lokaal/);
+  });
+
+  it('onzin of een reuzenobject: geen regel, en het antwoord blijft hetzelfde', async () => {
+    const gewoon = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    const reus: Record<string, unknown> = { ...START };
+    for (let i = 0; i < 20_000; i++) reus[`v${i}`] = i;
+    for (const start of ['[start] admin dashboard | gegevens 1', 42, null, [START], { rol: 'chauffeur' }, { ...START, gegevens: '1130' }, reus]) {
+      const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume', start } });
+      expect(res.status).toBe(200);
+      expect(zonderTijd(res.json)).toEqual(zonderTijd(gewoon.json));
+    }
+    expect(startRegels()).toEqual([]);
+  });
+
+  it('een meting verandert het antwoord en de boekhouding niet', async () => {
+    const met = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume', start: START } });
+    expect(met.status).toBe(200);
+    expect(mem.sessionMetaWrites).toHaveLength(1);
+    expect(met.json.lastLogin).toBe(mem.sessionMetaWrites[0].lastLogin);
+    const zonder = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    expect(zonderTijd(met.json)).toEqual(zonderTijd(zonder.json));
+    expect(Object.keys(met.json).sort()).toEqual(Object.keys(zonder.json).sort());
+  });
+
+  it('geen regel op een niet-goedgekeurd toestel (minimaal antwoord, geen boekhouding)', async () => {
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', device: 'dev-onbekend', body: { action: 'resume', start: START } });
+    expect(res.status).toBe(200);
+    expect(res.json.email).toBeUndefined();
+    expect(startRegels()).toEqual([]);
+  });
+
+  it('alleen de resume-ping: start en end loggen geen meting', async () => {
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start', start: START } });
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'end', start: START } });
+    expect(startRegels()).toEqual([]);
+  });
+});
+
 describe('documenten per gebruiker', () => {
   it('een chauffeur ziet alleen zijn eigen documenten, ook met een vreemde userId in de query', async () => {
     mem.documents = [
