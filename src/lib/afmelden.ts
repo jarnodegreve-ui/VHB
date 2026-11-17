@@ -45,12 +45,18 @@ export const isPriveCache = (naam: string): boolean => !naam.startsWith(SCHIL_CA
  *  gebruiker mag niet meer in de privé-cache landen (public/sw.js). */
 export const WIS_PRIVE_BERICHT = 'wis-prive';
 
+/** Venstergebeurtenis bij elke wis: het geheugen van de schermen in de pagina
+ *  (schermGeheugen.ts) gaat mee, ook zonder herlaad. */
+export const WIS_PRIVE_GEBEURTENIS = 'vhb-wis-prive';
+
 /**
  * De privé-caches weg: bij afmelden, bij een gebruikerswissel en zodra een
  * toestel geblokkeerd of ingetrokken is. De schil blijft. Best-effort: zonder
  * Cache Storage (privévenster) valt er niets te wissen.
  */
 export async function wisPriveCaches(): Promise<void> {
+  // Eerst en synchroon: vóór elke await is het geheugen van de schermen leeg.
+  window.dispatchEvent(new Event(WIS_PRIVE_GEBEURTENIS));
   try {
     navigator.serviceWorker?.controller?.postMessage({ type: WIS_PRIVE_BERICHT });
   } catch {
