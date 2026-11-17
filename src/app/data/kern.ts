@@ -202,8 +202,8 @@ export type DataCtx = DataBasis & {
   /** Uitkomst van een GET melden: geslaagd of mislukt. De tekst van de
    *  melding hoort bij de view (useCollectieStaat), niet in de startbundel. */
   noteerCollectie: (key: string, geslaagd: boolean) => void;
-  /** Collectie-revisie uit de responsheader bewaren. */
-  captureRevision: (key: string, response: Response) => void;
+  /** Collectie-revisie uit de responsheader bewaren, zonder respons wissen. */
+  captureRevision: (key: string, response?: Response) => void;
   /** Header met de laatst geladen collectie-revisie (leeg als onbekend). */
   revisionHeader: (key: string) => Record<string, string>;
   /** `_rev` per record uit een GET-lijst halen en bewaren; geeft de schone lijst. */
@@ -220,6 +220,8 @@ export type DataCtx = DataBasis & {
     applyLocal: (updated: any) => void,
     /** Extra body-velden naast status/ifStatus (bv. de weigerreden). */
     extra?: Record<string, unknown>,
+    /** Is deze beslissing nog van de huidige sessie? */
+    isActueel?: () => boolean,
   ) => Promise<boolean>;
   /** Alle laadvangrails wissen (uitloggen). */
   clearLoadedCollections: () => void;
@@ -292,7 +294,8 @@ export function useDataKern(basis: DataBasis): DataCtx {
   // collega ondertussen opgeslagen → 409, wij verversen i.p.v. te overschrijven.
   const REVISION_HEADER = 'x-collection-revision';
   const collectionRevisionsRef = useRef<Record<string, string>>({});
-  const captureRevision = (key: string, response: Response) => {
+  const captureRevision = (key: string, response?: Response) => {
+    if (!response) { delete collectionRevisionsRef.current[key]; return; }
     const rev = response.headers.get(REVISION_HEADER);
     if (rev) collectionRevisionsRef.current[key] = rev;
   };
@@ -415,13 +418,18 @@ export function useDataKern(basis: DataBasis): DataCtx {
     refetch: () => Promise<void> | void,
     applyLocal: (updated: any) => void,
     extra: Record<string, unknown> = {},
+    isActueel: () => boolean = () => true,
   ): Promise<boolean> => {
+    const toonSchrijffout = (tekst: string) => { if (isActueel()) showToast(tekst, 'error'); };
     try {
+      if (!isActueel()) return false;
       const response = await apiFetch(`/api/${kind}/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ ...extra, status, ifStatus }),
       });
+      if (!isActueel()) return false;
       const data = await response.json().catch(() => ({} as any));
+      if (!isActueel()) return false;
       if (response.ok) {
         captureRevision(kind, response);
         applyLocal(data?.leave ?? data?.swap ?? { status });
@@ -433,11 +441,12 @@ export function useDataKern(basis: DataBasis): DataCtx {
         void refetch();
         return false;
       }
-      laatSchrijffout('Beslissing opslaan', { status: response.status, message: data?.details || data?.error }, (tekst) => showToast(tekst, 'error'));
+      laatSchrijffout('Beslissing opslaan', { status: response.status, message: data?.details || data?.error }, toonSchrijffout);
       return false;
     } catch (error) {
+      if (!isActueel()) return false;
       console.error(`Error deciding ${kind}:`, error);
-      laatSchrijffout('Beslissing opslaan', error, (tekst) => showToast(tekst, 'error'));
+      laatSchrijffout('Beslissing opslaan', error, toonSchrijffout);
       return false;
     }
   };

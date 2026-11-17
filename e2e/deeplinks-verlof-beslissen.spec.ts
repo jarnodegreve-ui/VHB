@@ -1237,6 +1237,67 @@ test.describe('verlof beslissen: de besliste rij blijft even staan (desktop, 144
     expect(patches.map((p) => p.id)).toEqual(['w1', 'w3']);
   });
 
+  /**
+   * De verversing na de 409 vertrekt terwijl de beslissing over de derde
+   * aanvraag nog onderweg is. Komt haar antwoord (met de derde nog "in
+   * behandeling") na die beslissing binnen, dan mag het die beslissing niet
+   * terugzetten: de datalaag neemt de late lijst over, maar een aanvraag die ze
+   * nog toont zoals vóór de eigen beslissing, houdt die beslissing
+   * (src/app/data/verlof.ts). Tot 15-11 stond de net goedgekeurde aanvraag dan
+   * weer in de lijst tot de volgende verversing; de proef hierboven viel
+   * daardoor onder belasting 5 op 90 keer om. Hier is het antwoord altijd te
+   * laat en altijd oud, en de pagina legt zelf vast of de rij ooit terugkwam.
+   */
+  test('bulk met een 409 en een trage verversing: de lijst die vóór de derde beslissing vertrok, zet die beslissing niet terug', async ({ page }) => {
+    const { lijst, patches } = await verlofServer(page, DRIE());
+    let na409 = false;
+    let gets = 0;
+    let oudAfgeleverd = 0;
+    await page.route('**/api/leave/w2', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      na409 = true;
+      return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Deze aanvraag is intussen al behandeld.', currentStatus: 'approved' }) });
+    });
+    await page.route('**/api/leave', async (route) => {
+      if (route.request().method() !== 'GET' || !na409) return route.fallback();
+      gets += 1;
+      if (gets > 1) return route.fallback();
+      // Pas nadat de beslissing over w3 in de pagina is overgenomen (de rij
+      // staat vastgehouden), en met de stand van vóór die beslissing.
+      await expect.poll(() => page.locator('[data-vasthoud-vak="w3"][inert]').count(), { timeout: 10_000, intervals: [20] }).toBe(1);
+      await new Promise((klaar) => setTimeout(klaar, 100));
+      const oud = lijst.map((r) => (r.id === 'w3' ? { ...r, status: 'pending', decidedAt: undefined } : r));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(oud) });
+      oudAfgeleverd += 1;
+    });
+    await page.goto('/verlof');
+    await expect(page.getByText('Wachtend op goedkeuring')).toBeVisible({ timeout: 15_000 });
+    // De rij van w3 mag na haar stand nooit meer bedienbaar in de lijst staan.
+    await page.evaluate(() => {
+      const w = window as unknown as { __w3: { vast: boolean; terug: boolean } };
+      w.__w3 = { vast: false, terug: false };
+      new MutationObserver(() => {
+        const rij = document.querySelector('[data-vasthoud-vak="w3"]');
+        if (rij?.hasAttribute('inert')) w.__w3.vast = true;
+        else if (rij && w.__w3.vast) w.__w3.terug = true;
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['inert'] });
+    });
+    await page.getByRole('button', { name: 'Selecteer alles' }).click();
+    await page.getByRole('button', { name: 'Goedkeuren (3)' }).click();
+    await page.getByRole('dialog', { name: 'Aanvragen goedkeuren' }).getByRole('button', { name: 'Goedkeuren' }).click();
+    await expect(page.getByText('2 van 3 aanvragen goedgekeurd, de rest was intussen al behandeld.')).toBeVisible();
+    await expect.poll(() => oudAfgeleverd, 'het oude antwoord is afgeleverd').toBe(1);
+    await expect.poll(() => lijstIds(page)).toEqual(['w2']);
+    // Ruim na het oude antwoord: w3 kwam niet terug, ook niet even.
+    await page.waitForTimeout(1200);
+    expect(await lijstIds(page)).toEqual(['w2']);
+    expect(await page.evaluate(() => (window as unknown as { __w3: { vast: boolean; terug: boolean } }).__w3)).toEqual({ vast: true, terug: false });
+    await expect(page.getByRole('button', { name: new RegExp(`^${TEST}`) })).toHaveCount(0);
+    expect(patches.map((p) => p.id)).toEqual(['w1', 'w3']);
+    // De late lijst volstond: de datalaag las niet opnieuw.
+    expect(gets, 'één verversing na de 409').toBe(1);
+  });
+
   test('wie tijdens een lopende PATCH naar een ander scherm gaat en daar blijft: nergens een vastgehouden rij, geen fout in de console', async ({ page }) => {
     const fouten: string[] = [];
     page.on('pageerror', (e) => fouten.push(e.message));
