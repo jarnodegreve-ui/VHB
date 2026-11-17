@@ -392,4 +392,54 @@ test.describe('toast: van onder op de telefoon, weg in de richting van de veeg',
       expect(uit.opacity).toBe('0');
     }
   });
+
+  test('een weggeveegde melding vangt de tik op, haar actie is al onbedienbaar', async ({ page }, info) => {
+    test.skip(info.project.name.includes('webkit'), 'page.mouse sleept niet in WebKit met aanraakemulatie');
+    await designsysteemMetLogboek(page);
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('vhb-toast', {
+      detail: { message: 'Proefmelding', action: { label: 'Testactie', run: () => {} }, opties: { ongedaan: true } },
+    })));
+    const melding = toast(page).filter({ hasText: 'Proefmelding' });
+    const actie = melding.getByRole('button', { name: 'Testactie' });
+    await actie.focus();
+    await expect(actie).toBeFocused();
+    await expect.poll(() => melding.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+    const vak = (await melding.boundingBox())!;
+
+    // Lees het hitgebied van de actie terwijl ze beweegt. De veeg zelf loopt
+    // 160 px, met weerstand blijft de toast daarbij onder 120 px verplaatsing.
+    // Een meting daar voorbij valt dus tijdens de uitgang, niet tijdens slepen.
+    await melding.evaluate((el) => {
+      const knop = [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Testactie')!;
+      const w = window as unknown as { __toastUitKlik?: { onbedienbaar: boolean; vangtKlik: boolean } };
+      const meet = () => {
+        if (!el.isConnected) return;
+        const transform = getComputedStyle(el).transform;
+        const x = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
+        const r = knop.getBoundingClientRect();
+        const px = r.left + r.width / 2;
+        if (x < -120 && px > 0 && px < window.innerWidth) {
+          const geraakt = document.elementFromPoint(px, r.top + r.height / 2);
+          knop.focus();
+          w.__toastUitKlik = {
+            onbedienbaar: !!knop.closest('[inert]') && document.activeElement !== knop,
+            vangtKlik: geraakt === el,
+          };
+          return;
+        }
+        requestAnimationFrame(meet);
+      };
+      window.addEventListener('pointerup', () => requestAnimationFrame(meet), { capture: true, once: true });
+    });
+
+    const x = vak.x + vak.width / 2;
+    const y = vak.y + vak.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) await page.mouse.move(x - i * 20, y);
+    await page.mouse.up();
+    await expect(melding).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __toastUitKlik?: unknown }).__toastUitKlik))
+      .toEqual({ onbedienbaar: true, vangtKlik: true });
+  });
 });

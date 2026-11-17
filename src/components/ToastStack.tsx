@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion, useIsPresent, usePresenceData } from 'motion/react';
 import { AlertTriangle, CheckCircle2, Info, Undo2, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { Button, IconButton } from './primitives';
@@ -56,6 +56,14 @@ const vanafMd = () =>
 
 /** Richting van een veeg per toast-id: -1 naar links, 1 naar rechts. */
 type Veeg = Record<number, number>;
+
+/** Na een veeg blijft de bewegende buitenkant klikken opvangen, maar een
+ *  actie mag tijdens het wegschuiven niet op een andere plek klikbaar zijn. */
+function ToastInhoud({ id, children }: { id: number; children: ReactNode }) {
+  const aanwezig = useIsPresent();
+  const veeg: Veeg = usePresenceData();
+  return <div inert={!aanwezig && !!veeg[id]}>{children}</div>;
+}
 
 /**
  * Hoe een toast vertrekt (ronde 6, punt 5). Weggeveegd gaat ze verder in de
@@ -319,6 +327,7 @@ export function ToastStack({
               transition={{ duration: DUR.base, ease: EASE }}
               className="rounded-2xl border border-hairline bg-overlay px-4 py-3 elev-2 touch-pan-y"
             >
+              <ToastInhoud id={toast.id}>
               {toast.ongedaan ? (
                 <OngedaanToast
                   toast={toast}
@@ -366,6 +375,7 @@ export function ToastStack({
                 </IconButton>
               </div>
               )}
+              </ToastInhoud>
             </motion.div>
           );
         })}
