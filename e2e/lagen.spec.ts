@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { ADMIN, gaIntern, historiekOpgeruimd, kanScrollen, seed } from './helpers';
+import { ADMIN, CHAUFFEUR, gaIntern, historiekOpgeruimd, kanScrollen, seed } from './helpers';
 
 /**
  * De lagenstapel (polish P2a, regels Jarno 24-09; src/lib/lagen.ts).
@@ -178,6 +178,54 @@ test.describe('meldingen', () => {
     await expect.poll(() => pad(page)).toBe('/');
   });
 });
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`de mobiele lade houdt een tweede tik tegen tot haar gebruikelijke sluitmoment (${reducedMotion})`, async ({ page }, info) => {
+    test.skip(info.project.name === 'Desktop (chromium)', 'de lade sluit alleen op de telefoon');
+    await page.emulateMedia({ reducedMotion });
+    await seed(page, {
+      user: CHAUFFEUR,
+      view: 'meldingen',
+      extra: (pad) => pad === '/api/meldingen' ? {
+        meldingen: [{
+          id: 'lade-tikproef', titel: 'Testmelding', tekst: 'Een melding voor de tikproef.',
+          soort: 'planning', doel: 'rooster', createdAt: new Date().toISOString(),
+        }],
+        ongelezen: 1,
+      } : undefined,
+    });
+    await page.goto('/meldingen');
+    const verwijder = page.getByRole('button', { name: 'Melding verwijderen' });
+    await expect(verwijder).toBeVisible();
+    const vak = (await verwijder.boundingBox())!;
+    const x = Math.round(vak.x + vak.width / 2);
+    const y = Math.round(vak.y + vak.height / 2);
+    await page.getByRole('button', { name: 'Meer', exact: true }).tap();
+    const scrim = 'div.fixed.inset-0.z-zwevend.backdrop-blur-sm';
+    await expect(page.locator(scrim)).toHaveCSS('opacity', '1');
+    await page.evaluate(({ x, y, scrim }) => {
+      if (!document.elementFromPoint(x, y)?.matches(scrim)) throw new Error('De achtergrond moet vóór het sluiten boven de wisknop liggen.');
+      const w = window as Window & { ladeVrijNa?: Promise<number> };
+      w.ladeVrijNa = new Promise((klaar) => {
+        // Meet vanaf de echte sluitklik, ook als Playwright pas later naar
+        // de volgende stap gaat. Een trage browser kan alleen later meten.
+        document.addEventListener('click', () => {
+          const start = performance.now();
+          const meet = () => {
+            const doel = document.elementFromPoint(x, y);
+            if (doel?.closest('button[aria-label="Melding verwijderen"]')) klaar(performance.now() - start);
+            else requestAnimationFrame(meet);
+          };
+          requestAnimationFrame(meet);
+        }, { once: true, capture: true });
+      });
+    }, { x, y, scrim });
+    await page.touchscreen.tap(x, y);
+    const duur = await page.evaluate(() => (window as Window & { ladeVrijNa?: Promise<number> }).ladeVrijNa);
+    expect(duur, 'de wisknop is pas na de bestaande klikafscherming bereikbaar').toBeGreaterThanOrEqual(300);
+    await expect(verwijder).toBeVisible();
+  });
+}
 
 test.describe('focus blijft in een sheet', () => {
   // P6 (24-09): Sheet had focus-naar-paneel maar geen Tab-trap, dus Tab liep
