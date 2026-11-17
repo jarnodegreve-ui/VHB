@@ -172,7 +172,7 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
  */
 const FILTER_RAND = {
   kaart: 'filter-rij-rand max-md:-mx-5 max-md:px-5 [--filter-rand:1.25rem]',
-  pagina: 'filter-rij-rand max-md:mx-gutter-neg max-md:px-gutter [--filter-rand:var(--gutter)]',
+  pagina: 'filter-rij-rand max-md:mx-gutter-neg max-md:px-gutter',
 } as const;
 
 export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling, filters, acties, dichtheid, kolommen, className, rand }: {

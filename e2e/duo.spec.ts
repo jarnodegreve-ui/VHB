@@ -154,6 +154,31 @@ test('gewone iPhone vanaf het beginscherm: de statusbalk blijft meekleuren', asy
   await expect(statusbalk).toHaveAttribute('content', 'black');
 });
 
+test.describe('dichtgeklapte Duo met de systeemstrook rechts', () => {
+  test.use({ viewport: { width: 466, height: 678 }, screen: { width: 466, height: 678 } });
+
+  test('het dashboard gebruikt de vrije ruimte links', async ({ page }) => {
+    // Playwright biedt geen iOS-insets aan. Vul in wat het buitenscherm
+    // vanaf het beginscherm vrijhoudt: 84 px rechts en niets links.
+    await page.route('**/assets/index-*.css', async (route) => {
+      const response = await route.fetch();
+      const css = (await response.text())
+        .replaceAll('env(safe-area-inset-left)', '0px')
+        .replaceAll('env(safe-area-inset-right)', '84px');
+      await route.fulfill({ response, body: css });
+    });
+    await seed(page, { user: ADMIN, view: 'dashboard', thema: 'dark' });
+    await page.goto('/');
+    await expect(page.locator('#hoofdinhoud h1')).toBeVisible();
+    const inhoud = await page.locator('#hoofdinhoud').boundingBox();
+    expect(inhoud).toMatchObject({ x: 16, width: 366 });
+    const kop = await page.locator('.topbar').boundingBox();
+    expect(kop).toMatchObject({ x: 0, width: 466 });
+    await expect(page.getByRole('button', { name: /^Accountmenu/ })).toBeInViewport({ ratio: 1 });
+    expect(await overloop(page)).toEqual({ pagina: 0, inhoud: 0 });
+  });
+});
+
 /** De achtergrondkleur van <html> zelf (onder het verloop). */
 const paginaKleur = (page: Page) => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
 

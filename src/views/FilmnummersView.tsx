@@ -180,7 +180,7 @@ export function FilmnummersView({ magBeheren }: { magBeheren: boolean }) {
                     ref={toonGekozenChip}
                     role="group"
                     aria-label="Toon"
-                    className="filter-rij filter-rij-rand -m-1 flex items-center gap-1.5 overflow-x-auto p-1 [--filter-rand:var(--gutter)] max-md:mx-gutter-neg max-md:px-gutter [&>*]:shrink-0"
+                    className="filter-rij filter-rij-rand -m-1 flex items-center gap-1.5 overflow-x-auto p-1 max-md:mx-gutter-neg max-md:px-gutter [&>*]:shrink-0"
                   >
                     <FilterChip active={filter === null} onClick={() => setKeuze(null)}>Alle</FilterChip>
                     {heeftAlgemeen && <FilterChip active={filter === ''} onClick={() => setKeuze('')}>Algemeen</FilterChip>}

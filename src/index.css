@@ -321,7 +321,8 @@
   --zijbalk-w: 17.5rem;
   --zijbalk-w-lade: 17rem;
   --dock-h: 4.75rem;
-  --gutter: max(1rem, env(safe-area-inset-left), env(safe-area-inset-right));
+  --gutter-links: max(1rem, env(safe-area-inset-left), env(safe-area-inset-right));
+  --gutter-rechts: var(--gutter-links);
   --overlay-max-h: 88dvh;
 }
 @media (min-width: 640px) and (pointer: fine) {
@@ -1335,14 +1336,17 @@ html.dark {
   .filter-rij::-webkit-scrollbar {
     display: none;
   }
-  /* P4 (23-09): een filterrij die op de telefoon tot de rand doorloopt
-     (TableToolbar `rand`) vervaagt over precies die binnenmarge
-     (--filter-rand), zodat een chip onder de rand door loopt i.p.v. hard
-     af te breken. Aan begin en eind van het schuiven staat elke chip
-     volledig in beeld. */
+  /* Een filterrij die tot de rand doorloopt, vervaagt over de binnenmarge
+     van iedere kant. Kaarten geven hun eigen binnenmarge via --filter-rand. */
   @media (width < 48rem) {
     .filter-rij-rand {
-      mask-image: linear-gradient(to right, transparent, #000 var(--filter-rand), #000 calc(100% - var(--filter-rand)), transparent);
+      mask-image: linear-gradient(
+        to right,
+        transparent,
+        #000 var(--filter-rand, var(--gutter-links)),
+        #000 calc(100% - var(--filter-rand, var(--gutter-rechts))),
+        transparent
+      );
     }
   }
   /* TableShell: zolang er rechts nog kolommen buiten beeld staan, vervaagt
@@ -1468,8 +1472,14 @@ html.dark {
 /* Schil-maten (tokens in :root hierboven). */
 @utility w-zijbalk { width: var(--zijbalk-w); }
 @utility w-zijbalk-lade { width: var(--zijbalk-w-lade); }
-@utility px-gutter { padding-inline: var(--gutter); }
-@utility mx-gutter-neg { margin-inline: calc(-1 * var(--gutter)); }
+@utility px-gutter {
+  padding-left: var(--gutter-links);
+  padding-right: var(--gutter-rechts);
+}
+@utility mx-gutter-neg {
+  margin-left: calc(-1 * var(--gutter-links));
+  margin-right: calc(-1 * var(--gutter-rechts));
+}
 @utility max-h-overlay { max-height: var(--overlay-max-h); }
 @utility bottom-boven-dock { bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--dock-h)); }
 @utility elev-pil { box-shadow: var(--elev-pil); }
@@ -1532,6 +1542,15 @@ html.dark {
 @media (device-width: 466px) and (device-height: 678px), (device-width: 669px) and (device-height: 951px) {
   html {
     background-color: var(--laag-canvas);
+  }
+}
+
+/* Op het staande buitenscherm kan iOS rechts 84 px vrijhouden. Neem de
+   veilige marge per kant over zodat die strook links geen ruimte kost. */
+@media (device-width: 466px) and (device-height: 678px) and (orientation: portrait) {
+  :root {
+    --gutter-links: max(1rem, env(safe-area-inset-left));
+    --gutter-rechts: max(1rem, env(safe-area-inset-right));
   }
 }
 
