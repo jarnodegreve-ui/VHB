@@ -10,10 +10,9 @@ import { ADMIN, CHAUFFEUR, seed, type Fixture } from './helpers';
  * horizontale overloop, de navigatie volledig in beeld en bedienbaar, en de
  * paginakop zichtbaar.
  *
- * Het portaal detecteert de Duo nergens in code. Het enige wat alleen daar
- * geldt is één CSS-regel op de schermmaat (de zijstrook van Safari krijgt de
- * paginakleur); de laatste tests bewijzen dat die regel op een ander scherm
- * niets doet.
+ * De Duo-uitzonderingen gebruiken de fysieke schermmaat: de zijstrook
+ * van Safari kleurt mee en de statusbalkinstelling blijft behouden, ook
+ * voordat de app aan het beginscherm is toegevoegd.
  */
 const MATEN = [
   { naam: 'buitenscherm staand', width: 382, height: 580 },
@@ -111,6 +110,50 @@ test.describe('het menu op het laagste venster (buitenscherm liggend, 368 px hoo
   });
 });
 
+test('Duo vanaf het beginscherm: de stand en het thema veranderen de statusbalkinstelling niet', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'standalone', { value: true });
+    // setViewportSize verandert ook screen in Playwright. Geef de fysieke
+    // maat van het binnenscherm door, los van de beschikbare paginaruimte.
+    Object.defineProperties(screen, {
+      width: { get: () => innerWidth > innerHeight ? 951 : 669 },
+      height: { get: () => innerWidth > innerHeight ? 669 : 951 },
+    });
+  });
+  await page.setViewportSize({ width: 669, height: 867 });
+  await seed(page, { user: ADMIN, view: 'bezetting', thema: 'light' });
+  await page.goto('/maandplanning');
+  const account = page.getByRole('button', { name: /^Accountmenu/ });
+  await expect(account).toBeVisible();
+  const statusbalk = page.locator('meta[name="apple-mobile-web-app-status-bar-style"]');
+  await expect(statusbalk).toHaveAttribute('content', 'black-translucent');
+
+  await page.setViewportSize({ width: 951, height: 585 });
+  await expect(page.getByRole('button', { name: 'Menu openen' })).toBeInViewport({ ratio: 1 });
+  await account.tap();
+  await page.getByRole('menuitem', { name: 'Donkere modus' }).tap();
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await expect(statusbalk).toHaveAttribute('content', 'black-translucent');
+
+  await page.setViewportSize({ width: 669, height: 867 });
+  await expect(page.getByRole('navigation', { name: 'Hoofdnavigatie' })).toBeInViewport({ ratio: 1 });
+  await expect(account).toBeInViewport({ ratio: 1 });
+  await account.tap();
+  await expect(page.getByRole('menuitem', { name: 'Lichte modus' })).toBeVisible();
+  await expect(statusbalk).toHaveAttribute('content', 'black-translucent');
+});
+
+test('gewone iPhone vanaf het beginscherm: de statusbalk blijft meekleuren', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
+  await seed(page, { user: CHAUFFEUR, view: 'mijn-dag', thema: 'light' });
+  await page.goto('/mijn-dag');
+  const statusbalk = page.locator('meta[name="apple-mobile-web-app-status-bar-style"]');
+  await expect(statusbalk).toHaveAttribute('content', 'default');
+  await page.getByRole('button', { name: /^Accountmenu/ }).tap();
+  await page.getByRole('menuitem', { name: 'Donkere modus' }).tap();
+  await expect(statusbalk).toHaveAttribute('content', 'black');
+});
+
 /** De achtergrondkleur van <html> zelf (onder het verloop). */
 const paginaKleur = (page: Page) => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
 
@@ -123,9 +166,10 @@ test.describe('de Duo-regel geldt alleen op de schermen van de Duo', () => {
 
   test.describe('buitenscherm van de Duo (466 × 678)', () => {
     test.use({ viewport: { width: 382, height: 580 }, screen: { width: 466, height: 678 } });
-    test('de pagina draagt de canvaskleur, zodat de zijstrook van Safari meekleurt', async ({ page }) => {
+    test('Safari kleurt de zijstrook mee en de statusbalkinstelling ligt al klaar voor installatie', async ({ page }) => {
       await start(page);
       expect(await paginaKleur(page)).toBe('rgb(242, 243, 244)');
+      await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute('content', 'black-translucent');
     });
   });
 

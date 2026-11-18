@@ -48,6 +48,7 @@ import { ActieMenu } from '../components/ActieMenu';
 import { DashboardAanpassen } from '../components/DashboardAanpassen';
 import { PLANNER_TEGELS, pasVoorkeurenToe, stripSpans, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
 import { Card } from '../components/Card';
+import { markeerBeeld } from '../lib/startMeting';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { cn, telHref } from '../lib/ui';
 import { navigeer } from '../app/router';
@@ -952,7 +953,7 @@ export function PlannerDashboardWidgets({
       {/* === Operationele header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-greeting">
+          <h1 ref={markeerBeeld} className="text-greeting">
             {greeting}, {firstName}
           </h1>
           <p className="mt-0.5 text-md font-normal text-slate-500">
