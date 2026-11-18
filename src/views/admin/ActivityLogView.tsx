@@ -4,6 +4,8 @@ import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { isoDate, addDagen } from '../../lib/datum';
+import { vandaagBrussel } from '../../lib/brussel';
+import { tijdstipBrussel } from '../../../shared/uurwissel';
 import { formatDayLong, formatRelatief, formatShortDay, formatTijdstip, formatUur, hoofdletter, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { EmptyState, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
@@ -142,7 +144,7 @@ type Bundel = {
 const bundel = (entries: ActivityLogEntry[]): Bundel[] => {
   const uit: Bundel[] = [];
   for (const e of entries) {
-    const dag = isoDate(new Date(e.createdAt));
+    const dag = vandaagBrussel(new Date(e.createdAt));
     const laatste = uit[uit.length - 1];
     const vorige = laatste?.items[laatste.items.length - 1];
     if (
@@ -166,7 +168,9 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
   /** Naam van de migratie voor de plaats van aanmelden, zolang die nog moet draaien. */
   locatieMigratie?: string | null;
 }) {
-  const vandaag = isoDate(new Date());
+  const nu = new Date();
+  const vandaag = isoDate(nu);
+  const logboekVandaag = vandaagBrussel(nu);
 
   // ---- Aanwezigheid: wie was wanneer actief ----
   // Bron is public.user_presence (sessies), niet meer het auditlogboek. Dat
@@ -378,14 +382,15 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
 
   // Wat het venster dekt (vóór categorie/actor/zoek), voor de tellers in de keuzelijsten.
   const inVenster = useMemo(() => {
-    const now = Date.now();
-    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const vanaf = dateWindow === 'today'
+      ? tijdstipBrussel(logboekVandaag, 0)
+      : Date.now() - (dateWindow === '7d' ? 7 : 30) * 864e5;
     return sourceEntries.filter((entry) => {
       const t = new Date(entry.createdAt).getTime();
-      const dateMatch = dateWindow === 'all' ? true : dateWindow === 'today' ? t >= startOfToday.getTime() : dateWindow === '7d' ? t >= now - 7 * 864e5 : t >= now - 30 * 864e5;
+      const dateMatch = dateWindow === 'all' || (vanaf !== null && t >= vanaf);
       return dateMatch && (toonRuis || !isRuis(entry));
     });
-  }, [sourceEntries, dateWindow, toonRuis]);
+  }, [sourceEntries, dateWindow, toonRuis, logboekVandaag]);
   const ruisAantal = useMemo(() => sourceEntries.filter(isRuis).length, [sourceEntries]);
   const categorieTelling = useMemo(() => {
     const m = new Map<Categorie, number>();
@@ -738,9 +743,9 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
             // regels zelf houden hun raster (tijd, categorie, actie, wie).
             <Card padding="none" className="overflow-hidden">
               {perDag.map(({ dag, bundels: rijen }) => (
-                <section key={dag} aria-label={dagKop(dag, vandaag)}>
+                <section key={dag} aria-label={dagKop(dag, logboekVandaag)}>
                   <div className="flex items-baseline justify-between gap-3 border-b border-hairline-subtle bg-surface-muted/60 px-4 py-1.5">
-                    <h3 className="text-subsection-title text-slate-700">{dagKop(dag, vandaag)}{dag === vandaag || dag === addDagen(vandaag, -1) ? <span className="ml-2 font-normal text-slate-500">{formatDayLong(dag)}</span> : null}</h3>
+                    <h3 className="text-subsection-title text-slate-700">{dagKop(dag, logboekVandaag)}{dag === logboekVandaag || dag === addDagen(logboekVandaag, -1) ? <span className="ml-2 font-normal text-slate-500">{formatDayLong(dag)}</span> : null}</h3>
                     <span className="text-xs font-medium text-slate-500">{rijen.reduce((a, b) => a + b.items.length, 0)} {rijen.reduce((a, b) => a + b.items.length, 0) === 1 ? 'actie' : 'acties'}</span>
                   </div>
                   <ul className="divide-y divide-hairline-subtle">
