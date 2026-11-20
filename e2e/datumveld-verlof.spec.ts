@@ -28,8 +28,15 @@ const tot = (m: Locator) => m.getByLabel('Einddatum', { exact: true });
 
 test('typen in Van en Tot: dd/mm/jjjj erin, ISO in de aanvraag, het raster volgt', async ({ page }) => {
   const { modal, posts } = await openAanvraag(page);
-  const start = dag(40);
-  const eind = dag(42);
+  // Begin en einde in dezelfde maand: het raster toont één maand en volgt het
+  // laatst getypte veld. Met vast "over 40 en over 42 dagen" viel de periode
+  // twee dagen per maand over een maandgrens (op 20-11: 30/12 tot 01/01), stond
+  // de begindag niet in het raster en faalde de proef in elke engine, op main
+  // en op elke PR.
+  let over = 40;
+  while (dag(over).slice(0, 7) !== dag(over + 2).slice(0, 7)) over += 1;
+  const start = dag(over);
+  const eind = dag(over + 2);
   await van(modal).fill(dmj(start));
   await van(modal).press('Tab');
   await tot(modal).fill(dmj(eind));
