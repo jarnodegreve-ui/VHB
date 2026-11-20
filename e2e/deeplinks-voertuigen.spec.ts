@@ -131,9 +131,10 @@ test('onbewaarde invoer: terug vraagt eerst, het record blijft in de adresbalk',
   // de pagina al staat: geen popstate, geen vraag, en de proef wacht tot haar
   // limiet. Gemeten op 20-11 met de twee sprongen rechtstreeks: doel gelezen
   // vóór de opruimstap = 0 stappen en geen vraag, erna = de vraag. Eén keer in
-  // CI, lokaal ±1 op 600 onder belasting, op main even vaak als op #826. De
-  // terugknop van een gebruiker is een echte stap en heeft dat niet (negen
-  // tijdsafstanden van 0 tot 400 ms na "Verder bewerken": telkens de vraag).
+  // CI; lokaal onder belasting 1 op 600 op main en 1 op 600 op #826, met dit
+  // logboek. De terugknop van een gebruiker is een echte stap en heeft dat
+  // niet (negen tijdsafstanden van 0 tot 400 ms na "Verder bewerken": telkens
+  // de vraag).
   await expect(vraag(page)).toHaveCount(0);
   await expect.poll(() => bovensteLaag(page)).toBe(ficheEntry);
   await page.goBack();
