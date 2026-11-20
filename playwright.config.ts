@@ -47,6 +47,11 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
+    // Schermbeeld van elke mislukte poging, ook van een eerste poging die bij
+    // de herkansing slaagt; CI bewaart het samen met `error-context.md`
+    // (ci.yml, stap "Foutcontext van mislukte pogingen"). Kost niets zolang
+    // een proef slaagt.
+    screenshot: 'only-on-failure',
     // Service worker blokkeren: die onderschept anders de GET-calls naar
     // /api/**, waardoor page.route-mocks niet aankomen en de test op de
     // SPA-fallback (index.html) stuit. We testen hier de app, niet de sw —
