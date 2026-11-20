@@ -7,7 +7,7 @@ import { typedagLabel } from '../lib/typedag';
 import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, LijstSkelet, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, Chip, MicroLabel, microLabelClass, Segmented } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { ToonMeer, useToonMeer } from '../components/ToonMeer';
@@ -16,7 +16,6 @@ import { MaandNavigatie, MaandWissel } from '../components/MaandNavigatie';
 import { useMaandVeeg } from '../lib/useMaandVeeg';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { ActieMenu } from '../components/ActieMenu';
-import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
 import { planningTelefoon } from '../lib/planningTelefoon';
 import { shiftIdsWithConflict } from '../lib/conflicts';
@@ -310,13 +309,9 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
       <CalendarSubscribeModal open={calendarOpen} onClose={() => setCalendarOpen(false)} onDownload={exportToICS} />
 
       {isInitialLoad ? (
-        <Card padding="none" className="overflow-hidden">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i}>
-              <SkeletonRow className="border-b border-hairline-subtle last:border-0" />
-            </div>
-          ))}
-        </Card>
+        // Dezelfde lijstkaart als de terugval van dit scherm (skeletVoor
+        // → ViewLoader): één rijvorm van terugval tot scherm.
+        <LijstSkelet />
       ) : upcoming.length === 0 && past.length === 0 ? (
         <EmptyState illustratie={<LegeLijst />} title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier, je krijgt er een melding van." />
       ) : (
