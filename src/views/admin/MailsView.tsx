@@ -15,7 +15,7 @@ import { cn, notify } from '../../lib/ui';
 import { meldSchrijffout } from '../../lib/fouten';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
-import { formatDateTimeHuman, aantal as tel } from '../../lib/format';
+import { formatTijdstip, aantal as tel } from '../../lib/format';
 import { EXTRA_SOORT_NAMEN, leesAdressen, MAIL_SOORTEN, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
 import { MAIL_LOG_STATUS, mailLogStatus, mailLogToelichting, mailLogVraagtAandacht } from '../../../shared/mailLog';
 import type { User } from '../../types';
@@ -206,7 +206,7 @@ function AutomatischeMails({ soorten, instellingen, onGewijzigd }: { soorten: So
                   )}
                 >
                   <p className="mt-1 text-xs text-slate-500 tabular-nums">
-                    {s.laatst ? `Laatst verstuurd ${formatDateTimeHuman(s.laatst.op)} naar ${tel(s.laatst.aantal, 'ontvanger', 'ontvangers')}` : NOG_NIET_VERSTUURD}
+                    {s.laatst ? `Laatst verstuurd ${formatTijdstip(s.laatst.op)} naar ${tel(s.laatst.aantal, 'ontvanger', 'ontvangers')}` : NOG_NIET_VERSTUURD}
                   </p>
                 </Verwissel>
               </div>
@@ -383,7 +383,7 @@ function Verzendlog({ log, soorten }: { log: LogRij[] | null; soorten: Soort[] }
     const status = mailLogStatus(r);
     return {
       id: r.id,
-      moment: formatDateTimeHuman(r.verzondenOp),
+      moment: formatTijdstip(r.verzondenOp),
       mail: naamVan(r.soort),
       aantal: r.aantal,
       door: r.door ?? 'Systeem',

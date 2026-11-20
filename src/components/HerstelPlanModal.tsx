@@ -1,6 +1,6 @@
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import type { HerstelPlan } from '../../shared/herstelPlan';
-import { formatDateTimeHuman } from '../lib/format';
+import { formatTijdstip } from '../lib/format';
 import { Modal } from './Modal';
 import { Button, MicroLabel } from './primitives';
 import { Td, Th } from './TabelBasis';
@@ -37,7 +37,7 @@ export function HerstelPlanModal({ open, plan, labels, bezig, onClose, onBevesti
           </div>
           <h2 className="text-section-title">Back-up terugzetten?</h2>
           <p className="mt-1.5 text-body font-normal text-slate-500">
-            {plan.exportedAt ? `Back-up van ${formatDateTimeHuman(plan.exportedAt)}. ` : ''}
+            {plan.exportedAt ? `Back-up van ${formatTijdstip(plan.exportedAt)}. ` : ''}
             Dit is een droge run: er is nog niets gewijzigd. Hieronder staat wat het herstel zou doen.
           </p>
         </div>

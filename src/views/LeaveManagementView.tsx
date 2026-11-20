@@ -30,7 +30,7 @@ import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { groepeerPerJaar } from '../lib/verlofGroepen';
 import { isoDate } from '../lib/availability';
-import { aantal, formatDateHuman, formatPeriodeDMJ, formatPeriodeKort, formatShortDay } from '../lib/format';
+import { aantal, formatDateHuman, formatMaand, formatPeriodeDMJ, formatPeriodeKort, formatShortDay } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 import { apiJson } from '../lib/api';
@@ -784,7 +784,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
   const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
-  const monthName = viewMonth.toLocaleString('nl-BE', { month: 'long', year: 'numeric' });
+  const monthName = formatMaand(toonMaand);
   const calendarDays = [];
   const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
   for (let i = 0; i < startOffset; i++) calendarDays.push(null);
@@ -1016,7 +1016,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 {/* Bewust geen CardHeader: die zet de aside op mobiel ónder de
                     titel, en een sluitknop hoort rechts naast de kop te blijven. */}
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-card-title">Verlof op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h3>
+                  <h3 className="text-card-title">Verlof op {formatDateHuman(selectedDate)}</h3>
                   <IconButton label="Sluiten" variant="ghost" size="sm" onClick={() => setSelectedDate(null)}><X size={18} /></IconButton>
                 </div>
                 <div className="space-y-3">

@@ -121,7 +121,7 @@ function ZiekteRij({ melding: r, naam, vandaag, diensten, historiek, onOpen }: {
   const beschrijvingId = useId();
   const komend = r.startDate > vandaag;
   const dagen = daysBetween(r.startDate, !historiek && !komend ? vandaag : r.endDate);
-  const kort = (datum: string) => `${formatShortDay(datum)} ${datum.slice(0, 4)}`;
+  const kort = (datum: string) => formatShortDay(datum, true);
   return (
     <li className="min-w-0">
       {/* rauw: complete ziekmelding als één knop, opent het bestaande detail */}

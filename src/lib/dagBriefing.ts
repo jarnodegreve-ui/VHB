@@ -2,6 +2,7 @@ import type { Diversion, LeaveRequest, Shift, SwapRequest, User } from '../types
 import type { DayGap } from './coverage';
 import { openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from './availability';
 import { lopendeDiversions } from './diversions';
+import { formatWeekdagLang } from './format';
 
 /**
  * Dagbriefing van de planner (verbeterronde 4, punt 4): alles wat op één dag
@@ -167,5 +168,5 @@ export function dagWoordVoor(dag: string, vandaag: string): string {
   morgen.setDate(morgen.getDate() + 1);
   const morgenIso = `${morgen.getFullYear()}-${String(morgen.getMonth() + 1).padStart(2, '0')}-${String(morgen.getDate()).padStart(2, '0')}`;
   if (dag === morgenIso) return 'morgen';
-  return new Date(`${dag}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long' });
+  return formatWeekdagLang(dag);
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatDagMaand, formatDateHuman, formatDateTimeHuman, formatDatumDMJ, formatDayLong, formatGetal, formatMaand, formatMomentDMJ, formatMomentKort,
-  formatPeriodeDMJ, formatPeriodeKort, formatRelatief, formatShortDay, formatTijdstip, formatUpdateDate, formatUur, formatWeekdag, metEenheid,
+  formatPeriodeDMJ, formatPeriodeKort, formatRelatief, formatShortDay, formatTijdstip, formatUpdateDate, formatUur, formatWeekdag, formatWeekdagLang, metEenheid,
 } from './format';
 
 describe('formatGetal (komma als decimaalteken, smalle spatie als duizendtal, max. 2 decimalen)', () => {
@@ -167,6 +167,29 @@ describe('formatShortDay (korte dag: nooit een voorloopnul, het jaar alleen op v
     expect(formatWeekdag('2026-10-08')).toBe('do');
     expect(formatWeekdag('2026-11-04T23:30:00Z')).toBe('do');
     expect(formatWeekdag('')).toBe('');
+  });
+});
+
+describe('formatWeekdagLang (de weekdag voluit, voor de kop van Vandaag)', () => {
+  it('elke dag van de week, uit de kalenderdag zelf', () => {
+    // 5 t/m 11 oktober 2026 is maandag t/m zondag.
+    const week = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'];
+    expect(week.map((dag) => formatWeekdagLang(dag))).toEqual(['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag']);
+  });
+  it('dezelfde weekdag als de kop (formatDayLong) en de korte dag', () => {
+    for (const dag of ['2026-10-08', '2027-01-01', '2028-02-29']) {
+      expect(formatDayLong(dag).startsWith(`${formatWeekdagLang(dag)} `)).toBe(true);
+      expect(formatWeekdagLang(dag).slice(0, 2)).toBe(formatWeekdag(dag));
+    }
+  });
+  it('een tijdstempel telt als zijn Brusselse dag: 23:30 UTC op woensdag is bij ons al donderdag', () => {
+    expect(formatWeekdagLang('2026-11-04T23:30:00Z')).toBe('donderdag');
+    expect(formatWeekdagLang('2026-11-04T23:30:00')).toBe('woensdag');
+  });
+  it('leeg geeft niets; wat geen dag is komt ongewijzigd terug', () => {
+    expect(formatWeekdagLang('')).toBe('');
+    expect(formatWeekdagLang(null)).toBe('');
+    expect(formatWeekdagLang('gisteren')).toBe('gisteren');
   });
 });
 

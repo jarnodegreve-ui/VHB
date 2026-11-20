@@ -1,4 +1,5 @@
 import type { BadgeTone } from '../components/primitives';
+import { formatDagMaand } from './format';
 
 /**
  * Pure regels achter de vervalpil (VervalPil): hoe een vervaldatum eruitziet
@@ -34,8 +35,4 @@ export const vervalDagenTekst = (dagen: number): string =>
  * pillen zo breed dat ze op desktop niet in één kolom pasten en per rij op
  * een andere x begonnen. De volledige datum staat in de tooltip.
  */
-export const kortVervalDatum = (iso: string): string => {
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
-};
+export const kortVervalDatum = (iso: string): string => formatDagMaand(iso, true);

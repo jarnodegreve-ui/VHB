@@ -1,6 +1,6 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { telDiensten } from '../../lib/dienstTelling';
-import { aantal, formatDatumDMJ, formatPeriodeDMJ } from '../../lib/format';
+import { aantal, formatDatumDMJ, formatDayLong, formatPeriodeDMJ, formatTijdstip } from '../../lib/format';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
@@ -403,7 +403,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw Object.assign(new Error(data.error || ''), { status: response.status });
-      notify(`Planning teruggezet naar de stand van vóór de import van ${new Date(restoreEntry.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.`, 'success');
+      notify(`Planning teruggezet naar de stand van vóór de import van ${formatTijdstip(restoreEntry.createdAt)}.`, 'success');
       setRestoreEntry(null);
       await onMatrixImported();
     } catch (error) {
@@ -592,7 +592,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             const totalChanges = verlofSinds.length + ziekteSinds.length + changesSinceImport.approvedSwaps.length;
             const hasChanges = totalChanges > 0;
             const lastImportLabel = changesSinceImport.lastImport
-              ? new Date(changesSinceImport.lastImport.createdAt).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
+              ? formatTijdstip(changesSinceImport.lastImport.createdAt)
               : 'nog nooit';
 
             // Neutraal vlak; de betekenis zit in één badge (amber = nog te
@@ -786,13 +786,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-slate-800 tabular-nums">
-                        {new Date(entry.createdAt).toLocaleString('nl-BE', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatTijdstip(entry.createdAt)}
                       </p>
                       <Badge tone={hasIssues ? 'amber' : 'emerald'} dot stil={!hasIssues}>
                         {hasIssues ? 'Controle nodig' : 'Volledig herkend'}
@@ -841,7 +835,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         onClose={() => { if (!isRestoring) setRestoreEntry(null); }}
         onConfirm={() => { if (!isRestoring) void restoreImportSnapshot(); }}
         title="Planning terugzetten?"
-        message={restoreEntry ? `De volledige planning en matrix gaan terug naar de stand van vóór de import van ${new Date(restoreEntry.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${restoreEntry.filename ? ` (${restoreEntry.filename})` : ''}. Alles wat je ná die import wijzigde (latere imports, toewijzingen, geregistreerde ziektes) verdwijnt uit de planning.` : undefined}
+        message={restoreEntry ? `De volledige planning en matrix gaan terug naar de stand van vóór de import van ${formatTijdstip(restoreEntry.createdAt)}${restoreEntry.filename ? ` (${restoreEntry.filename})` : ''}. Alles wat je ná die import wijzigde (latere imports, toewijzingen, geregistreerde ziektes) verdwijnt uit de planning.` : undefined}
         confirmText={isRestoring ? 'Bezig…' : 'Zet terug'}
         variant="warning"
       />
@@ -927,7 +921,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 {[...byDate.entries()].map(([date, daysShifts]) => (
                   <div key={date}>
                     <MicroLabel className="mb-1.5">
-                      {new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: '2-digit', month: 'long' })}
+                      {formatDayLong(date)}
                       <span className="ml-2 text-slate-500">· {daysShifts.length}</span>
                     </MicroLabel>
                     <div className="rounded-2xl border border-hairline divide-y divide-hairline-subtle">

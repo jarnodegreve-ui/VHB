@@ -4,7 +4,7 @@ import type { User } from '../../types';
 import { BEVINDING_LABEL, SEGMENT_TYPE_LABEL } from '../../../shared/dienst';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
-import { aantal, formatDateTimeHuman, metEenheid } from '../../lib/format';
+import { aantal, formatTijdstip, metEenheid } from '../../lib/format';
 import {
   activeerImport, bestandNaarBase64, bewaarDagtype, importeerBestand, laadDagtypes, laadImports, laadLoonparameters, laadRitblad, laadSegmenten, leidLooncodesAf,
   minNaarHHMM, verwijderImport, type Bevinding, type DagtypeCode, type LoonParameters, type RitbladRij, type Segment, type SegmentImport,
@@ -128,7 +128,7 @@ export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" aria-label="ET-export kiezen" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} />
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" icon={<Upload size={16} />} onClick={() => fileRef.current?.click()} disabled={bezig}>{bezig ? 'Bezig…' : 'Bestand kiezen'}</Button>
-          {actief && <span className="text-xs text-slate-500">Actief: {actief.filename ?? 'import'} van {formatDateTimeHuman(actief.createdAt)}, {aantal(actief.rijen, 'ritdeel', 'ritdelen')}, {aantal(actief.diensten, 'dienst', 'diensten')}.</span>}
+          {actief && <span className="text-xs text-slate-500">Actief: {actief.filename ?? 'import'} van {formatTijdstip(actief.createdAt)}, {aantal(actief.rijen, 'ritdeel', 'ritdelen')}, {aantal(actief.diensten, 'dienst', 'diensten')}.</span>}
         </div>
       </Card>
 
@@ -144,7 +144,7 @@ export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports
                   <p className="min-w-0 truncate text-sm font-semibold text-slate-800">{i.filename ?? 'import'}</p>
                   {i.actief ? <Badge tone="emerald" dot>actief</Badge> : <Badge tone="slate" kaal>niet actief</Badge>}
                 </div>
-                <p className="text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)} · {aantal(i.rijen, 'ritdeel', 'ritdelen')} · {aantal(i.diensten, 'dienst', 'diensten')} · {i.dagtypes.join(', ')}</p>
+                <p className="text-xs text-slate-500">{formatTijdstip(i.createdAt)} · {aantal(i.rijen, 'ritdeel', 'ritdelen')} · {aantal(i.diensten, 'dienst', 'diensten')} · {i.dagtypes.join(', ')}</p>
                 <div className="flex flex-wrap gap-1">
                   {fouten(i) > 0 ? <Badge tone="red" dot>{fouten(i)} fouten</Badge> : <Badge tone="emerald" stil dot>geen fouten</Badge>}
                   {waarsch(i) > 0 && <Badge tone="amber" stil dot>{waarsch(i)} waarschuwingen</Badge>}
@@ -166,7 +166,7 @@ export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports
               <tbody>
                 {imports.map((i) => (
                   <tr key={i.id} className="border-b border-hairline-subtle last:border-b-0 align-top">
-                    <Td><p className="font-semibold text-slate-800">{i.filename ?? 'import'}</p><p className="whitespace-nowrap text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)}</p></Td>
+                    <Td><p className="font-semibold text-slate-800">{i.filename ?? 'import'}</p><p className="whitespace-nowrap text-xs text-slate-500">{formatTijdstip(i.createdAt)}</p></Td>
                     <Td num>{i.rijen}</Td>
                     <Td num>{i.diensten}</Td>
                     <Td className="text-xs">{i.dagtypes.join(', ')}</Td>
@@ -200,7 +200,7 @@ export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports
           onClose={() => setTeVerwijderen(null)}
           onConfirm={() => verwijder(teVerwijderen)}
           title="Import verwijderen?"
-          message={`${teVerwijderen.filename ?? 'De import'} van ${formatDateTimeHuman(teVerwijderen.createdAt)} verdwijnt, samen met al zijn ${teVerwijderen.rijen} ritdelen van ${teVerwijderen.diensten} diensten en de bevindingen van de controle. De actieve dienstopbouw en de looncodes blijven ongewijzigd. Dit kan niet ongedaan worden gemaakt: om hem terug te krijgen importeer je het bestand opnieuw.`}
+          message={`${teVerwijderen.filename ?? 'De import'} van ${formatTijdstip(teVerwijderen.createdAt)} verdwijnt, samen met al zijn ${teVerwijderen.rijen} ritdelen van ${teVerwijderen.diensten} diensten en de bevindingen van de controle. De actieve dienstopbouw en de looncodes blijven ongewijzigd. Dit kan niet ongedaan worden gemaakt: om hem terug te krijgen importeer je het bestand opnieuw.`}
           confirmText="Verwijderen"
         />
       )}
