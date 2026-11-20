@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ADMIN, CHAUFFEUR, seed } from './helpers';
+import { ADMIN, CHAUFFEUR, seed, uitgeklapt } from './helpers';
 import { dayOffset, PLANNING } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -54,6 +54,8 @@ test('rooster: het verleden toont de jongste tien diensten, dan tien per tik', a
   await page.goto('/rooster');
   await knop(page, /^Toon verleden/).click();
   await expect(knop(page, /^Toon \d+ oudere/)).toContainText(/10 van 1\d/);
+  // De knop staat in de uitklap die net openging: eerst klaar, dan klikken.
+  await uitgeklapt(knop(page, /^Toon \d+ oudere/));
   await knop(page, /^Toon \d+ oudere/).click();
   await expect(knop(page, /^Toon \d+ oudere/)).toHaveCount(0);
 });

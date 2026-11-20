@@ -13,6 +13,8 @@ import { VEHICLES } from '../scripts/audit-fixtures.mjs';
  */
 
 const pad = (page: Page) => new URL(page.url()).pathname;
+/** Het id van de laag waarvan de entry nu bovenaan de browserhistoriek staat (null = een pagina). */
+const bovensteLaag = (page: Page) => page.evaluate(() => (window.history.state as { vhbOverlay?: string } | null)?.vhbOverlay ?? null);
 const fiche = (page: Page) => page.getByRole('dialog', { name: 'Voertuig Bus 26' });
 const onbekend = (page: Page) => page.getByText('Dit voertuig is niet beschikbaar');
 const vraag = (page: Page) => page.getByRole('dialog', { name: 'Wijzigingen niet bewaren?' });
@@ -112,11 +114,28 @@ test('onbewaarde invoer: terug vraagt eerst, het record blijft in de adresbalk',
   await page.goto(`${LIJST}/v26`);
   await expect(fiche(page)).toBeVisible({ timeout: 15_000 });
   await fiche(page).getByLabel(/^Opmerking /).first().fill('2 stuks');
+  // De entry van de fiche in de historiek: daar staat ze weer zodra het
+  // portaal de entry van de gesloten vraag heeft opgeruimd.
+  await expect.poll(() => bovensteLaag(page)).not.toBeNull();
+  const ficheEntry = await bovensteLaag(page);
   await page.goBack();
   await expect(vraag(page)).toBeVisible();
   expect(pad(page)).toBe(`${LIJST}/v26`);
   await vraag(page).getByRole('button', { name: 'Verder bewerken' }).click();
   await expect(fiche(page).getByLabel(/^Opmerking /).first()).toHaveValue('2 stuks');
+  // Pas terug als de eerste vraag weg is en de historiek weer op de fiche
+  // staat. `page.goBack()` is in Chromium geen stap terug zoals de terugknop:
+  // het leest eerst de plaats in de historiek en springt dan naar "die plaats
+  // min één". Landt de eigen opruimstap van het portaal (lagen.ts, `ruimOp`,
+  // na het sluiten van de vraag) daartussen, dan is dat doel de plaats waar
+  // de pagina al staat: geen popstate, geen vraag, en de proef wacht tot haar
+  // limiet. Gemeten op 20-11 met de twee sprongen rechtstreeks: doel gelezen
+  // vóór de opruimstap = 0 stappen en geen vraag, erna = de vraag. Eén keer in
+  // CI, lokaal ±1 op 600 onder belasting, op main even vaak als op #826. De
+  // terugknop van een gebruiker is een echte stap en heeft dat niet (negen
+  // tijdsafstanden van 0 tot 400 ms na "Verder bewerken": telkens de vraag).
+  await expect(vraag(page)).toHaveCount(0);
+  await expect.poll(() => bovensteLaag(page)).toBe(ficheEntry);
   await page.goBack();
   await vraag(page).getByRole('button', { name: 'Niet bewaren' }).click();
   await expect(fiche(page)).toHaveCount(0);
