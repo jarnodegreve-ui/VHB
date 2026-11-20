@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
+import { beperkKaart, kaartSleutels } from './scripts/chunk-kaart-kern.mjs';
 
 // Build-info voor de versie-indicator in Systeem-status. Vercel injecteert de
 // commit-SHA; lokaal blijft die leeg. builtAt = tijdstip van de build.
@@ -110,7 +111,12 @@ const preconnectSupabase = (supabaseUrl: string) => ({
 // per view (sleutel = bronbestand t.o.v. src/, zonder extensie) de chunk
 // zelf plus alles wat hij statisch importeert en wat de schil nog niet
 // geladen heeft. viewLoaders.ts leest de kaart; ontbreekt hij (dev), dan
-// valt de warmup terug op `import()`. Achteraan toevoegen, vóór de
+// valt de warmup terug op `import()`. Alleen de views die de warmup leest
+// (WARMUP_VIEWS) en de zod-vrije startschermen staan erin (20-11-2026,
+// scripts/chunk-kaart-kern.mjs): met elke view erbij woog de kaart ±1,7 kB
+// gzip in de startbundel, en elke nieuwe gedeelde chunk maakte haar zwaarder.
+// Is de lijst niet te lezen, dan de volledige kaart (de warmup valt nooit op
+// evalueren terug) en faalt check-bundle-size. Achteraan toevoegen, vóór de
 // sourceMappingURL-regel, houdt de sourcemap kloppend: er schuift geen
 // bestaande regel op. Zelfde moment als Vite's eigen preload-kaart
 // (generateBundle), dus de hashes zijn dan al definitief en de kaart beweegt
@@ -147,7 +153,13 @@ const viewChunkKaart = () => {
         loopStatisch(naam, nodig);
         kaart[sleutel] = [...nodig].filter((f) => !alGeladen.has(f)).map((f) => `${base}${f}`);
       }
-      const regel = `globalThis.__VHB_VIEW_CHUNKS__=${JSON.stringify(kaart)};`;
+      let sleutels: Set<string> | null = null;
+      try {
+        sleutels = kaartSleutels(fs.readFileSync(path.resolve(srcDir, 'app/viewLoaders.ts'), 'utf8'));
+      } catch {
+        sleutels = null;
+      }
+      const regel = `globalThis.__VHB_VIEW_CHUNKS__=${JSON.stringify(beperkKaart(kaart, sleutels))};`;
       const code: string = entry.code;
       const staart = code.match(/\n\/\/# sourceMappingURL=[^\n]*\n?$/);
       entry.code = staart && staart.index !== undefined
