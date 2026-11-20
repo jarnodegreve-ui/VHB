@@ -1,0 +1,155 @@
+/**
+ * Startmeting (ronde 6, punt 21a): elke gewone warme start meet in ms sinds
+ * de navigatie (`performance.now()`, gehele getallen) wanneer de startcode
+ * liep (`js`), getSession een sessie gaf (`sessie`), /api/me een bruikbaar
+ * profiel gaf (`profiel`), de poort van de eerste laadbeurt dicht ging
+ * (`gegevens`) en de inhoud er stond (`beeld`: de eerste animatieframe nadat
+ * de h1 van Mijn dag, het chauffeursdashboard of de cockpit in de DOM kwam,
+ * via de ref `markeerBeeld`; het skelet telt dus niet).
+ *
+ * Geen extra verzoek: de meting komt in één localStorage-sleutel en reist mee
+ * met de aanwezigheidsping (`POST /api/auth/session`, `action: 'resume'`)
+ * van de vólgende start (`vorigeStart`); de server maakt er één regel
+ * `[start] …` van (api/_lib/startRegel.ts). Op het toestel staat alleen de
+ * laatste meting, zonder id, naam, e-mail, URL of user agent.
+ *
+ * Alleen een gewone warme start telt. Niets bewaren bij een start via het
+ * inlogformulier, het codescherm of het toestel-wachtscherm, een mislukt
+ * profiel of een mislukte poort (`startOnderbroken`), een tabblad dat vóór
+ * het einde ook maar even verborgen was, het printblad en de landing van een
+ * uitnodiging. Dicht is dicht: een herkansing, een tweede laadbeurt of een
+ * verversing later in de sessie zet niets meer, en een fase telt alleen na de
+ * vorige. Wat hier misgaat sluit de meting, nooit de start.
+ *
+ * Bewust klein: deze module zit in de startbundel (via useSessie en
+ * useAppData). Een timer of luisteraar die na het sluiten nog afgaat, doet
+ * niets, want de meting is dan null.
+ */
+import { RELEASE } from './appVersion';
+import { deriveDeviceName } from './device';
+import { UITNODIGING_HASH } from '../../shared/uitnodigingHash';
+import { schoneStartMeting, START_RELEASE, type StartFase, type StartMeting } from '../../shared/startMeting';
+
+const SLEUTEL = 'vhb-startmeting';
+/** Een meting die zo lang blijft liggen, gaat weg zonder mee te reizen. */
+const MAX_LEEFTIJD_MS = 7 * 864e5;
+/** Zo lang na `gegevens` wacht de meting op `beeld`, daarna zonder. */
+const BEELD_WACHT_MS = 10_000;
+
+/** De lopende meting; null = geen (meer): bewaard, onderbroken of nooit begonnen. */
+let meting: StartMeting | null = null;
+
+const nu = () => Math.round(performance.now());
+
+/** Deze start telt niet (meer): niets bewaren, ook later niet. */
+export const startOnderbroken = (): void => { meting = null; };
+
+// `js`: deze module loopt mee met de startbundel. Een tabblad dat verborgen
+// opent (achtergrond), het printblad en een uitnodiging meten niet. Het
+// printblad bewust ruimer dan `PRINT_PARAM` (src/app/Voorschermen.tsx): elke
+// `print-…` en `ruiloverzicht-…`, zodat een nieuwe printparameter hier niet
+// uit de pas loopt; een gewoon scherm draagt die nooit.
+try {
+  if (!document.hidden && !/[?&](print|ruiloverzicht)-/.test(location.search) && !location.hash.startsWith(UITNODIGING_HASH)) {
+    meting = { js: nu() };
+    document.addEventListener('visibilitychange', () => { if (document.hidden) meting = null; });
+  }
+} catch {
+  meting = null;
+}
+
+/** Eén fase zetten: alleen na `vorige` en alleen de eerste keer. Gooit nooit:
+ *  de aanroepers staan in de init en vlak vóór `setIsInitialLoad(false)`. */
+const stap = (fase: StartFase, vorige: StartFase, extra?: Partial<StartMeting>): StartMeting | null => {
+  const m = meting;
+  if (!m || m[fase] !== undefined || m[vorige] === undefined) return null;
+  try {
+    m[fase] = nu();
+    return Object.assign(m, extra);
+  } catch {
+    meting = null;
+    return null;
+  }
+};
+
+/** De meting op het toestel zetten, met de context; daarna is ze dicht. */
+function bewaar(): void {
+  const m = meting;
+  meting = null;
+  if (!m) return;
+  try {
+    // Toestel en weergave uit dezelfde indeling als de toestelnaam van de
+    // whitelist ("iPhone · app", "Android · browser", "Mac · browser").
+    const naam = deriveDeviceName();
+    m.toestel = /^iP/.test(naam) ? 'ios' : /^Android/.test(naam) ? 'android' : 'desktop';
+    m.weergave = /app$/.test(naam) ? 'app' : 'browser';
+    if (START_RELEASE.test(RELEASE)) m.release = RELEASE;
+    const schoon = schoneStartMeting(m);
+    if (!schoon) return;
+    // De tijd van bewaren: voor de 7 dagen, en twee metingen zijn zo nooit
+    // dezelfde tekst (zie `wis` in vorigeStart).
+    localStorage.setItem(SLEUTEL, JSON.stringify({ t: Date.now(), m: schoon }));
+  } catch { /* geen opslag: geen meting */ }
+}
+
+/** getSession gaf een sessie (de bootstrap van een warme start). */
+export const markeerSessie = (): void => { stap('sessie', 'js'); };
+
+/** /api/me gaf een bruikbaar profiel; de rol is die van deze start. */
+export const markeerProfiel = (rol: string): void => { stap('profiel', 'sessie', { rol }); };
+
+/** Einde van de eerste laadbeurt, vlak vóór `isInitialLoad` wegvalt.
+ *  `uitCache`: kwam een antwoord van de poort uit de cache; null = de poort
+ *  ging niet dicht (dan telt de start niet). Een latere laadbeurt doet niets.
+ *  Op Mijn dag en het dashboard wacht de meting op `beeld` (hoogstens 10 s),
+ *  elders wordt ze nu bewaard. */
+export function markeerGegevens(view: string, uitCache: boolean | null): void {
+  if (meting && meting.gegevens !== undefined) return;
+  if (uitCache === null) return startOnderbroken();
+  const scherm = view === 'dashboard' || view === 'mijn-dag' ? view : 'ander';
+  if (!stap('gegevens', 'profiel', { scherm, bron: uitCache ? 'cache' : 'vers' })) return;
+  if (scherm === 'ander') bewaar();
+  else setTimeout(bewaar, BEELD_WACHT_MS);
+}
+
+/** Ref-callback op de h1 van het eerste scherm (`<h1 ref={markeerBeeld}>`):
+ *  `beeld` = de eerste animatieframe daarna. Een ref is geen hook, dus mag
+ *  ook onder een vroege return. Alleen de eerste aanroep na `gegevens` telt:
+ *  haar frame zet `beeld` en bewaart, daarna is de meting dicht en doet een
+ *  volgende frame niets. */
+export function markeerBeeld(el: Element | null): void {
+  if (!el || !meting || meting.gegevens === undefined) return;
+  try {
+    requestAnimationFrame(() => { if (stap('beeld', 'gegevens')) bewaar(); });
+  } catch {
+    startOnderbroken();
+  }
+}
+
+/** De bewaarde meting van een vorige start, voor de aanwezigheidsping.
+ *  `wis` na een 2xx: alleen als er nog exact die tekst staat, zodat de
+ *  meting van deze start (intussen bewaard) blijft staan; een fout daarin
+ *  vangt de `.catch` van de ping. Ouder dan 7 dagen = weg zonder meesturen.
+ *  Een onleesbare of te lange waarde reist niet mee en wordt door de volgende
+ *  meting overschreven. Wat er meereist, gaat eerst door de gedeelde lezer,
+ *  zodat ook een korte, geknoeide sleutel geen vrije tekst kan meesturen.
+ *  De lengtegrens: een meting is ±200 tekens; iets diep genests of
+ *  groots (met de hand of door vreemde code gezet) zou JSON.stringify van de
+ *  ping laten gooien, en dus de start, of de ping een 413 geven en nooit
+ *  gewist worden. */
+export function vorigeStart(): { start: StartMeting; wis: () => void } | undefined {
+  try {
+    // Geen sleutel: `tekst!.length` gooit; te lang: JSON.parse('') gooit; in
+    // beide gevallen valt het in de catch.
+    const tekst = localStorage.getItem(SLEUTEL);
+    const { t, m } = JSON.parse(tekst!.length < 2e3 ? tekst! : '');
+    const leeftijd = typeof t === 'number' ? Date.now() - t : NaN;
+    if (leeftijd >= 0 && leeftijd < MAX_LEEFTIJD_MS) {
+      const start = schoneStartMeting(m);
+      if (start) {
+        return { start, wis: () => { if (localStorage.getItem(SLEUTEL) === tekst) localStorage.removeItem(SLEUTEL); } };
+      }
+    }
+    localStorage.removeItem(SLEUTEL);
+  } catch { /* geen opslag of onleesbaar: niets mee */ }
+}

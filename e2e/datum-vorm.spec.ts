@@ -13,6 +13,9 @@ import { CHAUFFEUR, seed, type Extra } from './helpers';
  *   "13" bewijst de vergelijking niets, die heeft geen voorloopnul).
  * - Het tijdstip: een stap in het verloop van een ruil, in de vorm die de
  *   server stuurt (PostgREST: microseconden en +00:00).
+ * - Verlof als chauffeur (deel 3): de kop van het dagdetail is de lopende
+ *   tekst ("Verlof op do 5 november", met weekdag) en het maandlabel de maand
+ *   voluit ("november 2026").
  */
 
 const WEEKDAGEN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
@@ -95,6 +98,63 @@ test.describe('één tijdstip', () => {
     // Het jaartal staat er pas bij zodra 2026 niet meer dit jaar is.
     await expect(collega.locator('time')).toHaveText(/^ma 5 okt( 2026)?, 09:40$/);
     await expect(verloop.getByRole('listitem').nth(0).locator('time')).toHaveText(/^ma 5 okt( 2026)?, 08:00$/);
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+});
+
+test.describe('Verlof als chauffeur: lopende tekst en maand', () => {
+  const MAANDEN_LANG = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+  /** De lopende tekst van een dag ("do 5 november"), uit de tabellen van deze spec; het jaar alleen op vraag. */
+  const lopend = (dag: string, metJaar = false) => {
+    const [j, m, d] = dag.split('-').map(Number);
+    return `${WEEKDAGEN[new Date(j, m - 1, d).getDay()]} ${d} ${MAANDEN_LANG[m - 1]}${metJaar ? ` ${j}` : ''}`;
+  };
+  /** De bezetting zoals de server ze geeft: elke dag van het bereik, zonder namen; op 18/11 is één van de twee plaatsen bezet. */
+  const bezetting: Extra = (p, request) => {
+    if (p.endsWith('/api/verlof/limieten')) return { standaard: 2, periodes: [], perDag: {} };
+    if (p.endsWith('/api/leave') && request.method() === 'GET') return [];
+    if (!p.endsWith('/api/leave/bezetting')) return undefined;
+    const q = new URL(request.url()).searchParams;
+    const dagen: Array<{ datum: string; aantal: number; limiet: number }> = [];
+    const eind = Date.parse(`${q.get('tot')}T00:00:00Z`);
+    for (let ms = Date.parse(`${q.get('van')}T00:00:00Z`); ms <= eind; ms += 86_400_000) {
+      const datum = new Date(ms).toISOString().slice(0, 10);
+      dagen.push({ datum, aantal: datum === '2026-11-18' ? 1 : 0, limiet: 2 });
+    }
+    return { dagen };
+  };
+  const kalenderCel = (page: Page, dag: number) => page.getByRole('button', { name: new RegExp(`^${dag}: `) });
+  const kop = (page: Page) => page.locator('h3', { hasText: /^Verlof op / });
+  const maandlabel = (page: Page) => page.getByRole('button', { name: 'Volgende maand' }).locator('xpath=preceding-sibling::span[1]');
+
+  test('het dagdetail noemt de dag met weekdag, zonder voorloopnul; het maandlabel volgt de maand', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    // Vaste klok op donderdag 12/11/2026: het jaartal staat er alleen buiten het lopende jaar bij.
+    await page.clock.setFixedTime(new Date('2026-11-12T08:00:00Z'));
+    await seed(page, { user: CHAUFFEUR, extra: bezetting });
+    await page.goto('/verlof');
+    await expect(page.getByRole('heading', { name: 'Verlof', level: 1 })).toBeVisible({ timeout: 15_000 });
+    await expect(maandlabel(page)).toHaveText('november 2026');
+
+    // Een dag onder de tien: de weekdag erbij, geen voorloopnul, de maand voluit.
+    await kalenderCel(page, 5).click();
+    await expect(kop(page)).toHaveText('Verlof op do 5 november');
+    await expect(kop(page)).toHaveText(`Verlof op ${lopend('2026-11-05')}`);
+    // De stand van de dag staat er zoals voorheen onder (de chauffeur ziet aantallen, geen namen).
+    await expect(page.locator('[data-dagstand]')).toHaveText('Vrij, niemand afwezig');
+    await kalenderCel(page, 18).click();
+    await expect(kop(page)).toHaveText('Verlof op wo 18 november');
+    await expect(page.locator('[data-dagstand]')).toHaveText('Nog 1 plaats, 1 van 2 afwezig');
+
+    // Het maandlabel volgt de maand, en een dag buiten het lopende jaar krijgt zijn jaartal.
+    await page.getByRole('button', { name: 'Volgende maand' }).click();
+    await expect(maandlabel(page)).toHaveText('december 2026');
+    await page.getByRole('button', { name: 'Volgende maand' }).click();
+    await expect(maandlabel(page)).toHaveText('januari 2027');
+    await kalenderCel(page, 4).click();
+    await expect(kop(page)).toHaveText('Verlof op ma 4 januari 2027');
+    await expect(kop(page)).toHaveText(`Verlof op ${lopend('2027-01-04', true)}`);
     expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
   });
 });

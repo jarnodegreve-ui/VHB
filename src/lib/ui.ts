@@ -217,6 +217,14 @@ export async function downloadBlob(filename: string, blob: Blob): Promise<Downlo
   return 'gedownload';
 }
 
+function heeftDuoScherm() {
+  const { width, height } = window.screen;
+  const kort = Math.min(width, height);
+  const lang = Math.max(width, height);
+  // Schermmaten uit de Duo-regel in index.css, ongeacht de huidige rotatie.
+  return (kort === 466 && lang === 678) || (kort === 669 && lang === 951);
+}
+
 /** Statusbalk-kleur van de PWA-schil laten meekleuren met het thema — een
  *  carbon balk boven een lichte app oogde als een bug op geïnstalleerde
  *  iPhones (design-ronde 30/07). Login zet hem altijd op carbon. */
@@ -224,6 +232,10 @@ export function applyThemeColorMeta(dark: boolean) {
   if (typeof document === 'undefined') return;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', dark ? '#0D0D0F' : '#F2F3F4');
+  // De geïnstalleerde Duo-app rekent op black-translucent (index.html).
+  // Laat die ook in Safari staan: iOS kan de instelling al bij het toevoegen
+  // aan het beginscherm vastleggen. De Safari-kleur volgt theme-color hierboven.
+  if (heeftDuoScherm()) return;
   // In een geïnstalleerde iOS-PWA stuurt DEZE meta de statusbalk aan, niet
   // theme-color. Hij stond hard op 'black', dus in lichte modus hield je
   // alsnog een zwarte strook boven een lichtgrijze app — precies wat de regel

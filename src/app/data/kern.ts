@@ -182,6 +182,8 @@ export function useStabieleActies<T extends Record<string, (...args: any[]) => a
 export type DataCtx = DataBasis & {
   /** Collectie markeren als aantoonbaar geladen (GET geslaagd). */
   markCollectionLoaded: (key: string) => void;
+  /** Is de collectie aantoonbaar geladen? Alleen lezen, zonder toast. */
+  isGeladen: (key: string) => boolean;
   /** Herkomst van een GET-antwoord bijhouden (vers of uit de SW-cache), voor
    *  de versheid van de lopende dataload. */
   noteerAntwoord: (response: Response) => void;
@@ -246,6 +248,7 @@ export function useDataKern(basis: DataBasis): DataCtx {
   const markCollectionLoaded = (key: string) => {
     loadedCollectionsRef.current.add(key);
   };
+  const isGeladen = (key: string) => loadedCollectionsRef.current.has(key);
   const guardCollectionLoaded = (key: string, label: string): boolean => {
     if (loadedCollectionsRef.current.has(key)) return true;
     showToast(`${label} is nog niet geladen, opslaan is geblokkeerd om dataverlies te voorkomen. Vernieuw de pagina en probeer het opnieuw.`, 'error');
@@ -451,6 +454,7 @@ export function useDataKern(basis: DataBasis): DataCtx {
   return {
     ...basis,
     markCollectionLoaded,
+    isGeladen,
     noteerAntwoord,
     beginBronMeting,
     sluitBronMeting,

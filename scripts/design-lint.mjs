@@ -105,14 +105,6 @@ const OPMAAK_RE = /\.toLocale(?:Date|Time)?String\(\s*(?!['"](?!nl\b)[A-Za-z]{2,
 // zijn deel. Elk ander bestand faalt meteen. De lijst mag alleen krimpen: een
 // bestand zonder treffer meer moet eruit (de lint zegt het).
 const DATUM_NOG_TE_DOEN = {
-  'views/admin/ManageSchedulesView.tsx': 3,
-  'components/EntityHistoryModal.tsx': 3,
-  'views/LeaveManagementView.tsx': 3,
-  'views/PlannerDashboardWidgets.tsx': 3,
-  'components/ZiekteInzicht.tsx': 3,
-  'lib/dagBriefing.ts': 3,
-  'lib/maandplanning.ts': 3,
-  'lib/verval.ts': 3,
   'views/admin/DebugView.tsx': 4,
   'views/admin/laadpalen/gedeeld.tsx': 4,
   'lib/techniek.ts': 4,

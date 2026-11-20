@@ -38,6 +38,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { ZOD_VRIJE_VIEWS, kaartSleutels, leesViewLoaders } from './chunk-kaart-kern.mjs';
 
 // gzip, alle JS in dist/assets samen zonder de lazy pdf/xlsx-chunks.
 // 20-09: 600 → 615. Gemeten: main 585,9 kB (14-09 was dat ±528), met de
@@ -405,7 +406,8 @@ const DEELBUDGET_KB = {
 const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 141 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
-const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
+// ZOD_VRIJE_VIEWS staat in scripts/chunk-kaart-kern.mjs: de plugin die de
+// chunk-kaart schrijft, leest dezelfde lijst.
 
 // Modules die niet in de startbundel horen (bewaker 6, 29-09): ze zijn pas
 // nodig na een bewuste klik of in een lui geladen scherm. De datalaag zit in
@@ -707,19 +709,23 @@ if (!kaartMatch) {
   console.log(`  zod-vrij         ${ZOD_VRIJE_VIEWS.map((v) => v.replace('views/', '')).join(', ')}`);
 
   const loaders = fs.readFileSync('src/app/viewLoaders.ts', 'utf8');
-  // View → pad, en drift tussen het pad en de import ernaast.
-  const padPerView = new Map();
-  for (const m of loaders.matchAll(/^\s*'?([\w-]+)'?:\s*view\('([^']+)',\s*\(\)\s*=>\s*import\('\.\.\/([^']+)'\)\)/gm)) {
-    const [, view, pad, importPad] = m;
-    padPerView.set(view, pad);
-    if (pad !== importPad) fouten.push(`viewLoaders.ts: view '${view}' noemt pad '${pad}' maar importeert '../${importPad}'.`);
+  // View → pad, drift tussen het pad en de import ernaast, en WARMUP_VIEWS
+  // per rol: dezelfde lezing als de plugin (scripts/chunk-kaart-kern.mjs).
+  const { padPerView, drift, warmup } = leesViewLoaders(loaders);
+  for (const d of drift) fouten.push(`viewLoaders.ts: view '${d.view}' noemt pad '${d.pad}' maar importeert '../${d.importPad}'.`);
+  if (padPerView.size === 0) fouten.push('viewLoaders.ts: geen view(...)-regels herkend; is de notatie veranderd? Pas dan de regex in scripts/chunk-kaart-kern.mjs aan.');
+  const lijst = (rol) => warmup[rol];
+  // De kaart draagt precies de views die de warmup leest plus de zod-vrije
+  // startschermen (20-11-2026). Meer = de plugin kon de lijst niet lezen en
+  // schreef de volledige kaart (±1,7 kB gzip terug in de startbundel).
+  const verwacht = kaartSleutels(loaders);
+  if (!verwacht) {
+    fouten.push('viewLoaders.ts: WARMUP_VIEWS of het pad van een warmup-view is niet te lezen; de plugin vhb-view-chunks schrijft dan de volledige chunk-kaart in de startbundel.');
+  } else {
+    const teVeel = Object.keys(kaart).filter((k) => !verwacht.has(k));
+    if (teVeel.length > 0) fouten.push(`De chunk-kaart draagt ${teVeel.length} view(s) die de warmup niet leest (${teVeel.slice(0, 4).join(', ')}${teVeel.length > 4 ? ', …' : ''}); alleen WARMUP_VIEWS en de zod-vrije startschermen horen erin (scripts/chunk-kaart-kern.mjs).`);
+    console.log(`  chunk-kaart      ${Object.keys(kaart).length} views (${(Buffer.byteLength(kaartMatch[1]) / 1024).toFixed(1)} kB ruw)`);
   }
-  if (padPerView.size === 0) fouten.push('viewLoaders.ts: geen view(...)-regels herkend; is de notatie veranderd? Pas dan de regex hier aan.');
-  const warmupBlok = loaders.match(/WARMUP_VIEWS[^=]*=\s*\{([\s\S]*?)\n\};/);
-  const lijst = (rol) => {
-    const m = warmupBlok?.[1].match(new RegExp(`${rol}:\\s*\\[([^\\]]*)\\]`));
-    return m ? [...m[1].matchAll(/'([\w-]+)'/g)].map((x) => x[1]) : [];
-  };
   for (const rol of ['chauffeur', 'staf']) {
     const views = lijst(rol);
     if (views.length === 0) {

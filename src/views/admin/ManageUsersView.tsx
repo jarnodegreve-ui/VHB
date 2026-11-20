@@ -8,7 +8,7 @@ import { ACCOUNT_STATUS } from '../../../shared/status';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
-import { EXPIRY_SOORT_LABELS, formatDateTimeHuman, formatDatumDMJ, hoofdletter } from '../../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDatumDMJ, formatTijdstip, hoofdletter } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { CredentialsModal } from '../../components/CredentialsModal';
@@ -977,7 +977,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                     {voorkeur.zichtbaar('meldingen') && (
                       <Td>{meldingenBadge(u, false)}</Td>
                     )}
-                    {voorkeur.zichtbaar('laatst') && <Td nowrap>{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <><span className="text-slate-500">Nooit</span><UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</Td>}
+                    {voorkeur.zichtbaar('laatst') && <Td nowrap>{u.lastLogin ? formatTijdstip(u.lastLogin) : <><span className="text-slate-500">Nooit</span><UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</Td>}
                     {voorkeur.zichtbaar('sessies') && <Td num className={toestellenStaat === 'geladen' && (toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'text-slate-800' : 'text-slate-500'}>{toestellenTelling(u)}</Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
@@ -1023,7 +1023,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 whitespace-nowrap text-sm font-semibold text-slate-700">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <>Nooit<UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 whitespace-nowrap text-sm font-semibold text-slate-700">{u.lastLogin ? formatTijdstip(u.lastLogin) : <>Nooit<UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</p></Card>
                 <Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700">{toestellenTelling(u)}</p></Card>
               </div>
               {/* Zelfde acties als de tabelrij: Bewerken + het rijmenu. De
@@ -1205,7 +1205,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                   <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
                 </Card>
               )}
-              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{toestellenTelling(editingUser)}</p></Card></div>
+              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatTijdstip(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{toestellenTelling(editingUser)}</p></Card></div>
               {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
                   daar geen slot voor, dus links in de knoppenrij (zelfde
                   gedrag, zelfde bescherming; controle-ronde 27-08). */}

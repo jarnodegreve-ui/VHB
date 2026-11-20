@@ -19,6 +19,7 @@ import { isPushSupported, unsubscribeFromPush } from '../lib/push';
 import { deriveDeviceName, deviceHeaders } from '../lib/device';
 import { isOnlineNu } from '../lib/useOnline';
 import { ververRealtimeToken } from '../lib/realtime';
+import { markeerProfiel, markeerSessie, startOnderbroken, vorigeStart } from '../lib/startMeting';
 
 /** Rol van de vorige geslaagde start op dit toestel: alleen een hint voor
  *  wát er bij de boot parallel mag starten (2FA-status), nooit voor toegang. */
@@ -106,7 +107,8 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
   // al aan laadfouten klaarstond.
   const setDeviceBlocked = (status: 'pending' | 'revoked' | null) => {
     toestelGeblokkeerdRef.current = status !== null;
-    if (status !== null) wisFouten();
+    // Het wachtscherm verscheen: deze start telt niet voor de startmeting.
+    if (status !== null) { wisFouten(); startOnderbroken(); }
     zetDeviceBlockedState(status);
   };
   // Reden van een gedwongen uitlog, door te geven aan het inlogscherm.
@@ -165,6 +167,7 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
 
         setSession(data.session);
         if (data.session) {
+          markeerSessie();
           // Al aangemeld: een uitnodigingslink opent dan gewoon de app, met
           // een woord uitleg (op een gedeeld toestel eerst afmelden).
           if (uitnodiging) {
@@ -317,6 +320,7 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
     // Server zegt 403 mfa_required (staf zonder code in deze sessie): naar het
     // codescherm, of naar inschrijven als er nog geen authenticator is.
     const onMfaRequired = () => {
+      startOnderbroken();
       void leesTweeStapsStatus().then((status) => {
         setTweeStaps(status?.factorId ? { stap: 'code', factorId: status.factorId } : { stap: 'inschrijven', factorId: null });
       });
@@ -367,6 +371,7 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
   /** Wat er van het account in de React-state staat, weg. Op zijn plaats:
    *  dit is ook de terugval wanneer herladen niet kan. */
   const wisAccountStaat = () => {
+    startOnderbroken();
     setRecoveryMode(false);
     setSession(null);
     setCurrentUser(null);
@@ -584,6 +589,7 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
       }
       setDeviceBlocked(null);
       const { appUser, beveiliging, uitCache } = profiel;
+      markeerProfiel(appUser.role);
       // Twee-stapsverificatie (staf): ingeschreven maar nog geen code in deze
       // sessie = codescherm; geen authenticator terwijl de server hem eist =
       // inschrijfscherm. Chauffeurs slaan dit over. Fail-open: lukt de status
@@ -607,6 +613,7 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
         let besluit = beslisTweeStaps(status, bev);
         if (besluit.onzeker) besluit = beslisTweeStaps(await leesStatusGedeeld(accessToken, true), bev);
         if (besluit.stap !== 'geen') {
+          startOnderbroken();
           setTweeStaps({ stap: besluit.stap, factorId: besluit.factorId });
           setIsInitialLoad(false);
           initializingUserIdRef.current = null; // na de code opnieuw initialiseren
@@ -630,14 +637,18 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
       // Aanwezigheids-ping: wie de app opent met een nog geldige sessie logt
       // niet opnieuw in en was daardoor onzichtbaar in "Actieve gebruikers
       // per dag". De server dedupliceert per dag. Best-effort, fire-and-forget.
+      // De startmeting van de vorige start reist mee (`start`, geen extra
+      // verzoek) en gaat na een 2xx weg (src/lib/startMeting.ts).
+      const vorige = vorigeStart();
       void apiFetch('/api/auth/session', {
         method: 'POST',
-        body: JSON.stringify({ action: 'resume' }),
+        body: JSON.stringify({ action: 'resume', start: vorige?.start }),
         accessToken,
-      }).catch(() => {});
+      }).then((r) => { if (r.ok) vorige?.wis(); }).catch(() => {});
       void loadAppData(appUser, accessToken);
     } catch (error) {
       console.error('Error initializing app:', error);
+      startOnderbroken();
       if (authUserId) { initializedUserIdRef.current = null; initializingUserIdRef.current = null; } // her-init toestaan bij een volgend auth-event
       // Zette handleLogin de gebruiker al (hij loopt gelijk met deze init),
       // dan stond de app tot 05-11 half open: geen gegevens, geen Foutkaart,
@@ -653,6 +664,8 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
   };
 
   const handleLogin = async (accessToken?: string) => {
+    // Aanmelden via het formulier: geen gewone warme start.
+    startOnderbroken();
     const token = accessToken || session?.access_token;
     if (!token) return;
 

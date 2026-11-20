@@ -132,6 +132,9 @@ describe('dagWoordVoor', () => {
     expect(dagWoordVoor('2026-09-22', '2026-09-22')).toBe('vandaag');
     expect(dagWoordVoor('2026-09-23', '2026-09-22')).toBe('morgen');
     expect(dagWoordVoor('2026-09-24', '2026-09-22')).toBe('donderdag');
+    // De laatste dag van de weekstrook (zes dagen verder), een zondag en een maandag.
+    expect(dagWoordVoor('2026-09-27', '2026-09-22')).toBe('zondag');
+    expect(dagWoordVoor('2026-09-28', '2026-09-22')).toBe('maandag');
     expect(dagWoordVoor('2026-10-01', '2026-09-30')).toBe('morgen');
   });
 });

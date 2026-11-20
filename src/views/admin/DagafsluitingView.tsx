@@ -5,7 +5,7 @@ import { QUAL_VLAGGEN, QUAL_VLAG_LABEL, OPMERKING_MAX, loonCodeSleutel, type Qua
 import { DAG_STATUS, dagOpenStatus, statusVan } from '../../../shared/status';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
-import { aantal, formatDatumDMJ, formatDayLong, formatMomentKort } from '../../lib/format';
+import { aantal, formatDatumDMJ, formatDayLong, formatTijdstip } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import { vandaagBrussel } from '../../lib/brussel';
 import {
@@ -309,7 +309,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
             </TableShell>
           )}
           {detail.dag.status === 'afgesloten' && (
-            <p className="text-xs text-slate-500">Afgesloten op {detail.dag.afgeslotenOp ? formatMomentKort(detail.dag.afgeslotenOp) : '?'}{detail.dag.heropendReden ? ` · eerder heropend: ${detail.dag.heropendReden}` : ''}</p>
+            <p className="text-xs text-slate-500">Afgesloten op {detail.dag.afgeslotenOp ? formatTijdstip(detail.dag.afgeslotenOp) : '?'}{detail.dag.heropendReden ? ` · eerder heropend: ${detail.dag.heropendReden}` : ''}</p>
           )}
         </>
       ) : null}

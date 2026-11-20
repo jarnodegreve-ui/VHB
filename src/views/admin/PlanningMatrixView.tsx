@@ -35,7 +35,7 @@ const dagKort = (iso: string) => {
   return Number.isNaN(d.getTime()) ? formatDatumDMJ(iso) : `${WEEKDAY_SHORT_SUN[d.getDay()]} ${formatDatumDMJ(iso)}`;
 };
 /** "woensdag 17 september 2026": de kop van de gekozen dag. */
-const dagLang = (iso: string) => `${formatDayLong(iso)} ${iso.slice(0, 4)}`;
+const dagLang = (iso: string) => formatDayLong(iso, true);
 
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
 // Gedeelde kleurentaal met de Maandplanning (src/lib/planningKind.ts) —

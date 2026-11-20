@@ -230,7 +230,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
       />
     );
 
-  const dagTitel = gekozenDag ? formatDayLong(gekozenDag).replace(/^./, (c) => c.toUpperCase()) : '';
+  const dagTitel = gekozenDag ? hoofdletter(formatDayLong(gekozenDag)) : '';
 
   return (
     <PageShell>

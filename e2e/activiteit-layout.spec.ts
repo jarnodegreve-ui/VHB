@@ -1,6 +1,41 @@
 import { test, expect, type Locator } from '@playwright/test';
 import { ADMIN, seed } from './helpers';
 
+test('het activiteitenlogboek volgt de Brusselse dag rond middernacht', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, timezoneId: 'UTC', serviceWorkers: 'block' });
+  try {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(new Date('2026-11-05T00:45:00.000Z'));
+    const actor = { actorName: 'Proefgebruiker', actorRole: 'planner', category: 'planning', details: '' };
+    await seed(page, {
+      user: { ...ADMIN, name: 'Testbeheerder', email: 'beheerder@example.test' },
+      view: 'activiteit',
+      extra: (pad) => {
+        if (pad.endsWith('/api/activity/logins')) return { logins: [] };
+        if (pad.endsWith('/api/activity/presence')) return { days: 14, sessies: [] };
+        if (pad.endsWith('/api/activity')) return [
+          { ...actor, id: 'na-middernacht', createdAt: '2026-11-04T23:30:00.000Z', action: 'Proef na middernacht' },
+          { ...actor, id: 'voor-middernacht', createdAt: '2026-11-04T22:30:00.000Z', action: 'Proef voor middernacht' },
+        ];
+      },
+    });
+    await page.goto('/beheer/activiteit');
+    const nieuw = page.getByRole('button', { name: /Proef na middernacht/ });
+    const oud = page.getByRole('button', { name: /Proef voor middernacht/ });
+    await expect(nieuw).toBeVisible();
+    await expect(oud).toBeVisible();
+    await expect(nieuw.locator('xpath=ancestor::section[1]').getByRole('heading')).toHaveText(/Vandaag\s*donderdag 5 november/);
+    await expect(oud.locator('xpath=ancestor::section[1]').getByRole('heading')).toHaveText(/Gisteren\s*woensdag 4 november/);
+    await nieuw.click();
+    await expect(page.getByText('do 5 nov, 00:30', { exact: true })).toBeVisible();
+    await page.getByRole('group', { name: 'Periode', exact: true }).getByRole('button', { name: 'Vandaag', exact: true }).click();
+    await expect(nieuw).toBeVisible();
+    await expect(oud).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
 const LANGE_NAAM = 'Jean-Christophe Van Den Broeck-De Smet';
 const NU = new Date('2026-09-15T12:00:00+02:00');
 const UUR = 3600_000;

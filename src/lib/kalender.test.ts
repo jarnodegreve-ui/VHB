@@ -144,6 +144,10 @@ describe('typbare datum: leesDmj / isoNaarDmj (datumtranche PR 1)', () => {
     process.env.TZ = 'America/Los_Angeles';
     expect(vandaagBrussel(kortNaMiddernacht)).toBe('2026-09-23');
   });
+
+  it('vandaagBrussel geeft bij een ongeldige datum dezelfde tekst terug', () => {
+    expect(vandaagBrussel(new Date(NaN))).toBe('Invalid Date');
+  });
 });
 
 describe('typbare maand: leesMj / maandNaarMj (datumtranche PR 4)', () => {

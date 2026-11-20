@@ -3,6 +3,7 @@ import { Clock, History } from 'lucide-react';
 import type { ActivityEntityType, ActivityLogEntry } from '../types';
 import { apiJson } from '../lib/api';
 import { cn } from '../lib/ui';
+import { formatTijdstip } from '../lib/format';
 import { Modal } from './Modal';
 import { Card } from './Card';
 import { Skeleton } from './Skeleton';
@@ -98,12 +99,7 @@ export function EntityHistoryModal({
                           <p className="text-sm font-semibold text-slate-800">{entry.action}</p>
                           <span className={cn(microLabelClass, 'shrink-0')}>
                             <Clock size={12} className="inline -mt-0.5 mr-1" />
-                            {new Date(entry.createdAt).toLocaleString('nl-BE', {
-                              day: '2-digit',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {formatTijdstip(entry.createdAt)}
                           </span>
                         </div>
                         <p className="mt-1 text-body-sm text-slate-600">{entry.details}</p>
