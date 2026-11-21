@@ -78,3 +78,87 @@ describe.each(['modal', 'paneel'] as const)('%s: focus en scrollpositie', (soort
     expect(scrollRoot.style.overflow).toBe('auto');
   });
 });
+
+// 20-11: een Modal die weer openging op het moment dat zijn uitgang net klaar
+// was, kwam soms volledig in beeld terwijl `pointer-events: none` uit de exit
+// van motion bleef staan (gemeten met een echte stap terug ±140 tot 180 ms na
+// "Verder bewerken": het vraagvenster stond er, de knoppen namen geen klik aan). Wat
+// het venster aanneemt hangt daarom aan `open` zelf, niet aan de animatie.
+describe('modal: sluiten en meteen weer openen', () => {
+  const scrimVan = () => document.querySelector<HTMLElement>('[role="dialog"][aria-label="Details"]')?.parentElement ?? null;
+
+  it('is vanaf het sluiten inert, terwijl het nog wegfadet', () => {
+    const { rerender } = render(<Harnas soort="modal" open />);
+    const scrim = scrimVan()!;
+    expect(scrim.hasAttribute('inert')).toBe(false);
+
+    rerender(<Harnas soort="modal" open={false} />);
+    // De uitgang loopt: het element staat er nog, maar neemt niets meer aan.
+    expect(scrim.isConnected).toBe(true);
+    expect(scrim.hasAttribute('inert')).toBe(true);
+  });
+
+  it('is na heropenen tijdens de uitgang meteen weer bedienbaar (zelfde element)', () => {
+    const { rerender } = render(<Harnas soort="modal" open />);
+    const scrim = scrimVan()!;
+    rerender(<Harnas soort="modal" open={false} />);
+    expect(scrim.hasAttribute('inert')).toBe(true);
+
+    rerender(<Harnas soort="modal" open />);
+    const opnieuw = scrimVan()!;
+    expect(opnieuw).toBe(scrim);
+    expect(opnieuw.hasAttribute('inert')).toBe(false);
+    // De animatie zet zelf geen pointer-events meer: er valt niets te herstellen.
+    expect(opnieuw.style.pointerEvents).toBe('');
+  });
+
+  // Het venster waarin het misliep: de uitgang is nét klaar (AnimatePresence
+  // heeft het kind als "klaar" genoteerd) en `open` wordt waar vóór React het
+  // element weghaalt. Dan blijft hetzelfde element staan. De oude Modal hield
+  // daar `pointer-events: none` van zijn exit (6 op 6 in deze proef), midden
+  // in de uitgang herstelde hij wel. AnimatePresence noteert "klaar" in een
+  // Map met de key van het kind ('modal'); de haak hieronder heropent precies
+  // op dat moment. Wijzigt motion dat detail, dan faalt de proef luid op de
+  // tijdslimiet in plaats van stil te slagen.
+  it('heropenen op het moment dat de uitgang net klaar is: zelfde element, meteen bedienbaar', async () => {
+    const { rerender } = render(<Harnas soort="modal" open />);
+    const scrim = scrimVan()!;
+    const echteSet = Map.prototype.set;
+    let haak = null as (() => void) | null;
+    const heropend = new Promise<void>((klaar) => {
+      haak = () => queueMicrotask(() => { rerender(<Harnas soort="modal" open />); klaar(); });
+    });
+    Map.prototype.set = function zet(this: Map<unknown, unknown>, sleutel: unknown, waarde: unknown) {
+      const uit = echteSet.call(this, sleutel, waarde);
+      if (sleutel === 'modal' && waarde === true && haak) { const nu = haak; haak = null; nu(); }
+      return uit;
+    } as typeof Map.prototype.set;
+    try {
+      rerender(<Harnas soort="modal" open={false} />);
+      await Promise.race([
+        heropend,
+        new Promise<never>((_, faal) => setTimeout(() => faal(new Error('AnimatePresence meldde het einde van de uitgang niet zoals verwacht: kijk de haak na.')), 2000)),
+      ]);
+    } finally {
+      Map.prototype.set = echteSet;
+    }
+    // Laat elke beweging uitlopen: het gaat om de eindtoestand.
+    await new Promise((klaar) => setTimeout(klaar, 500));
+    const na = scrimVan()!;
+    expect(na).toBe(scrim);
+    expect(na.hasAttribute('inert')).toBe(false);
+    expect(na.style.pointerEvents).toBe('');
+    expect(na.style.opacity).toBe('1');
+  });
+
+  it('een vers venster (na een volledige uitgang) is bedienbaar', async () => {
+    const { rerender } = render(<Harnas soort="modal" open />);
+    rerender(<Harnas soort="modal" open={false} />);
+    await vi.waitFor(() => expect(scrimVan()).toBeNull(), { timeout: 2000 });
+
+    rerender(<Harnas soort="modal" open />);
+    const vers = scrimVan()!;
+    expect(vers.hasAttribute('inert')).toBe(false);
+    expect(vers.style.pointerEvents).toBe('');
+  });
+});

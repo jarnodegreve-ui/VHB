@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
@@ -119,10 +119,20 @@ export function useSluitPoort(open: boolean, vuil: boolean, onNietBewaren?: () =
  * SlideOver, ActieMenu en de menu's. Tot dan verdween elke Modal in één
  * frame, omdat een eerdere exit-animatie de scrim enkele frames liet staan
  * en scrollgebaren opslokte. Dat is opgelost door de scrim tijdens de
- * uitgang `pointer-events: none` te geven (niet-animeerbare waarde, geldt
- * meteen bij het begin van de exit) en door scroll-lock, focus-herstel en
- * de modal-stapel aan `open` te hangen, niet aan de mount: de pagina is dus
- * direct weer bedienbaar terwijl het paneel nog wegfadet.
+ * uitgang niets meer te laten aannemen (een tik valt op de pagina eronder)
+ * en door scroll-lock, focus-herstel en de modal-stapel aan `open` te
+ * hangen, niet aan de mount: de pagina is dus direct weer bedienbaar terwijl
+ * het paneel nog wegfadet.
+ *
+ * Sinds 20-11 gebeurt dat met `inert` op de scrim, en `inert` volgt `open`
+ * rechtstreeks (een layout-effect, zoals SlideOver), niet de animatie. Van
+ * 22-09 tot dan stond er `pointerEvents: 'none'` in de exit van motion.
+ * Ging het venster weer open op het moment dat die uitgang net klaar
+ * was (±140 tot 180 ms na het sluiten, het moment schuift met de belasting;
+ * bv. "Verder bewerken" en meteen weer Terug), dan kwam het soms volledig in
+ * beeld terwijl `pointer-events: none` bleef staan: een venster waar je niet
+ * op kon klikken (gemeten op main onder belasting: 5 op 600 pogingen op
+ * 20-11, 1 op 600 op 21-11; met `inert` 0 op 600).
  */
 export function Modal({
   open,
@@ -174,6 +184,18 @@ export function Modal({
   // Focus-trap alleen in de bovenste dialoog (Modal of SlideOver); een menu
   // of datumkiezer erboven heeft zijn eigen toetsen.
   const isBovenste = () => laag.isBovenste('dialoog');
+
+  // Vanaf het sluiten is het venster inert: een tik valt op de pagina
+  // eronder, het toetsenbord bereikt het niet meer. Gaat het weer open terwijl
+  // het nog wegfadet (zelfde element), dan is het meteen weer bedienbaar.
+  // Bewust los van de animatie, zie de kop hierboven.
+  const scrimRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const scrim = scrimRef.current;
+    if (!scrim) return;
+    if (open) scrim.removeAttribute('inert');
+    else scrim.setAttribute('inert', '');
+  }, [open]);
 
   // Dialoog-semantiek + focus-beheer (zelfde patroon als SlideOver): focus
   // het paneel bij openen, houd Tab binnen de dialoog (aria-modal), en zet
@@ -241,9 +263,10 @@ export function Modal({
       {open && (
     <motion.div
       key="modal"
+      ref={scrimRef}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
-      exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
+      exit={{ opacity: 0, transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
       onClick={dismissOnBackdrop && !vast ? () => sluit() : undefined}
       // Op mobile: minimale padding zodat de modal bijna full-screen kan,
       // en respecteer safe-area (notch + home-indicator).
