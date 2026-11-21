@@ -109,8 +109,9 @@ export function SlideOver({
   // sluiten is het paneel inert: een tik valt dan op de vervagende achtergrond
   // (een `sluit` die niets meer verandert), het toetsenbord bereikt het niet
   // meer. Gaat het opnieuw open terwijl het nog wegschuift (zelfde element),
-  // dan is het meteen weer bedienbaar. Modal doet hetzelfde met
-  // `pointerEvents: 'none'` in zijn exit.
+  // dan is het meteen weer bedienbaar. Modal volgt sinds 20-11 hetzelfde
+  // patroon (`inert` op `open`; tot dan `pointerEvents: 'none'` in zijn exit),
+  // maar daar is de hele scrim inert en valt de tik op de pagina eronder.
   useLayoutEffect(() => {
     const paneel = panelRef.current;
     if (!paneel) return;

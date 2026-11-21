@@ -152,7 +152,30 @@ jobs:
         if: matrix.shard == 1
         env:
           E2E_SKIP_BUILD: "1"
-        run: npm run test:e2e:pwa
+        # Eigen uitvoermap: Playwright leegt zijn uitvoermap bij elke start en
+        # zou anders de foutcontext van de smoke hierboven wissen.
+        run: npm run test:e2e:pwa -- --output=test-results-pwa
+
+      # Wat er op het scherm stond bij elke mislukte poging (20-11). Een proef
+      # die pas bij de tweede poging slaagt, laat de job groen; zonder dit
+      # was achteraf niet meer na te gaan wat de eerste keer misliep (de
+      # trace van `on-first-retry` is die van de geslaagde herkansing).
+      # Playwright schrijft per mislukte poging `error-context.md` (de pagina
+      # als boom) en, met `screenshot: 'only-on-failure'`, een schermbeeld.
+      # Alleen als er iets is, klein (±0,1 tot 0,5 MB per mislukte poging) en
+      # zeven dagen, om de opslag van het account te sparen.
+      - name: Foutcontext van mislukte pogingen
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-foutcontext-${{ matrix.shard }}
+          path: |
+            test-results/**/error-context.md
+            test-results/**/*.png
+            test-results-pwa/**/error-context.md
+            test-results-pwa/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Prestatiebudget (09-2026): Lighthouse CI op de gebouwde app, mobiel
   # geëmuleerd (Moto-G-klasse, gesimuleerde 4G — de bus, niet de kantoor-Mac),

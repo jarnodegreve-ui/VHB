@@ -111,8 +111,18 @@ const onderPunt = (page: Page, punt: { x: number; y: number }) => page.evaluate(
   };
 }, punt);
 
+/**
+ * Het midden van het doel, met het doel in het midden van het venster.
+ * `scrollIntoViewIfNeeded` telt een rij die onder de vaste onderbalk ligt als
+ * "in beeld" en verschuift dan niets: de tik valt op de balk ("Rooster") en
+ * de proef verlaat het scherm. Dat hing aan de dag van de maand: de daglijst
+ * sorteert op dienstnummer en het bord van deze proef geeft elke dag andere
+ * nummers, dus de rij van de proef zakte vanaf de 20e een of twee plaatsen
+ * (gemeten 21-11 op main: 19-11 rij 9, onderkant 822 px, balk vanaf 826 px;
+ * 20-11 rij 10 en 21-11 rij 11, allebei onder de balk).
+ */
 async function midden(locator: ReturnType<Page['locator']>) {
-  await locator.scrollIntoViewIfNeeded();
+  await locator.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
   const b = await locator.boundingBox();
   if (!b) throw new Error('geen vak');
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
@@ -282,6 +292,8 @@ test.describe('toetssteen 4: klik en tik openen het celdetail zoals vandaag, en 
   async function proef(page: Page, punt: { x: number; y: number }, wie: string, tik: boolean) {
     const voor = await onderPunt(page, punt);
     expect(voor.knop, 'onder het punt ligt een cel of rij').toBeTruthy();
+    // En wel die van deze chauffeur, niet een knop van de schil die erover ligt.
+    expect(voor.rijkop === wie || (voor.knop ?? '').includes(wie), `onder het punt ligt ${wie}: ${JSON.stringify(voor)}`).toBe(true);
     const druk = () => (tik ? page.touchscreen.tap(punt.x, punt.y) : page.mouse.click(punt.x, punt.y));
     const schrijf = schrijfacties(page);
     await druk();
