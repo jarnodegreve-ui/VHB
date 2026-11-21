@@ -1,4 +1,4 @@
-import { expect, type Page, type Request } from '@playwright/test';
+import { expect, type Locator, type Page, type Request } from '@playwright/test';
 import { ADMIN, CHAUFFEUR, USERS, seedPagina } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -76,6 +76,29 @@ export async function kanScrollen(page: Page) {
 export const historiekOpgeruimd = (page: Page) => expect.poll(
   () => page.evaluate(() => window.history.state?.vhbOverlay ?? null),
 ).toBeNull();
+
+/**
+ * Wacht tot niets tussen `doel` en de scroll-root nog afknipt: de uitklap
+ * waarin het staat is klaar met openen. Een `Uitklap` houdt `overflow: hidden`
+ * alleen zolang hij beweegt (src/components/Uitklap.tsx).
+ *
+ * Nodig vóór een klik op iets in een uitklap die net openging. Playwright
+ * brengt zijn doel in beeld door élke schuivende voorouder te verschuiven, ook
+ * dat afgeknipte vak: de inhoud schuift daarin omhoog, de knop staat even op
+ * een plek waar hij bij een gebruiker nooit staat, en bij het volgende beeld
+ * van de beweging zakt hij weer. Muis-neer valt dan op de knop, muis-op op de
+ * rij erboven, en de browser geeft de klik aan hun gezamenlijke ouder: de
+ * knop doet niets (gemeten 20-11 met het logboek van de invoer: knop van
+ * y 572 naar 663 in 18 ms; twee keer op main in CI, lokaal 7 op 700 onder
+ * belasting). Een gebruiker kan dat vak niet verschuiven, het portaal is
+ * hier dus in orde.
+ */
+export const uitgeklapt = (doel: Locator) => expect.poll(() => doel.evaluate((el) => {
+  for (let p = el.parentElement; p && !p.hasAttribute('data-scroll-root'); p = p.parentElement) {
+    if (getComputedStyle(p).overflowY === 'hidden' && p.scrollHeight > p.clientHeight + 1) return false;
+  }
+  return true;
+}), 'de uitklap is klaar met openen').toBe(true);
 
 /** Navigeren binnen de app (pushState + popstate, zoals een tik in het menu),
  *  zodat er een interne vorige pagina is zonder de app te herladen. */
