@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING, scrimTransitie } from '../lib/motion';
 import { maandPlus } from '../lib/datum';
 import { MAAND_KORT, MONTH_NAMES } from '../lib/format';
 import { isMaand, leesMj, maandBereikFout, maandNaarMj } from '../lib/maand';
@@ -366,7 +366,8 @@ export function MaandInput({
           <CalendarRange size={16} aria-hidden="true" />
         </IconButton>
       </div>
-      {fout && <p id={foutId} role="alert" className="mt-1.5 text-xs font-medium text-red-700">{fout}</p>}
+      {/* Zakt in bij het verschijnen en bij elke andere tekst (sleutel). */}
+      {fout && <p key={fout} id={foutId} role="alert" className="zak-in mt-1.5 text-xs font-medium text-red-700">{fout}</p>}
       {hersteld && !fout && <p id={foutId} role="status" className="mt-1.5 text-xs font-medium text-slate-600">{hersteld}</p>}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
@@ -378,7 +379,7 @@ export function MaandInput({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: reduceMotion ? 0 : DUR.fast }}
+                  transition={scrimTransitie(reduceMotion)}
                   className="fixed inset-0 z-kiezer bg-ink/30"
                 />
               )}

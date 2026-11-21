@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING, scrimTransitie } from '../lib/motion';
 import { addDagen, maandPlus } from '../lib/datum';
 import { WEEKDAY_SHORT_MON } from '../lib/format';
 import {
@@ -510,8 +510,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       </div>
       {/* De ISO-waarde in FormData, niet de getypte tekst. */}
       {name && <input type="hidden" name={name} value={geldig} />}
+      {/* Zakt in bij het verschijnen en bij elke andere tekst (sleutel). */}
       {fout && (
-        <p id={foutId} role="alert" className="mt-1.5 text-xs font-medium text-red-700">{fout}</p>
+        <p key={fout} id={foutId} role="alert" className="zak-in mt-1.5 text-xs font-medium text-red-700">{fout}</p>
       )}
       {hersteld && !fout && (
         <p id={foutId} role="status" className="mt-1.5 text-xs font-medium text-slate-600">{hersteld}</p>
@@ -526,7 +527,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: reduceMotion ? 0 : DUR.fast }}
+                  transition={scrimTransitie(reduceMotion)}
                   className="fixed inset-0 z-kiezer bg-ink/30"
                 />
               )}

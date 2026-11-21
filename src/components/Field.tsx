@@ -107,8 +107,10 @@ export function Field({
       ) : (
         <FieldContext.Provider value={ctx}>{children}</FieldContext.Provider>
       )}
+      {/* De fout zakt in bij het verschijnen en bij elke andere tekst
+          (sleutel); de hint niet. */}
       {error ? (
-        <p id={errorId} role="alert" className="text-xs font-medium text-red-700">{error}</p>
+        <p key={typeof error === 'string' ? error : 'fout'} id={errorId} role="alert" className="zak-in text-xs font-medium text-red-700">{error}</p>
       ) : hint ? (
         <p id={hintId} className="text-xs text-slate-500">{hint}</p>
       ) : null}
