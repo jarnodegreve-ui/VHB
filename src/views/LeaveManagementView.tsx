@@ -21,7 +21,8 @@ import { ActieMenu } from '../components/ActieMenu';
 import { Checkbox } from '../components/Table';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { VerlofBereikRaster } from '../components/VerlofBereikRaster';
-import { MaandNavigatie } from '../components/MaandNavigatie';
+import { MaandNavigatie, MaandWissel } from '../components/MaandNavigatie';
+import { useMaandVeeg } from '../lib/useMaandVeeg';
 import { verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { VerlofFeestdagenModal } from '../components/VerlofFeestdagenModal';
 import { VerlofSaldoModal } from '../components/VerlofSaldoModal';
@@ -151,12 +152,30 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  const goToPrevMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
-  const goToNextMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  // De kalender bladert met richting en volgt de vinger, zoals het Rooster
+  // (ronde 6, punt 4): `MaandWissel` om het raster, de veeg op touch en de
+  // pijlen via `useMaandVeeg`. Elke maandwissel van dit scherm loopt langs de
+  // hook (pijl, veeg of sprong), ook die van het aanvraagvenster: wie de maand
+  // rechtstreeks zet, laat na een veeg de stille uitgang en de oude kant staan.
+  const veeg = useMaandVeeg({
+    onVorige: () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1)),
+    onVolgende: () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1)),
+  });
+  const goToPrevMonth = veeg.vorige;
+  const goToNextMonth = veeg.volgende;
+  /** Een sprong naar een maand die niet de buur hoeft te zijn (Vandaag, typen
+   *  in Van/Tot, PageUp/PageDown in het bereikraster): de kant volgt uit de
+   *  vergelijking van de twee maanden, dezelfde maand doet niets. */
+  const springNaarMaand = (doel: Date) => {
+    const verschil = doel.getTime() - viewMonth.getTime();
+    if (verschil === 0) return;
+    veeg.sprong(verschil > 0 ? 1 : -1);
+    setViewMonth(doel);
+  };
   /** Naar een maand ('YYYY-MM'): het raster bladert mee met typen en met de pijltjes. */
   const naarMaand = (maand: string) => {
     const [j, m] = maand.split('-').map(Number);
-    setViewMonth((d) => (d.getFullYear() === j && d.getMonth() === m - 1 ? d : new Date(j, m - 1, 1)));
+    springNaarMaand(new Date(j, m - 1, 1));
   };
   /** De aanvraag openen met een startdatum (knop in het dagdetail, ronde 6):
    *  hetzelfde venster en dezelfde regels als "Verlof aanvragen". Het raster
@@ -182,6 +201,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // Maand-swipe op touch (verbeterronde 01-09, nr. 3): veeg links/rechts over
   // de kalender i.p.v. de kleine pijltjes te raken. Duidelijk horizontaal
   // (>56 px en ~2× de verticale beweging) zodat gewoon scrollen niet bladert.
+  // Alleen nog voor het bereikraster in het aanvraagvenster: een sleutelwissel
+  // (MaandWissel) zou dat raster opnieuw monteren en cursor en focus wissen.
+  // De kalender van het scherm zelf veegt via `veeg` hierboven.
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const swipeHandlers = {
     onTouchStart: (e: React.TouchEvent) => {
@@ -202,7 +224,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   };
   const goToCurrentMonth = () => {
     const now = new Date();
-    setViewMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    springNaarMaand(new Date(now.getFullYear(), now.getMonth(), 1));
   };
   const isCurrentMonth = (() => {
     const now = new Date();
@@ -950,9 +972,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               kalender zou ruis zijn. */}
           {!eigenEerst && onbekendeLink}
           {renderBeoordelingPaneel()}
-          <Card padding="lg" {...swipeHandlers}>
+          <Card padding="lg">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-              <MaandNavigatie label={monthName} labelClassName="min-w-36" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
+              <MaandNavigatie label={monthName} labelClassName="min-w-36" veeg={veeg}>
                 {!isCurrentMonth && (
                   <Button variant="secondary" size="sm" className="ml-1" onClick={goToCurrentMonth}>
                     Vandaag
@@ -973,7 +995,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-7 gap-3">
+            {/* Het raster wisselt van maand met richting en volgt op touch de
+                vinger (MaandWissel, zoals het Rooster). Geen eigen bovenmarge:
+                de knip van MaandWissel heft zijn 4 px speling zelf op, zodat het
+                raster staat waar het stond. Onderaan dezelfde speling (marge +
+                padding, samen nul): waar de browser `overflow-clip-margin` niet
+                kent, knipte de knip anders de focusring van de onderste rij af.
+                De vertrekkende maand blijft ±150 ms aanklikbaar: haar dagen
+                openen alleen het dagdetail hieronder. */}
+            <MaandWissel sleutel={toonMaand} veeg={veeg} className="-mb-1 pb-1">
+            <div className="grid grid-cols-7 gap-3" data-verlofmaand={toonMaand}>
               {WEEKDAY_SHORT_MON.map((d) => <div key={d} className={cn(microLabelClass, 'text-center mb-2')}>{d}</div>)}
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
@@ -1008,6 +1039,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 );
               })}
             </div>
+            </MaandWissel>
           </Card>
 
           {selectedDate && (

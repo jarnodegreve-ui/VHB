@@ -152,6 +152,9 @@ test.describe('Verlof als chauffeur: lopende tekst en maand', () => {
     await expect(maandlabel(page)).toHaveText('december 2026');
     await page.getByRole('button', { name: 'Volgende maand' }).click();
     await expect(maandlabel(page)).toHaveText('januari 2027');
+    // De kalender wisselt met richting (ronde 6, e2e/verlofmaand.spec.ts): de vertrekkende
+    // maanden staan er nog ±150 ms naast de nieuwe, elk met een eigen dag 4.
+    await expect(page.locator('[data-verlofmaand]')).toHaveCount(1);
     await kalenderCel(page, 4).click();
     await expect(kop(page)).toHaveText('Verlof op ma 4 januari 2027');
     await expect(kop(page)).toHaveText(`Verlof op ${lopend('2027-01-04', true)}`);

@@ -22,6 +22,10 @@ export type MaandVeeg = {
   /** Voor de pijltjes: zetten de richting en roepen de callback aan. */
   vorige: () => void;
   volgende: () => void;
+  /** Voor een sprong (Vandaag, een maand die de aanroeper zelf kiest): zet
+   *  alleen de richting, zonder callback. De aanroeper zet de maand in
+   *  dezelfde tick, zodat de wissel beide in één render ziet. */
+  sprong: (richting: VeegRichting) => void;
 };
 
 /**
@@ -32,7 +36,8 @@ export type MaandVeeg = {
  * schrijft de transform rechtstreeks op het element (geen React-state per
  * frame) en geeft `richting`/`viaVeeg` terug zodat de aanroeper de nieuwe
  * maand met `RichtingWissel` van de juiste kant laat binnenkomen, ook bij
- * de pijltjes (`vorige`/`volgende`).
+ * de pijltjes (`vorige`/`volgende`) en bij een sprong naar een maand die de
+ * aanroeper zelf kiest (`sprong`, bv. Vandaag in Verlof).
  *
  * Axis-lock exact zoals usePullToRefresh: pas na 6 px beweging wordt de
  * richting bepaald, en alleen een duidelijk horizontale beweging wordt
@@ -62,6 +67,7 @@ export function useMaandVeeg({ onVorige, onVolgende, enabled = true }: {
   }, []);
   const vorige = useCallback(() => wisselNaar(-1, false), [wisselNaar]);
   const volgende = useCallback(() => wisselNaar(1, false), [wisselNaar]);
+  const sprong = useCallback((richting: VeegRichting) => setWissel({ richting, viaVeeg: false }), []);
 
   useEffect(() => {
     const el = ref.current;
@@ -161,5 +167,5 @@ export function useMaandVeeg({ onVorige, onVolgende, enabled = true }: {
     };
   }, [enabled, reduced, wisselNaar]);
 
-  return { ref, richting: wissel.richting, viaVeeg: wissel.viaVeeg, vorige, volgende };
+  return { ref, richting: wissel.richting, viaVeeg: wissel.viaVeeg, vorige, volgende, sprong };
 }
