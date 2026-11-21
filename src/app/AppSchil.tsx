@@ -360,13 +360,15 @@ export function AppSchil({
             werkt (echte iOS-vibe i.p.v. harde rand). */}
         {/* Pull-to-refresh-indicator: altijd in de DOM (de hook stuurt opacity/
             transform rechtstreeks aan via ptrIndicatorRef); animate-spin volgt
-            de refreshing-state. */}
+            de refreshing-state. Zodra loslaten ververst zet de hook
+            `data-drempel` op de indicator: het vlak wordt goud met een carbon
+            icoon (goud = nu/live), en weer wit als de vinger terugschuift. */}
         <div
           ref={ptrIndicatorRef}
-          className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-zwevend flex justify-center opacity-0"
+          className="group pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-zwevend flex justify-center opacity-0"
         >
-          <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white elev-2 ring-1 ring-hairline">
-            <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500', ptrRefreshing && 'animate-spin')} />
+          <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white elev-2 ring-1 ring-hairline group-data-drempel:bg-oker-500">
+            <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500 group-data-drempel:text-slate-950', ptrRefreshing && 'animate-spin')} />
           </div>
         </div>
         {/* scrollbar-gutter:stable (21-09): met een klassieke scrollbalk (muis,
