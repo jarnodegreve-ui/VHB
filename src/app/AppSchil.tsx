@@ -12,6 +12,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { X, RefreshCw, Menu, Eye, WifiOff } from 'lucide-react';
 import { formatSyncedTime } from '../lib/format';
 import { AnimatePresence, motion } from 'motion/react';
+import { DUR, scrimTransitie, verminderdeBeweging } from '../lib/motion';
 import type { Session } from '@supabase/supabase-js';
 import type { Role, Shift, User, View } from '../types';
 import { cn } from '../lib/ui';
@@ -203,6 +204,7 @@ export function AppSchil({
   swapPreselectShiftId,
   setSwapPreselectShiftId,
 }: AppSchilProps) {
+  const ladeTransitie = scrimTransitie(isSidebarOpen && verminderdeBeweging());
   return (
     <AppDataProvider value={appData}>
       {/* Parallax-laag: fixed gekleurde blobs die trager scrollen dan content */}
@@ -263,8 +265,15 @@ export function AppSchil({
         {isSidebarOpen && (
           <motion.div 
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            animate={{ opacity: 1, visibility: 'visible' }}
+            // Na het dimmen houdt de transparante achtergrond nog even
+            // een tweede tik tegen, even lang beschermd als vóór de wijziging.
+            exit={{
+              opacity: 0,
+              visibility: 'hidden',
+              transition: { opacity: ladeTransitie, visibility: { duration: 0, delay: 2 * DUR.fast } },
+            }}
+            transition={ladeTransitie}
             onClick={() => setIsSidebarOpen(false)}
             className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-zwevend lg:hidden"
           />

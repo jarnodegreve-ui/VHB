@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { ADMIN, gaIntern, historiekOpgeruimd, kanScrollen, seed } from './helpers';
+import { ADMIN, CHAUFFEUR, gaIntern, historiekOpgeruimd, kanScrollen, seed } from './helpers';
 
 /**
  * De lagenstapel (polish P2a, regels Jarno 24-09; src/lib/lagen.ts).
@@ -179,6 +179,54 @@ test.describe('meldingen', () => {
   });
 });
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`de mobiele lade houdt een tweede tik tegen tot haar gebruikelijke sluitmoment (${reducedMotion})`, async ({ page }, info) => {
+    test.skip(info.project.name === 'Desktop (chromium)', 'de lade sluit alleen op de telefoon');
+    await page.emulateMedia({ reducedMotion });
+    await seed(page, {
+      user: CHAUFFEUR,
+      view: 'meldingen',
+      extra: (pad) => pad === '/api/meldingen' ? {
+        meldingen: [{
+          id: 'lade-tikproef', titel: 'Testmelding', tekst: 'Een melding voor de tikproef.',
+          soort: 'planning', doel: 'rooster', createdAt: new Date().toISOString(),
+        }],
+        ongelezen: 1,
+      } : undefined,
+    });
+    await page.goto('/meldingen');
+    const verwijder = page.getByRole('button', { name: 'Melding verwijderen' });
+    await expect(verwijder).toBeVisible();
+    const vak = (await verwijder.boundingBox())!;
+    const x = Math.round(vak.x + vak.width / 2);
+    const y = Math.round(vak.y + vak.height / 2);
+    await page.getByRole('button', { name: 'Meer', exact: true }).tap();
+    const scrim = 'div.fixed.inset-0.z-zwevend.backdrop-blur-sm';
+    await expect(page.locator(scrim)).toHaveCSS('opacity', '1');
+    await page.evaluate(({ x, y, scrim }) => {
+      if (!document.elementFromPoint(x, y)?.matches(scrim)) throw new Error('De achtergrond moet vóór het sluiten boven de wisknop liggen.');
+      const w = window as Window & { ladeVrijNa?: Promise<number> };
+      w.ladeVrijNa = new Promise((klaar) => {
+        // Meet vanaf de echte sluitklik, ook als Playwright pas later naar
+        // de volgende stap gaat. Een trage browser kan alleen later meten.
+        document.addEventListener('click', () => {
+          const start = performance.now();
+          const meet = () => {
+            const doel = document.elementFromPoint(x, y);
+            if (doel?.closest('button[aria-label="Melding verwijderen"]')) klaar(performance.now() - start);
+            else requestAnimationFrame(meet);
+          };
+          requestAnimationFrame(meet);
+        }, { once: true, capture: true });
+      });
+    }, { x, y, scrim });
+    await page.touchscreen.tap(x, y);
+    const duur = await page.evaluate(() => (window as Window & { ladeVrijNa?: Promise<number> }).ladeVrijNa);
+    expect(duur, 'de wisknop is pas na de bestaande klikafscherming bereikbaar').toBeGreaterThanOrEqual(300);
+    await expect(verwijder).toBeVisible();
+  });
+}
+
 test.describe('focus blijft in een sheet', () => {
   // P6 (24-09): Sheet had focus-naar-paneel maar geen Tab-trap, dus Tab liep
   // het sheet uit naar de pagina eronder (aria-modal belooft het tegendeel).
@@ -266,5 +314,132 @@ test.describe('installatiekaart (Android/Chrome)', () => {
     await page.keyboard.press('Escape');
     await expect(venster).toHaveCount(0);
     await expect.poll(bovenaan).toBe(true);
+  });
+});
+
+test.describe('toast: van onder op de telefoon, weg in de richting van de veeg', () => {
+  // Ronde 6, punt 5. Een logboek in de pagina noteert de inline transform die
+  // motion zet op het moment dat een toast in de DOM komt (de beginstand) en
+  // op het moment dat ze eruit gaat (de eindstand van de uitgang). Zo hangt
+  // de toets niet af van frames of van hoe druk de machine is.
+  type Regel = { soort: 'in' | 'uit'; transform: string; opacity: string };
+  const toast = (page: Page) => page.locator('[aria-live="polite"].z-toast > [role="status"]');
+  const logboek = (page: Page) => page.evaluate(() => (window as unknown as { __toasts: Regel[] }).__toasts);
+  const ty = (t: string) => Number(/translateY\((-?[\d.]+)px\)/.exec(t)?.[1] ?? 0);
+  const tx = (t: string) => Number(/translateX\((-?[\d.]+)px\)/.exec(t)?.[1] ?? 0);
+
+  async function designsysteemMetLogboek(page: Page) {
+    await seed(page, { user: ADMIN });
+    await page.goto('/beheer/designsysteem');
+    await expect(page.getByRole('button', { name: 'Succes', exact: true })).toBeVisible({ timeout: 15_000 });
+    await page.evaluate(() => {
+      const w = window as unknown as { __toasts: Regel[] };
+      w.__toasts = [];
+      const isToast = (n: Node): n is HTMLElement => n instanceof HTMLElement && n.getAttribute('role') === 'status';
+      new MutationObserver((lijst) => {
+        for (const m of lijst) {
+          if (!(m.target instanceof HTMLElement) || !m.target.classList.contains('z-toast')) continue;
+          m.addedNodes.forEach((n) => { if (isToast(n)) w.__toasts.push({ soort: 'in', transform: n.style.transform, opacity: n.style.opacity }); });
+          m.removedNodes.forEach((n) => { if (isToast(n)) w.__toasts.push({ soort: 'uit', transform: n.style.transform, opacity: n.style.opacity }); });
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+  }
+
+  /** Een nieuwe toast, in rust (motion zet de transform dan op none). */
+  async function nieuweToast(page: Page) {
+    await page.getByRole('button', { name: 'Succes', exact: true }).click();
+    await expect(toast(page)).toHaveCount(1);
+    await expect.poll(() => toast(page).evaluate((el) => (el as HTMLElement).style.transform || 'none')).toBe('none');
+  }
+
+  test('komt op de telefoon van onder en gaat naar onder, vanaf 768 px van boven', async ({ page }) => {
+    await designsysteemMetLogboek(page);
+    const y = (page.viewportSize()?.width ?? 0) >= 768 ? -8 : 8;
+    await nieuweToast(page);
+    await toast(page).getByRole('button', { name: 'Sluit melding' }).click();
+    await expect(toast(page)).toHaveCount(0);
+    const log = await logboek(page);
+    expect(log.map((r) => r.soort)).toEqual(['in', 'uit']);
+    expect(ty(log[0].transform)).toBe(y);
+    expect(ty(log[1].transform)).toBe(y);
+    expect(tx(log[1].transform)).toBe(0);
+    expect(log[1].opacity).toBe('0');
+  });
+
+  test('weggeveegd naar rechts of links gaat ze in die richting tot buiten de rand', async ({ page }, info) => {
+    // Gemeten 14-11: in WebKit met aanraakemulatie komt page.mouse niet als
+    // sleep bij motion aan (de toast blijft staan tot haar tijd om is).
+    test.skip(info.project.name.includes('webkit'), 'page.mouse sleept niet in WebKit met aanraakemulatie');
+    await designsysteemMetLogboek(page);
+    const breedte = page.viewportSize()!.width;
+    for (const richting of [1, -1]) {
+      await nieuweToast(page);
+      const box = (await toast(page).boundingBox())!;
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      // page.mouse: daarop reageert de sleep van motion (pointer events).
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(x + richting * 20 * i, y);
+      await page.mouse.up();
+      await expect(toast(page)).toHaveCount(0);
+      const uit = (await logboek(page)).filter((r) => r.soort === 'uit').at(-1)!;
+      // Een schermbreedte verder: de linkerrand voorbij de rechterrand van het
+      // scherm (of andersom), vervaagd. Op main vervaagde ze op haar plek.
+      expect(tx(uit.transform)).toBe(richting * breedte);
+      expect(ty(uit.transform)).toBe(0);
+      expect(uit.opacity).toBe('0');
+    }
+  });
+
+  test('een weggeveegde melding vangt de tik op, haar actie is al onbedienbaar', async ({ page }, info) => {
+    test.skip(info.project.name.includes('webkit'), 'page.mouse sleept niet in WebKit met aanraakemulatie');
+    await designsysteemMetLogboek(page);
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('vhb-toast', {
+      detail: { message: 'Proefmelding', action: { label: 'Testactie', run: () => {} }, opties: { ongedaan: true } },
+    })));
+    const melding = toast(page).filter({ hasText: 'Proefmelding' });
+    const actie = melding.getByRole('button', { name: 'Testactie' });
+    await actie.focus();
+    await expect(actie).toBeFocused();
+    await expect.poll(() => melding.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+    const vak = (await melding.boundingBox())!;
+
+    // Lees het hitgebied van de actie terwijl ze beweegt. De veeg zelf loopt
+    // 160 px, met weerstand blijft de toast daarbij onder 120 px verplaatsing.
+    // Een meting daar voorbij valt dus tijdens de uitgang, niet tijdens slepen.
+    await melding.evaluate((el) => {
+      const knop = [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Testactie')!;
+      const w = window as unknown as { __toastUitKlik?: { onbedienbaar: boolean; vangtKlik: boolean } };
+      const meet = () => {
+        if (!el.isConnected) return;
+        const transform = getComputedStyle(el).transform;
+        const x = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
+        const r = knop.getBoundingClientRect();
+        const px = r.left + r.width / 2;
+        if (x < -120 && px > 0 && px < window.innerWidth) {
+          const geraakt = document.elementFromPoint(px, r.top + r.height / 2);
+          knop.focus();
+          w.__toastUitKlik = {
+            onbedienbaar: !!knop.closest('[inert]') && document.activeElement !== knop,
+            vangtKlik: geraakt === el,
+          };
+          return;
+        }
+        requestAnimationFrame(meet);
+      };
+      window.addEventListener('pointerup', () => requestAnimationFrame(meet), { capture: true, once: true });
+    });
+
+    const x = vak.x + vak.width / 2;
+    const y = vak.y + vak.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) await page.mouse.move(x - i * 20, y);
+    await page.mouse.up();
+    await expect(melding).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __toastUitKlik?: unknown }).__toastUitKlik))
+      .toEqual({ onbedienbaar: true, vangtKlik: true });
   });
 });
