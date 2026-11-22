@@ -1,8 +1,8 @@
 /**
  * Wie een dienstruil van welke status naar welke status mag brengen (01-10).
  *
- * Eén tabel voor de vier partijen. `PATCH /api/swaps/:id` (en via
- * `beslisRuilIntern` ook de Telegram-knoppen) en de lijstroute
+ * Eén tabel voor de vier partijen. `PATCH /api/swaps/:id` (via
+ * `beslisRuilIntern`) en de lijstroute
  * `POST /api/swaps` lezen dezelfde tabel, zodat een regel niet op de ene weg
  * geldt en op de andere niet. Puur, zonder opslag: de routes beslissen zelf
  * wat een toegelaten overgang in de planning doet.

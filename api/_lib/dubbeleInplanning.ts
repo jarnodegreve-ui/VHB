@@ -12,9 +12,9 @@
  * ontvanger op de dienstdag, en bij een 1-op-1 ook de aanvrager op de terugdag.
  *
  * Elk schrijfpad beschrijft wat het doet als een lijst ontvangsten en vraagt
- * hier de conflicten: de handmatige wissel, een ruil goedkeuren (PATCH, de
- * lijst en de Telegram-knop, via dubbeleInplanningFout), een overname
- * aanvragen en een dienst toewijzen (ook de Telegram-knop). De zin die de
+ * hier de conflicten: de handmatige wissel, een ruil goedkeuren (PATCH en de
+ * lijst, via dubbeleInplanningFout), een overname
+ * aanvragen en een dienst toewijzen. De zin die de
  * planner leest maakt het pad zelf, de regel is overal dezelfde.
  *
  * Een code op het bord die het portaal niet kent (niet in het dienstoverzicht,

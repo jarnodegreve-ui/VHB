@@ -44,7 +44,7 @@ export const lijnenNaarTekst = (lijnen: readonly string[]): string => {
 
 /**
  * Leesbaar label: "Lijn 801", "Lijnen 883 en 884", "Lijnen 50, 58 en 82",
- * "Alle lijnen". Voor badges, ondertitels, mails en Telegram.
+ * "Alle lijnen". Voor badges, ondertitels en mails.
  */
 export const lijnLabel = (line: string | null | undefined): string => {
   const lijnen = lijnenVan(line);

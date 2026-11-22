@@ -14,7 +14,7 @@ import { meldUrl, vergeetLaagEntry, verwerkOverlayPop } from '../lib/lagen';
  *
  * - `useRoute()` geeft { view, params, navigeer }.
  * - `navigeer(view, { params, replace })` pusht een history-entry.
- * - `?view=x` (oude deeplinks uit push-meldingen/Telegram) wordt bij het
+ * - `?view=x` (oude deeplinks uit push-meldingen en oude berichten) wordt bij het
  *   opstarten omgezet naar het pad.
  * - Landt de PWA op `/` (start_url), dan herstellen we de laatst geopende
  *   pagina uit localStorage — zoals de app dat altijd deed.

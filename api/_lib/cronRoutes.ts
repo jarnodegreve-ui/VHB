@@ -1,6 +1,6 @@
 /**
  * Cron en back-up: nachtelijke back-up, weekrapport, herstelproef,
- * Telegram-briefing, rooster-meldingen, foutdigest, en handmatig back-up/herstel.
+ * rooster-meldingen, foutdigest, en handmatig back-up/herstel.
  *
  * Verhuisd uit api/index.ts (21-09, verbeterronde 4, G1): dat bestand was
  * 6.344 regels en elke wijziging raakte dezelfde importkop. De code is
@@ -10,7 +10,7 @@
 
 import { bouwHerstelPlan } from "../../shared/herstelPlan.js";
 import express from "express";
-import { sendEmail, sendExpiryReminderEmail, escapeHtml } from "./email.js";
+import { sendEmail, sendExpiryReminderEmail } from "./email.js";
 import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwOverzichtMail, bouwRestoreProefMail } from "./mailTeksten.js";
 import { sendPushToUsers } from "./push.js";
 import type { AuthenticatedRequest } from "./types.js";
@@ -24,11 +24,10 @@ import { getVehicleExpiries, getVehicles } from "./techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../../shared/schemas/techniek.js";
 import { heeftRol, isTechnieker } from "../../shared/toegang.js";
 import { verstuurRoosterMeldingen } from "./planningHeropbouw.js";
-import { stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT } from "./telegram.js";
 import { berekenDekkingsGaten, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { addDagenIso, brusselsDay, DAG_DMJ, isDigestRuis, SWAP_UITVOERING_ACTIES, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, DAG_KORT, isDigestRuis, SWAP_UITVOERING_ACTIES, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { MigratieOntbreektError, getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesAlle, getDienstregelingen, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, getRitbladRijen, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "./storage.js";
 import { viewUrl } from "./collectie.js";
@@ -379,78 +378,6 @@ export function mountCronRoutes(app: express.Express) {
     }
   });
 
-  // Ochtendbriefing naar Telegram (verbeterronde-bot 22-08, nr. 4): elke dag
-  // een kort overzicht — óók als alles in orde is, want "geen bericht" en
-  // "geen probleem" zijn anders niet te onderscheiden. Bevat vandaag + morgen,
-  // wie ziek is, de planning-horizon en dringende vervaldata (nr. 5).
-  app.get("/api/cron/telegram-briefing", async (req, res) => {
-    if (!isCronAuthorized(req)) {
-      return res.status(401).json({ error: "Niet toegestaan." });
-    }
-    try {
-      if (!telegramGeconfigureerd()) {
-        return res.json({ success: true, skipped: "telegram niet geconfigureerd" });
-      }
-      const vandaag = brusselsDay(new Date().toISOString());
-      const morgen = addDagenIso(vandaag, 1);
-      const [dagenVandaag, dagenMorgen, matrixRows, expiries, usersVoorVerval] = await Promise.all([
-        berekenDekkingsGaten(vandaag, vandaag),
-        berekenDekkingsGaten(morgen, morgen),
-        getPlanningMatrixRows(),
-        getUserExpiries(),
-        getUsersData(),
-      ]);
-
-      const delen: string[] = [];
-      const dagLang = new Date(`${vandaag}T12:00:00Z`).toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Brussels" });
-      delen.push(`🌅 <b>Ochtendbriefing, ${dagLang}</b>`);
-      delen.push(await formatVandaag(dagenVandaag));
-      const morgenGat = dagenMorgen.find((d) => d.date === morgen);
-      delen.push(!morgenGat
-        ? "⚠️ Geen geïmporteerde planning voor morgen."
-        : morgenGat.missing.length > 0
-          ? `Morgen open: ${morgenGat.missing.map((c) => escapeHtml(c)).join(", ")}.`
-          : "Morgen: alles ingevuld.");
-      delen.push(await formatZiek());
-
-      // Planning-horizon: hoe ver reikt de geïmporteerde matrix nog?
-      const laatste = (matrixRows as any[])
-        .map((r) => String(r.source_date ?? ""))
-        .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
-        .sort()
-        .pop();
-      if (laatste) {
-        const dagenOver = Math.round((Date.parse(`${laatste}T00:00:00Z`) - Date.parse(`${vandaag}T00:00:00Z`)) / 86400000);
-        if (dagenOver < 0) {
-          delen.push(`⚠️ De geïmporteerde planning is verlopen (liep t/m ${DAG_KORT(laatste)}), importeer de nieuwe Excel.`);
-        } else if (dagenOver <= 7) {
-          delen.push(`⚠️ Nog maar ${dagenOver} dag${dagenOver === 1 ? "" : "en"} planning in het portaal (t/m ${DAG_KORT(laatste)}), tijd voor een import.`);
-        }
-      }
-
-      // Dringende vervaldata (≤ 7 dagen of verlopen) — de mail meldt breder,
-      // dit is alleen de staart die echt aandacht vraagt.
-      const naamVan = (id: string) => (usersVoorVerval as any[]).find((u) => String(u.id) === id)?.name ?? "Onbekend";
-      const dringend = expiries
-        .filter((e) => Boolean(EXPIRY_SOORT_LABEL[e.soort]) && e.validUntil)
-        .map((e) => ({ ...e, dagen: Math.round((Date.parse(`${e.validUntil}T00:00:00Z`) - Date.parse(`${vandaag}T00:00:00Z`)) / 86400000) }))
-        .filter((e) => e.dagen <= 7)
-        .sort((a, b) => a.dagen - b.dagen);
-      if (dringend.length > 0) {
-        delen.push(`📄 Documenten: ${dringend.map((e) => `${escapeHtml(naamVan(e.userId))}, ${EXPIRY_SOORT_LABEL[e.soort]} ${e.dagen < 0 ? `VERLOPEN (${DAG_DMJ(e.validUntil)})` : e.dagen === 0 ? "verloopt VANDAAG" : `nog ${e.dagen} dag${e.dagen === 1 ? "" : "en"}`}`).join("; ")}.`);
-      }
-
-      // Kandidaten-knoppen voor de gaten van vandaag + morgen (max 8).
-      const { knoppen } = formatGaten([...dagenVandaag, ...dagenMorgen.filter((d) => d.date === morgen)]);
-      const verzonden = await stuurTelegram(delen.join("\n\n"), { knoppen });
-      await logCronHeartbeat("telegram-briefing", verzonden ? "Briefing verstuurd." : "Versturen mislukt of niet geconfigureerd.");
-      res.json({ success: true, verzonden });
-    } catch (err: any) {
-      console.error("[telegram-briefing] mislukt:", err?.message ?? err);
-      res.status(500).json({ error: "Briefing versturen is mislukt." });
-    }
-  });
-
   // Rooster-meldingen na automatisch bijgewerkte planning: één melding per
   // chauffeur zodra het dienstoverzicht ROOSTER_MELDING_RUST_MINUTEN stil is
   // (zie de meldingswachtrij in api/_lib/planningHeropbouw.ts). Elke 5 minuten;
@@ -679,13 +606,6 @@ export function mountCronRoutes(app: express.Express) {
               body: regels[0].slice(0, 140),
               url: viewUrl("dekking"),
             });
-          }
-          // Zelfde signaal ook naar de gekoppelde Telegram-chat, mét
-          // kandidaten-knoppen per gat — push bereikt bijna niemand, Telegram
-          // wél (keuze Jarno 21-08). Best-effort, net als de rest.
-          if (telegramGeconfigureerd()) {
-            const { tekst: tgTekst, knoppen } = formatGaten(dagen);
-            await stuurTelegram(tgTekst, { knoppen });
           }
         }
       } catch (err: any) {

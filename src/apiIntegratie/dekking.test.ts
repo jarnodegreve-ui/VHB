@@ -507,35 +507,6 @@ describe('advies openstaande diensten, het venster van één aanvraag is begrens
       delete process.env.ERROR_DIGEST_WEEKDAG;
     }
   });
-
-  it('Telegram: een knop met een dag die niet kan krijgt een antwoord in de chat, geen crash en geen dataload', async () => {
-    const { zetTelegramVerzenderVoorTests } = await import('../../api/_lib/telegram');
-    const verzonden: Array<{ tekst: string }> = [];
-    zetTelegramVerzenderVoorTests(async (v: any) => { verzonden.push(v); return true; });
-    process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
-    process.env.TELEGRAM_CHAT_ID = '777';
-    delete process.env.TELEGRAM_BOT_TOKEN;
-    const fouten = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      for (const dag of ['9999-12-15', '2026-02-30', '']) {
-        verzonden.length = 0;
-        const res = await api('POST', '/api/telegram/webhook', {
-          body: { callback_query: { id: 'cb-x', data: `adv|${dag}|11`, message: { chat: { id: 777 } } } },
-          headers: { 'X-Telegram-Bot-Api-Secret-Token': 'test-secret' },
-        });
-        expect(res.status).toBe(200);
-        expect(verzonden).toHaveLength(1);
-        expect(verzonden[0].tekst).toBe('Advies voor dienst 11 kon niet berekend worden.');
-      }
-      nietsGeladen();
-      expect(fouten.mock.calls.filter((c) => String(c[0]).includes('[telegram] advies mislukt'))).toHaveLength(3);
-    } finally {
-      fouten.mockRestore();
-      zetTelegramVerzenderVoorTests(null);
-      delete process.env.TELEGRAM_WEBHOOK_SECRET;
-      delete process.env.TELEGRAM_CHAT_ID;
-    }
-  });
 });
 
 describe('advisor: ketting-voorstellen en collega-samenvatting', () => {

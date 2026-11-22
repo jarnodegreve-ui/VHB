@@ -30,10 +30,9 @@ import { isIsoDag } from "../../shared/rapporten/periode.js";
 
 /**
  * Dekking & advies — verhuisd uit api/index.ts (verbeterronde 22-08, nr. 8;
- * zelfde opknip-patroon als deviceRoutes/telegram). Pure verplaatsing: de
+ * zelfde opknip-patroon als deviceRoutes). Pure verplaatsing: de
  * routes en berekeningen zijn ongewijzigd; de bereken-functies blijven
- * geëxporteerd voor de digest, de import-preview en de
- * Telegram-bot.
+ * geëxporteerd voor de digest en de import-preview.
  */
 
 const ISO_DAG_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -276,7 +275,7 @@ type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; serv
 
 /** Eén dataload voor [vanaf, tot] — gedeeld door het losse advies en de
  *  batch (herverdeel-wizard): 17 gaten hoeven niet 17× alles op te halen.
- *  Elke aanroeper (de twee routes, de digest, de Telegram-bot) komt hier
+ *  Elke aanroeper (de twee routes, de digest) komt hier
  *  langs, dus hier staat de grens: twee echte kalenderdagen, hoogstens een
  *  jaar breed. Een aanvraag die dat niet haalt gooit een AdviesBereikFout
  *  vóór er iets geladen wordt (beveiligingsscan 01-10, punt 7). */
