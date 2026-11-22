@@ -110,9 +110,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   // historiek + expliciete bevestigmodal — dit vervangt de volledige planning.
   const [restoreEntry, setRestoreEntry] = useState<PlanningMatrixImportHistory | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
-  // Gekozen importperiode (standaard het volledige bestand). De planner maakt
-  // de Excel vaak maanden vooruit; met een kortere periode blijft het
-  // nog-niet-vaststaande deel buiten het portaal.
+  // Gekozen importperiode: leeg tot de planner zelf Van en Tot en met kiest
+  // (22-11; vroeger voorgevuld met het volledige bestand). De planner maakt
+  // de Excel vaak maanden vooruit; alleen de gekozen periode gaat het portaal
+  // in, het nog-niet-vaststaande deel blijft erbuiten.
   const [periodeVan, setPeriodeVan] = useState('');
   const [periodeTot, setPeriodeTot] = useState('');
   const [isPreviewVerversen, setIsPreviewVerversen] = useState(false);
@@ -292,9 +293,22 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   // als het voorbeeld berekend is voor de periode die nu in de velden staat
   // (dezelfde die de import verstuurt): na een mislukte herberekening of een
   // leeggemaakt datumveld toont het scherm geen plan van een vorige periode.
-  const importPlan = matrixPreview && matrixPreview.planPeriode.van === periodeVan && matrixPreview.planPeriode.tot === periodeTot
-    ? matrixPreview.plan
-    : null;
+  // De import mag pas vertrekken als beide datums zelf gekozen zijn en het
+  // voorbeeld in beeld voor precies die periode berekend is.
+  // `periodeIngevuld` zegt alleen dat beide velden een geldige periode dragen
+  // (voor de woorden op het scherm: "kies eerst" tegenover "wordt berekend" of
+  // "niet berekend"); de poort van de import is `periodeGekozen`.
+  const periodeIngevuld = !!periodeVan && !!periodeTot && periodeVan <= periodeTot;
+  const periodeGekozen = !!matrixPreview && periodeIngevuld
+    && matrixPreview.planPeriode.van === periodeVan && matrixPreview.planPeriode.tot === periodeTot;
+  const importPlan = matrixPreview && periodeGekozen ? matrixPreview.plan : null;
+  // Waarover de cijfers in beeld gaan zolang er geen periode gekozen is: het
+  // hele bestand na het kiezen van een bestand, of de vorige periode als een
+  // veld daarna weer leeggemaakt is.
+  const voorbeeldIsHeleBestand = !!matrixPreview
+    && (!matrixPreview.planPeriode.van || !matrixPreview.planPeriode.tot
+      || (matrixPreview.planPeriode.van === (matrixPreview.fileStartDate ?? matrixPreview.planPeriode.van)
+        && matrixPreview.planPeriode.tot === (matrixPreview.fileEndDate ?? matrixPreview.planPeriode.tot)));
   // De eerste tien chauffeurs, de rest op vraag; een ander bestand of een
   // andere periode begint opnieuw bij tien.
   const planLijst = useToonMeer(importPlan?.chauffeurs ?? GEEN_CHAUFFEURS, {
@@ -353,9 +367,14 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       setPendingMatrixFilename(file.name);
       setZiekteGeregistreerd(new Set());
       setMatrixPreview(previewToState(data, { van: data.startDate || '', tot: data.endDate || '' }));
-      // Periode start op het volledige bestand; inkorten kan in de preview.
-      setPeriodeVan(data.startDate || '');
-      setPeriodeTot(data.endDate || '');
+      // De periode start LEEG (Jarno 22-11: "zolang ik niet expliciet aanduid
+      // … mag er niks geimporteerd worden, enkel de gekozen periode"). Tot
+      // 22-11 stond hier het volledige bestand voorgevuld, en ging een Excel
+      // die maanden vooruit loopt in haar geheel het portaal in als niemand
+      // de velden aanraakte. Het voorbeeld hierboven is wel al over het hele
+      // bestand berekend, zodat het scherm het bereik en de fouten kan tonen.
+      setPeriodeVan('');
+      setPeriodeTot('');
       setMatrixPreviewOpen(true);
     } catch (error) {
       meldSchrijffout('Excel-voorbeeld maken', error);
@@ -418,6 +437,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       notify('Er is geen matrixbestand klaar om te importeren.', 'error');
       return;
     }
+    // Nooit zonder een zelf gekozen periode, en nooit met een andere dan die
+    // van het getoonde voorbeeld (de knop staat dan ook uit).
+    if (!periodeGekozen) {
+      notify('Kies eerst de periode die je wil importeren.', 'error');
+      return;
+    }
 
     try {
       setIsMatrixImporting(true);
@@ -427,7 +452,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         ...(pendingMatrixFilename ? { filename: pendingMatrixFilename } : {}),
         // Zelfde periode als het getoonde voorbeeld — de import verwerkt
         // en vervangt alleen de geselecteerde dagen.
-        ...(periodeVan && periodeTot ? { periode: { van: periodeVan, tot: periodeTot } } : {}),
+        periode: { van: periodeVan, tot: periodeTot },
       });
 
       const syncNotes: string[] = [];
@@ -973,7 +998,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         <>
               <ModalHeader
                 title="Controleer voor je deze periode vervangt"
-                description="Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen, planning daarbuiten blijft staan."
+                description="Deze stap schrijft nog niets weg. Alleen de periode die je kiest wordt vervangen, planning daarbuiten blijft staan."
               />
 
               <div className="p-6 md:p-7 space-y-6 overflow-y-auto flex-1">
@@ -1179,7 +1204,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {isPreviewVerversen && <MicroLabel className="text-oker-700">Bijwerken…</MicroLabel>}
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-500">
-                      Het bestand loopt van {matrixPreview.fileStartDate ? formatDatumDMJ(matrixPreview.fileStartDate) : '?'} t/m {matrixPreview.fileEndDate ? formatDatumDMJ(matrixPreview.fileEndDate) : '?'}. Alleen de gekozen periode wordt geïmporteerd en vervangen, kort hem in als latere maanden nog niet vaststaan.
+                      Het bestand loopt van {matrixPreview.fileStartDate ? formatDatumDMJ(matrixPreview.fileStartDate) : '?'} t/m {matrixPreview.fileEndDate ? formatDatumDMJ(matrixPreview.fileEndDate) : '?'}. Alleen de periode die je hieronder kiest wordt geïmporteerd en vervangen; latere maanden die nog niet vaststaan laat je erbuiten.
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <Field label="Van" htmlFor="import-periode-van">
@@ -1201,11 +1226,34 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         />
                       </Field>
                     </div>
-                    <p className="mt-3 text-sm font-medium text-slate-500">
-                      {matrixPreview.importedDays} dag{matrixPreview.importedDays === 1 ? '' : 'en'} geselecteerd. Alleen dit bereik wordt vervangen{matrixPreview.retainedDays > 0
-                        ? `, ${matrixPreview.retainedDays} bestaande dag${matrixPreview.retainedDays === 1 ? ' erbuiten blijft' : 'en erbuiten blijven'} staan.`
-                        : '; er staat geen planning buiten dit bereik.'}
-                    </p>
+                    {periodeGekozen ? (
+                      <p className="mt-3 text-sm font-medium text-slate-500">
+                        {matrixPreview.importedDays} dag{matrixPreview.importedDays === 1 ? '' : 'en'} geselecteerd. Alleen dit bereik wordt vervangen{matrixPreview.retainedDays > 0
+                          ? `, ${matrixPreview.retainedDays} bestaande dag${matrixPreview.retainedDays === 1 ? ' erbuiten blijft' : 'en erbuiten blijven'} staan.`
+                          : '; er staat geen planning buiten dit bereik.'}
+                      </p>
+                    ) : !periodeIngevuld ? (
+                      <p className="mt-3 text-sm font-semibold text-amber-800" role="status">
+                        Nog geen periode gekozen. Kies Van en Tot en met: zonder periode wordt er niets geïmporteerd. De cijfers op dit scherm gelden tot dan voor {voorbeeldIsHeleBestand ? 'het hele bestand' : formatPeriodeDMJ(matrixPreview.planPeriode.van, matrixPreview.planPeriode.tot)}.
+                      </p>
+                    ) : isPreviewVerversen ? (
+                      <p className="mt-3 text-sm font-medium text-slate-500" role="status">
+                        Het voorbeeld voor deze periode wordt berekend…
+                      </p>
+                    ) : (
+                      // Beide datums staan er, maar het voorbeeld in beeld is
+                      // niet van deze periode: de herberekening is mislukt.
+                      // Dezelfde datum opnieuw intikken geeft niets door, dus
+                      // staat de weg terug hier (de toast is na tien seconden weg).
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <p className="text-sm font-semibold text-amber-800" role="status">
+                          Het voorbeeld voor deze periode is niet berekend. Tot dan wordt er niets geïmporteerd.
+                        </p>
+                        <Button variant="secondary" size="sm" onClick={() => { void handlePeriodeChange(periodeVan, periodeTot); }}>
+                          Opnieuw berekenen
+                        </Button>
+                      </div>
+                    )}
                   </Card>
 
                   <Card>
@@ -1272,6 +1320,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       <MicroLabel>Wat verandert voor de chauffeurs</MicroLabel>
                       {isPreviewVerversen ? (
                         <p className="mt-2 text-body-sm text-slate-500" role="status">Het verschil per chauffeur wordt opnieuw berekend…</p>
+                      ) : !periodeIngevuld ? (
+                        <p className="mt-2 text-body-sm text-slate-500" role="status">Kies eerst de importperiode hierboven. Daarna staat hier wat er voor de chauffeurs verandert.</p>
                       ) : !importPlan ? (
                         <p className="mt-2 text-body-sm text-slate-500" role="status">Het verschil per chauffeur kon niet berekend worden.</p>
                       ) : importPlan.totaal.chauffeurs === 0 ? (
@@ -1430,10 +1480,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   size="lg"
                   className={cn('flex-1', matrixPreviewHasIssues && 'bg-slate-400 hover:bg-slate-400 shadow-none')}
                   onClick={confirmMatrixImport}
-                  disabled={isMatrixImporting || isPreviewVerversen || matrixPreviewHasIssues}
+                  disabled={isMatrixImporting || isPreviewVerversen || matrixPreviewHasIssues || !periodeGekozen}
                   title={matrixPreviewHasIssues ? 'Los eerst de fouten op in de Excel of in de planningscodes/chauffeurslijst.' : undefined}
                 >
-                  {isMatrixImporting ? 'Importeren…' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang deze periode'}
+                  {isMatrixImporting ? 'Importeren…' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : !periodeIngevuld ? 'Kies eerst de periode' : 'Vervang deze periode'}
                 </Button>
               </div>
         </>
