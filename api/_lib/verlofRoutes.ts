@@ -219,8 +219,8 @@ export async function registreerZiekmeldingIntern(
       leave: record,
       period,
       targetName: target.name,
-      // ISO-variant voor de bot: kandidaten-knoppen hebben de rauwe datum
-      // nodig; de label-variant leeft alleen intern (mail/alert).
+      // ISO-variant van de openvallende diensten (rauwe datum); de
+      // label-variant leeft alleen intern (mail). Sinds 22-11 zonder lezer.
       openDienstenIso: [...dagDiensten.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([d, nummers]) => ({ date: d, nummers })),
     };
 }
