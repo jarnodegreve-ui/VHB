@@ -679,14 +679,109 @@ describe('optimistic concurrency (revisie-tokens, anti-overschrijf)', () => {
 });
 
 describe('planning-horizon (x-planning-tot)', () => {
-  it('GET /api/planning geeft de laatste dag van de matrix mee, ook aan een chauffeur', async () => {
-    mem.planningMatrix = [
-      { source_date: '2026-08-05', naam: 'A', code: '2101' },
-      { source_date: '2026-11-08', naam: 'A', code: '2101' },
-    ];
-    const res = await api('GET', '/api/planning', { token: 'tok-a' });
+  // Jarno 22-11: de planning loopt tot de laatste dag met minstens één dienst.
+  // Lege dagen en dagen met alleen afwezigheid op het einde van de matrix
+  // tellen niet. De mock draait de échte beslissing (api/_lib/planningGrens.ts);
+  // de opgebouwde planning volgt de matrix, zoals na elke import.
+  const rij = (dag: string, assignments: Record<string, string>) => ({ id: `m-${dag}`, source_date: dag, day_type: 'week', assignments, raw_row: '' });
+  const dienst = (dag: string, line = '12') => ({ id: `p-${dag}`, driverId: '3', date: dag, line, startTime: '08:00', endTime: '16:00' });
+  const horizon = async (token = 'tok-a') => {
+    const res = await api('GET', '/api/planning', { token });
     expect(res.status).toBe(200);
-    expect(res.headers.get('x-planning-tot')).toBe('2026-11-08');
+    return res.headers.get('x-planning-tot');
+  };
+  const laatsteVanBord = async () => (await api('GET', '/api/month-planning?month=2027-01', { token: 'tok-planner' })).json.geimporteerd.laatste;
+
+  beforeEach(() => {
+    mem.planningCodes = [
+      { code: 'bv', description: 'Betaald verlof', category: 'leave' },
+      { code: 'ziek', description: 'Ziek', category: 'absence' },
+      { code: 'vrij', description: 'Vrij', category: 'absence' },
+      { code: 'opl', description: 'Opleiding', category: 'training' },
+      { code: 'eek1', description: 'Schoolrit Eeklo', category: 'service' },
+    ];
+  });
+
+  it('GET /api/planning geeft de laatste dag met een dienst mee, ook aan een chauffeur', async () => {
+    mem.planningMatrix = [rij('2026-08-05', { 'Chauffeur A': '12' }), rij('2026-11-08', { 'Chauffeur A': '12' })];
+    mem.planning = [dienst('2026-08-05'), dienst('2026-11-08')];
+    expect(await horizon()).toBe('2026-11-08');
+    expect(await horizon('tok-planner')).toBe('2026-11-08');
+  });
+
+  it('lege dagen op het einde van de matrix tellen niet (de upload van Jarno: planning tot 03/01, rijen tot 31/01)', async () => {
+    const leeg = Array.from({ length: 28 }, (_, i) => rij(`2027-01-${String(i + 4).padStart(2, '0')}`, i % 2 ? {} : { 'Chauffeur A': '', 'Chauffeur B': ' ' }));
+    mem.planningMatrix = [rij('2027-01-02', { 'Chauffeur A': '12' }), rij('2027-01-03', { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }), ...leeg];
+    mem.planning = [dienst('2027-01-02'), dienst('2027-01-03')];
+    expect(await horizon()).toBe('2027-01-03');
+    // Het rooster en de maandplanning lezen dezelfde dag.
+    expect(await laatsteVanBord()).toBe('2027-01-03');
+  });
+
+  it('dagen met alleen afwezigheid, leestekens of een onbekende code op het einde tellen evenmin', async () => {
+    mem.planningMatrix = [
+      rij('2027-01-03', { 'Chauffeur A': '12' }),
+      rij('2027-01-04', { 'Chauffeur A': 'BV', 'Chauffeur B': 'ziek' }),
+      rij('2027-01-05', { 'Chauffeur A': 'vrij', 'Chauffeur B': 'OPL' }),
+      rij('2027-01-06', { 'Chauffeur A': '-', 'Chauffeur B': '?' }),
+      rij('2027-01-07', { 'Chauffeur A': 'xyz' }),
+    ];
+    mem.planning = [dienst('2027-01-03')];
+    expect(await horizon()).toBe('2027-01-03');
+    expect(await laatsteVanBord()).toBe('2027-01-03');
+  });
+
+  it('een code-dienst (schoolrit, zonder rijen in de planning) na de laatste planningdag telt wel', async () => {
+    mem.planningMatrix = [
+      rij('2027-01-03', { 'Chauffeur A': '12' }),
+      rij('2027-01-04', { 'Chauffeur A': 'bv' }),
+      rij('2027-01-05', { 'Chauffeur A': 'bv', 'Chauffeur B': 'EEK1' }),
+      rij('2027-01-06', { 'Chauffeur A': 'bv' }),
+    ];
+    mem.planning = [dienst('2027-01-03')];
+    expect(await horizon()).toBe('2027-01-05');
+    expect(await laatsteVanBord()).toBe('2027-01-05');
+  });
+
+  it('lege dagen midden in de planning veranderen niets: alleen het einde telt', async () => {
+    mem.planningMatrix = [rij('2027-01-03', { 'Chauffeur A': '12' }), rij('2027-01-04', {}), rij('2027-01-05', { 'Chauffeur A': '12' })];
+    mem.planning = [dienst('2027-01-03'), dienst('2027-01-05')];
+    expect(await horizon()).toBe('2027-01-05');
+  });
+
+  // Gewijzigd na de tegenlezing (was: geen horizon, `laatste: null`). Zonder
+  // één planningrij kent de regel de gewone diensten niet; dan geldt de grens
+  // van vóór 22-11, de laatste matrixrij.
+  it('een matrix zonder opgebouwde planning houdt de grens van vroeger: de laatste matrixrij', async () => {
+    mem.planningMatrix = [rij('2027-01-04', { 'Chauffeur A': 'bv' }), rij('2027-01-05', {})];
+    mem.planning = [];
+    expect(await horizon()).toBe('2027-01-05');
+    expect((await api('GET', '/api/month-planning?month=2027-01', { token: 'tok-planner' })).json.geimporteerd).toEqual({ eerste: '2027-01-04', laatste: '2027-01-05' });
+  });
+
+  it('planning gewist terwijl de matrix er staat: de grens valt niet op de laatste schoolrit en Openstaande diensten houdt zijn bereik', async () => {
+    // Gewone diensten t/m 03/01, de laatste schoolrit op 18/12.
+    mem.planningMatrix = [
+      rij('2026-12-18', { 'Chauffeur A': '12', 'Chauffeur B': 'EEK1' }),
+      rij('2026-12-19', { 'Chauffeur A': '12' }),
+      rij('2027-01-03', { 'Chauffeur A': '12' }),
+    ];
+    mem.planning = [];
+    expect(await horizon()).toBe('2027-01-03');
+    expect(await laatsteVanBord()).toBe('2027-01-03');
+    // Openstaande diensten gaf zonder grens geen rijen en geen bereik meer. Overzicht per
+    // chauffeur leest dezelfde `geimporteerd`-grenzen (eerste en laatste, hierboven getoetst);
+    // zijn lader leest de medewerkers buiten de opslagmock en draait hier niet.
+    const res = await api('GET', '/api/rapporten/openstaande-diensten?van=2026-12-01&tot=2027-01-31', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.bereik?.tot).toBe('2027-01-03');
+  });
+
+  it('een staart langer dan het maximum valt terug op de laatste matrixrij', async () => {
+    const dagNa = (n: number) => new Date(Date.UTC(2027, 0, 3 + n)).toISOString().slice(0, 10);
+    mem.planningMatrix = [rij('2027-01-03', { 'Chauffeur A': '12' }), ...Array.from({ length: 150 }, (_, i) => rij(dagNa(i + 1), {}))];
+    mem.planning = [dienst('2027-01-03')];
+    expect(await horizon()).toBe(dagNa(150));
   });
 
   it('zonder matrix valt hij terug op de laatste opgebouwde dienst', async () => {
@@ -827,6 +922,8 @@ describe('maandplanning, afwezigheidscodes zijn voor iedereen zichtbaar', () => 
       ...mem.planningMatrix,
       { id: 'm-nov', source_date: '2026-11-08', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
     ];
+    // De opgebouwde planning volgt de matrix: de grens is de laatste dag met een dienst (22-11).
+    mem.planning = [...mem.planning, { id: 'p-nov', driverId: '3', date: '2026-11-08', line: '12', startTime: '08:00', endTime: '16:00' }];
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
     expect(res.status).toBe(200);
     expect(res.json.geimporteerd).toEqual({ eerste: '2026-07-15', laatste: '2026-11-08' });
@@ -878,6 +975,9 @@ describe('maandplanning, wie geen staf is kijkt niet verder terug dan de maandag
     mem.planningMatrix = DAGEN.map((dag, i) => ({
       id: `m-${i}`, source_date: dag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '',
     }));
+    // De opgebouwde planning volgt de matrix, zoals na elke import: de grens
+    // achteraan is de laatste dag met een dienst (22-11).
+    mem.planning = DAGEN.map((dag, i) => ({ id: `p-${i}`, driverId: '3', date: dag, line: '12', startTime: '08:00', endTime: '16:00' }));
     // Een doorgevoerde ruil en een ziekte van vóór de grens: ook die sporen
     // (wie nam over, wie was ziek) horen bij het verleden.
     mem.swaps = [{
