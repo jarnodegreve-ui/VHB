@@ -1,9 +1,24 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { tik } from './tik';
 
-const THRESHOLD = 70; // px slepen om te verversen
-const MAX_PULL = 110; // visuele cap
+export const THRESHOLD = 70; // px rek om te verversen (de vinger legt het dubbele af)
+export const MAX_PULL = 110; // de rek nadert deze grens en haalt hem nooit
 const DIR_SLOP = 6; // px voor de richting bepaald wordt (axis-lock)
+const REK = MAX_PULL - THRESHOLD; // ruimte boven de drempel waarin de rek uitdooft
+// Terugveren en vasthouden op de ladder (index.css), zoals de maand-veeg.
+const TERUG = 'transform var(--duration-fast) var(--ease-standard)';
+
+/**
+ * Hoe ver de inhoud meegaat bij een vinger die `dy` px gezakt is. Tot de
+ * drempel de helft van de vinger. Daarboven dooft de rek uit naar `MAX_PULL`
+ * zonder die ooit te halen: zo blijft de inhoud tot het einde meegeven in
+ * plaats van tegen een harde stop te lopen. Op de drempel is de helling links
+ * en rechts dezelfde (geen knik, geen sprong).
+ */
+export function rek(dy: number): number {
+  const x = dy * 0.5;
+  return x <= THRESHOLD ? x : THRESHOLD + REK * (1 - Math.exp(-(x - THRESHOLD) / REK));
+}
 
 /**
  * Pull-to-refresh voor de geïnstalleerde PWA. Sleep omlaag vanaf de bovenkant
@@ -61,12 +76,18 @@ export function usePullToRefresh(
     const iconEl = () => indicatorRef.current?.querySelector<HTMLElement>('[data-ptr-icon]') ?? null;
 
     const paint = (px: number) => {
-      el.style.transition = px > 0 ? 'none' : 'transform 0.2s';
+      el.style.transition = px > 0 ? 'none' : TERUG;
       el.style.transform = px > 0 ? `translateY(${px}px)` : '';
       const ind = indicatorRef.current;
       if (ind) {
         ind.style.opacity = px > 4 ? '1' : '0';
         ind.style.transform = `translateY(${Math.max(0, px - 20)}px)`;
+        // Drempelstaat: de indicator zegt wanneer loslaten ververst, en neemt
+        // dat terug als de vinger weer onder de drempel schuift (AppSchil
+        // kleurt het vlak op dit attribuut goud met een carbon icoon). Een
+        // attribuut en geen klasse: die schrijft React bij een render over.
+        // Tijdens het verversen blijft het staan tot `reset`.
+        ind.toggleAttribute('data-drempel', px >= THRESHOLD);
       }
       const ic = iconEl();
       if (ic) ic.style.transform = `rotate(${px * 2.2}deg)`;
@@ -117,8 +138,8 @@ export function usePullToRefresh(
         reset();
         return;
       }
-      // Wrijvingscurve: voelt elastisch, cap op MAX_PULL.
-      pull = Math.min(MAX_PULL, dy * 0.5);
+      // Wrijvingscurve: voelt elastisch en dooft uit naar MAX_PULL (zie `rek`).
+      pull = rek(dy);
       paint(pull);
       // Eén korte tik op het moment dat loslaten gaat verversen (zoals de
       // klik van een fysieke schakelaar); niet nog eens bij terugveren.
@@ -145,7 +166,7 @@ export function usePullToRefresh(
       setRefreshing(true);
       // Op de drempel laten staan tijdens het verversen; icoon spint via de
       // animate-spin-klasse (inline rotate weghalen zodat die niet botst).
-      el.style.transition = 'transform 0.2s';
+      el.style.transition = TERUG;
       el.style.transform = `translateY(${THRESHOLD}px)`;
       const ind = indicatorRef.current;
       if (ind) {
@@ -174,6 +195,7 @@ export function usePullToRefresh(
       el.removeEventListener('touchcancel', onEnd);
       el.style.transform = '';
       el.style.transition = '';
+      indicatorRef.current?.removeAttribute('data-drempel');
     };
   }, [scrollRef, indicatorRef, enabled]);
 
