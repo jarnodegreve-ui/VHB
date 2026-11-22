@@ -28,6 +28,7 @@ export function MaandNavigatie({
   veeg,
   vorigeUit = false,
   volgendeUit = false,
+  volgendeTitel,
   labelClassName,
   className,
   children,
@@ -40,6 +41,8 @@ export function MaandNavigatie({
   veeg?: MaandVeeg;
   vorigeUit?: boolean;
   volgendeUit?: boolean;
+  /** Uitleg op de pijl Volgende (bv. waarom ze uit staat); de naam blijft "Volgende maand". */
+  volgendeTitel?: string;
   /** Extra klassen op de maandnaam (bv. een min-width tegen verspringen). */
   labelClassName?: string;
   className?: string;
@@ -59,7 +62,7 @@ export function MaandNavigatie({
       <span className={cn('text-center text-sm font-semibold capitalize text-slate-800 max-sm:flex-1', labelClassName)} aria-live="polite">
         {label}
       </span>
-      <IconButton label="Volgende maand" variant="secondary" onClick={naarVolgende} disabled={volgendeUit}>
+      <IconButton label="Volgende maand" title={volgendeTitel ?? 'Volgende maand'} variant="secondary" onClick={naarVolgende} disabled={volgendeUit}>
         <ChevronRight size={16} />
       </IconButton>
       {children}

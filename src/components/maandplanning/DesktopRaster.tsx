@@ -7,7 +7,7 @@ import { typedagLabel } from '../../lib/typedag';
 import { formatDayLong, MONTH_NAMES } from '../../lib/format';
 import { celTextClass } from '../../lib/planningKind';
 import type { MonthCell } from '../../lib/monthPlanning';
-import { celTitel, dagtypeMarkering, dayHeader, noteKey, sectieLabel, type Cellen, type Chauffeur, type Sectie } from '../../lib/maandplanning';
+import { celTitel, dagtypeMarkering, dayHeader, naImport, noteKey, sectieLabel, type Cellen, type Chauffeur, type Sectie } from '../../lib/maandplanning';
 import { SECTIE_BAND, SECTIE_KOP, SECTIE_STREEP } from './sectiekop';
 
 /**
@@ -29,10 +29,12 @@ type Props = {
   notes: Map<string, string>;
   /** Het De Lijn-dagtype per dag uit GET /api/month-planning (deel 2, 11-10); ontbreekt in ouder cachemateriaal. */
   dagtypes?: Record<string, { code: string; label: string; periode: string } | null>;
+  /** Laatste geïmporteerde dag (ISO) of null zolang onbekend: kolommen erna zijn leeg en gedempt. */
+  laatsteDag?: string | null;
   onCel: (drv: Chauffeur, iso: string, cell: MonthCell) => void;
 };
 
-export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSections, cells, ownId, notes, dagtypes, onCel }: Props) {
+export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSections, cells, ownId, notes, dagtypes, laatsteDag, onCel }: Props) {
   return (
     /* .mp-*-klassen (weekend-arcering, opake sticky-cellen) staan in
        index.css bij de andere component-klassen. */
@@ -74,10 +76,12 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
               // 2-wekenvenster, waardoor de ene week een maand toonde
               // en de andere niet.
               const maandKort = (MONTH_NAMES[Number(iso.slice(5, 7)) - 1] ?? '').slice(0, 3).toLowerCase();
+              // Na de laatste geïmporteerde dag: de kop blijft staan, gedempt.
+              const buiten = naImport(iso, laatsteDag);
               return (
                 <Th
                   key={iso}
-                  title={titel}
+                  title={buiten ? 'Nog geen planning geïmporteerd' : titel}
                   className={cn(
                     'px-1 py-2 text-center',
                     h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
@@ -85,8 +89,8 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
                   )}
                 >
                   {/* Zichtbaar: letter, dag, maand; voorgelezen: de volledige dag. */}
-                  <span className="sr-only">{formatDayLong(iso)}{dagtype ? `, ${dagtype.label.toLowerCase()}` : feestdag ? ', feestdag' : ''}{today ? ', vandaag' : ''}</span>
-                  <span aria-hidden="true">
+                  <span className="sr-only">{formatDayLong(iso)}{dagtype ? `, ${dagtype.label.toLowerCase()}` : feestdag ? ', feestdag' : ''}{today ? ', vandaag' : ''}{buiten ? ', nog geen planning' : ''}</span>
+                  <span aria-hidden="true" className={cn(buiten && 'opacity-60')}>
                     <span className={cn(microLabelClass, 'block')}>{h.letter}</span>
                     <span className={cn('mt-0.5 block text-xs font-semibold', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</span>
                     {/* 2xs: matrixcel van 3 px-hoog label onder de dag, dichte planningsmatrix */}
@@ -151,7 +155,13 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
                     </span>
                   </Th>
                   {visibleDates.map((iso) => {
-                    const cell = row[iso];
+                    // Na de laatste geïmporteerde dag toont de kolom niets: ook
+                    // geen verlof of ziekte (de cel-waarheid legt die over een
+                    // lege cel, wat las als "er is planning") en dus geen knop
+                    // naar het celdetail. Bewust zonder de stippen van een
+                    // lege cel: die zeggen "niemand ingepland".
+                    const buiten = naImport(iso, laatsteDag);
+                    const cell = buiten ? undefined : row[iso];
                     const h = dayHeader(iso);
                     const today = iso === todayIso;
                     return (
@@ -162,7 +172,7 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
                           h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
                           today ? 'bg-oker-100/60' : h.weekend ? 'mp-weekend' : '',
                           // Lege cel: stippen (anders dan de weekendarcering), Jarno 08-09.
-                          !cell && 'mp-leeg',
+                          !cell && !buiten && 'mp-leeg',
                         )}
                       >
                         {cell ? (

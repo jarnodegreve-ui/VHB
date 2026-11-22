@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { MonthCell } from './monthPlanning';
 import {
   addDaysIso, berekenCodeLegend, bouwDagRijen, celTitel, dagtypeMarkering, dayHeader, formatDayMonth, groepeerPerSectie,
-  maandNaarParam, maandUitParam, mondayOf, monthOf, noteKey, sectieLabel, sectionOf, sorteerOverzichtRijen,
-  urenLabel, voegCellenSamen, voegChauffeursSamen, werkdagenUitCellen, wisselOverzichtSortering,
+  kiesDagBinnenImport, maandNaarParam, maandUitParam, mondayOf, monthOf, naImport, noteKey, sectieLabel, sectionOf, sorteerOverzichtRijen,
+  teltAlsDagkeuze, urenLabel, voegCellenSamen, voegChauffeursSamen, werkdagenUitCellen, wisselOverzichtSortering,
   type Cellen, type OverzichtRij,
 } from './maandplanning';
 
@@ -231,5 +231,75 @@ describe('dagtypeMarkering (dagkop van het bord, deel 2 dagtypekalender)', () =>
     expect(dagtypeMarkering(null)).toBeNull();
     expect(dagtypeMarkering(undefined)).toBeNull();
     expect(dagtypeMarkering('')).toBeNull();
+  });
+});
+
+describe('grens van de import (planning-grens, 22-11)', () => {
+  const januari = Array.from({ length: 31 }, (_, i) => `2027-01-${String(i + 1).padStart(2, '0')}`);
+
+  it('naImport: alleen dagen ná de laatste geïmporteerde dag, en nooit zonder geldige grens', () => {
+    expect(naImport('2027-01-03', '2027-01-03')).toBe(false);
+    expect(naImport('2027-01-04', '2027-01-03')).toBe(true);
+    expect(naImport('2026-12-31', '2027-01-03')).toBe(false);
+    // Onbekend (nog niet geladen, oude server) of geen ISO-dag: niets raden, alles blijft bereikbaar.
+    expect(naImport('2027-01-04', null)).toBe(false);
+    expect(naImport('2027-01-04', undefined)).toBe(false);
+    expect(naImport('2027-01-04', '')).toBe(false);
+    expect(naImport('2027-01-04', '03/01/2027')).toBe(false);
+    expect(naImport('2027-01-04', '2027-01')).toBe(false);
+  });
+
+  it('kiesDagBinnenImport zonder grens: de eerste kandidaat in de maand, anders de eerste dag (zoals vroeger)', () => {
+    expect(kiesDagBinnenImport(januari, ['2027-01-20', '2027-01-05'], null)).toBe('2027-01-20');
+    expect(kiesDagBinnenImport(januari, [null, '2027-01-15'], null)).toBe('2027-01-15');
+    expect(kiesDagBinnenImport(januari, ['2026-12-15', null], null)).toBe('2027-01-01');
+    expect(kiesDagBinnenImport(januari, [], undefined)).toBe('2027-01-01');
+  });
+
+  it('een dag uit het adres, de huidige keuze of vandaag voorbij de grens valt terug op de laatste dag met planning', () => {
+    expect(kiesDagBinnenImport(januari, ['2027-01-20'], '2027-01-03')).toBe('2027-01-03');
+    expect(kiesDagBinnenImport(januari, [null, '2027-01-04'], '2027-01-03')).toBe('2027-01-03');
+    // Op of vóór de grens blijft de keuze staan.
+    expect(kiesDagBinnenImport(januari, ['2027-01-03'], '2027-01-03')).toBe('2027-01-03');
+    expect(kiesDagBinnenImport(januari, ['2027-01-02', '2027-01-20'], '2027-01-03')).toBe('2027-01-02');
+    // Geen kandidaat in de maand: de eerste dag (die heeft planning).
+    expect(kiesDagBinnenImport(januari, ['2026-12-30'], '2027-01-03')).toBe('2027-01-01');
+  });
+
+  // De vorm van de echte server: alleen dagen met een matrixrij, dus tot en met `laatste`.
+  const tot3 = ['2027-01-01', '2027-01-02', '2027-01-03'];
+
+  it('teltAlsDagkeuze: een dag in de lijst, of een echte dag van dezelfde maand ná de grens', () => {
+    expect(teltAlsDagkeuze(tot3, '2027-01-02', '2027-01-03')).toBe(true);
+    expect(teltAlsDagkeuze(tot3, '2027-01-20', '2027-01-03')).toBe(true);
+    // Andere maand, typefout, geen kalenderdag, geen grens of een lege maand: telt niet (oud gedrag).
+    expect(teltAlsDagkeuze(tot3, '2027-02-20', '2027-01-03')).toBe(false);
+    expect(teltAlsDagkeuze(tot3, '2026-12-20', '2027-01-03')).toBe(false);
+    expect(teltAlsDagkeuze(tot3, '2027-01-45', '2027-01-03')).toBe(false);
+    expect(teltAlsDagkeuze(tot3, '2027-01-2', '2027-01-03')).toBe(false);
+    expect(teltAlsDagkeuze(tot3, '2027-01-20', null)).toBe(false);
+    expect(teltAlsDagkeuze(tot3, null, '2027-01-03')).toBe(false);
+    expect(teltAlsDagkeuze([], '2027-01-20', '2027-01-03')).toBe(false);
+    // Een gat in de matrix vóór de grens is geen dag na de grens.
+    expect(teltAlsDagkeuze(['2027-01-01', '2027-01-03'], '2027-01-02', '2027-01-03')).toBe(false);
+  });
+
+  it('met de dagen van de echte server (tot en met de grens) valt een dag voorbij de grens op de laatste dag, niet op de eerste', () => {
+    expect(kiesDagBinnenImport(tot3, ['2027-01-20'], '2027-01-03')).toBe('2027-01-03');
+    // Vandaag voorbij de grens, zonder eerdere keuze of met een keuze uit een andere maand.
+    expect(kiesDagBinnenImport(tot3, [null, '2027-01-10'], '2027-01-03')).toBe('2027-01-03');
+    expect(kiesDagBinnenImport(tot3, ['2026-12-15', '2027-01-10'], '2027-01-03')).toBe('2027-01-03');
+    // Een geldige eerdere keuze wint van vandaag.
+    expect(kiesDagBinnenImport(tot3, ['2027-01-02', '2027-01-10'], '2027-01-03')).toBe('2027-01-02');
+    // Andere maand of typefout: de eerste dag, zoals vroeger. De uitkomst staat altijd in de lijst.
+    expect(kiesDagBinnenImport(tot3, ['2027-02-20'], '2027-01-03')).toBe('2027-01-01');
+    expect(kiesDagBinnenImport(tot3, ['2027-01-45'], '2027-01-03')).toBe('2027-01-01');
+    // Zonder grens telt een dag buiten de lijst nooit.
+    expect(kiesDagBinnenImport(tot3, ['2027-01-20'], null)).toBe('2027-01-01');
+  });
+
+  it('een maand zonder één dag planning geeft geen keuze, een lege maand ook niet', () => {
+    expect(kiesDagBinnenImport(januari, ['2027-01-10'], '2026-12-31')).toBeNull();
+    expect(kiesDagBinnenImport([], ['2027-01-10'], null)).toBeNull();
   });
 });

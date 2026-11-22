@@ -179,7 +179,11 @@ export function useImportGrenzen({ data, extraData, monthParam, year, monthIndex
   // Zolang de server de grenzen niet meestuurt blijft alles gewoon bereikbaar.
   const geimporteerd = data?.geimporteerd ?? extraData?.geimporteerd ?? null;
   const eersteDag = geimporteerd?.eerste ?? null;
-  const laatsteDag = geimporteerd?.laatste ?? null;
+  // De laatste van de twee geladen maanden: komt de hoofdmaand uit de cache
+  // van vóór een nieuwe import (zwak netwerk) en de tweede maand vers binnen,
+  // dan mag de oude grens de verse cellen van de tweede maand niet verbergen.
+  const laatsten = [data?.geimporteerd?.laatste, extraData?.geimporteerd?.laatste].filter((d): d is string => !!d).sort();
+  const laatsteDag = laatsten.length > 0 ? laatsten[laatsten.length - 1] : null;
   // Wie geen staf is krijgt het bord vanaf de maandag van deze week; de server
   // legt `eerste` dan op die dag (`zichtbaarVanaf`), zodat dezelfde grens de
   // knoppen hieronder stuurt. Alleen de uitleg bij de knop verschilt.
