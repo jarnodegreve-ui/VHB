@@ -109,3 +109,83 @@ describe('Verlof: de stand van een dag wacht op de echte limieten', () => {
     expect(vanafKnop()).toBeNull();
   });
 });
+
+// Ronde 6, punt 4 (deel 2): de kalender bladert met richting. De nieuwe maand
+// komt van rechts bij "volgende" en van links bij "vorige", ook bij een sprong
+// (Vandaag): de kant volgt uit de vergelijking van de twee maanden. De
+// vingerveeg zelf ligt vast in src/lib/useMaandVeeg.test.tsx en, met een echte
+// vinger, in e2e/verlofmaand.spec.ts.
+describe('Verlof: de kalender bladert met richting', () => {
+  const bezettingVragen = () => apiJsonMock.mock.calls.map((c) => String(c[0])).filter((p) => p.startsWith('/api/leave/bezetting'));
+  const maanden = () => [...document.querySelectorAll<HTMLElement>('[data-verlofmaand]')].map((el) => el.dataset.verlofmaand);
+  /** De kant waar de maand vandaan komt: de beginstand die RichtingWissel op het nieuwe raster zet. */
+  const kant = (maand: string) => {
+    const doos = document.querySelector<HTMLElement>(`[data-verlofmaand="${maand}"]`)!.parentElement!;
+    const x = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(doos.style.transform)?.[1];
+    return x === undefined ? 0 : Math.sign(Number(x));
+  };
+  const klik = async (naam: string) => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: naam })); }); };
+  const toon = async () => {
+    apiJsonMock.mockImplementation(async (pad: string) => {
+      if (pad.startsWith('/api/leave/bezetting')) return { dagen: [] };
+      if (pad === '/api/verlof/limieten') return { standaard: 2, periodes: [] };
+      return {};
+    });
+    render(<LeaveManagementView user={CHAUFFEUR} leaveRequests={[]} users={[CHAUFFEUR]} onSave={vi.fn()} />);
+    await waitFor(() => expect(bezettingVragen()).toHaveLength(1));
+  };
+
+  it('pijlen: volgende komt van rechts, vorige van links, en elke getoonde maand vraagt haar bezetting één keer', async () => {
+    await toon();
+    expect(maanden()).toEqual(['2026-11']);
+    expect(bezettingVragen()).toEqual(['/api/leave/bezetting?van=2026-11-01&tot=2026-11-30']);
+
+    await klik('Volgende maand');
+    expect(maanden()).toContain('2026-12');
+    expect(kant('2026-12')).toBe(1);
+    await waitFor(() => expect(maanden()).toEqual(['2026-12']));
+
+    await klik('Vorige maand');
+    expect(kant('2026-11')).toBe(-1);
+    await waitFor(() => expect(maanden()).toEqual(['2026-11']));
+    expect(bezettingVragen()).toEqual([
+      '/api/leave/bezetting?van=2026-11-01&tot=2026-11-30',
+      '/api/leave/bezetting?van=2026-12-01&tot=2026-12-31',
+      '/api/leave/bezetting?van=2026-11-01&tot=2026-11-30',
+    ]);
+  });
+
+  it('Vandaag: vanuit een latere maand komt de huidige van links, vanuit een vroegere van rechts', async () => {
+    await toon();
+    expect(screen.queryByRole('button', { name: 'Vandaag' })).toBeNull();
+
+    // Twee maanden verder (de laatste stap was "volgende", kant rechts): Vandaag gaat terug in de tijd.
+    await klik('Volgende maand');
+    await klik('Volgende maand');
+    await waitFor(() => expect(maanden()).toEqual(['2027-01']));
+    await klik('Vandaag');
+    expect(kant('2026-11')).toBe(-1);
+    await waitFor(() => expect(maanden()).toEqual(['2026-11']));
+    expect(screen.queryByRole('button', { name: 'Vandaag' })).toBeNull();
+
+    // Twee maanden terug (de laatste stap was "vorige", kant links): Vandaag gaat vooruit.
+    await klik('Vorige maand');
+    await klik('Vorige maand');
+    await waitFor(() => expect(maanden()).toEqual(['2026-09']));
+    await klik('Vandaag');
+    expect(kant('2026-11')).toBe(1);
+    await waitFor(() => expect(maanden()).toEqual(['2026-11']));
+  });
+
+  it('de gekozen dag en het dagdetail blijven staan bij een maandwissel', async () => {
+    await toon();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^18: / })); });
+    expect(screen.getByRole('heading', { name: /^Verlof op wo 18 november/ })).toBeTruthy();
+    await klik('Volgende maand');
+    await waitFor(() => expect(maanden()).toEqual(['2026-12']));
+    expect(screen.getByRole('heading', { name: /^Verlof op wo 18 november/ })).toBeTruthy();
+    await klik('Vorige maand');
+    await waitFor(() => expect(maanden()).toEqual(['2026-11']));
+    expect(screen.getByRole('heading', { name: /^Verlof op wo 18 november/ })).toBeTruthy();
+  });
+});

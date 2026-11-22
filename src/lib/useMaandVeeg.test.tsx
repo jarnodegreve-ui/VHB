@@ -145,6 +145,23 @@ describe('useMaandVeeg', () => {
     expect(laatste!.richting).toBe(1);
   });
 
+  // Een sprong (Vandaag in Verlof): de aanroeper kiest de maand zelf en geeft
+  // alleen de kant door. Het Rooster roept dit nooit aan en blijft dus gelijk.
+  it('een sprong zet alleen de richting: geen callback, en geen stille uitgang meer na een veeg', async () => {
+    await act(async () => { sleep(-(VEEG_DREMPEL + 20), 0); vi.advanceTimersByTime(200); });
+    expect(laatste!.viaVeeg).toBe(true);
+    expect(onVolgende).toHaveBeenCalledTimes(1);
+    await act(async () => { laatste!.sprong(-1); });
+    expect(laatste!.richting).toBe(-1);
+    expect(laatste!.viaVeeg).toBe(false);
+    await act(async () => { laatste!.sprong(1); });
+    expect(laatste!.richting).toBe(1);
+    expect(laatste!.viaVeeg).toBe(false);
+    // De sprong zelf wisselt niets: de teller staat nog op die ene veeg.
+    expect(onVolgende).toHaveBeenCalledTimes(1);
+    expect(onVorige).not.toHaveBeenCalled();
+  });
+
   describe('grens vooruit (kanVolgende: false)', () => {
     const zetGrens = async (waarde: boolean) => {
       kanVolgende = waarde;
