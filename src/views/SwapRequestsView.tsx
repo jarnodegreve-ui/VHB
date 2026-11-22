@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent } from 'react';
 import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Phone, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
@@ -114,6 +114,22 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // sluiten geen "Wijzigingen niet bewaren?".
   const [collegaZoek, setCollegaZoek] = useState('');
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
+  // "Kijkt ook mee" (ronde 6, punt 20), alleen voor staf en lui: Dienstruil
+  // zit in de warmup van de chauffeur en die ziet nooit iemand. Een gewone
+  // import() in een effect, bewust geen React.lazy of lazyRetry: mislukt de
+  // import, dan is er gewoon geen chip (React.lazy geeft het hele scherm aan
+  // de foutgrens, lazyRetry herlaadt de schil). Na het verlaten van het scherm
+  // zet een laat antwoord niets meer.
+  const [Meekijkers, setMeekijkers] = useState<ComponentType<{ className?: string }> | null>(null);
+  const kijktMee = isStaf(user.role);
+  useEffect(() => {
+    if (!kijktMee) return;
+    let weg = false;
+    import('../components/AanwezigOpScherm')
+      .then((m) => { if (!weg) setMeekijkers(() => m.AanwezigOpScherm); })
+      .catch(() => { /* geen chip */ });
+    return () => { weg = true; };
+  }, [kijktMee]);
   // Ruiloverzicht afdrukken (bewijsstuk voor het klassement, Jarno 18-09):
   // sinds 16-10 een vrije periode op de datum van de dienst, standaard de
   // lopende week. Schuift Vanaf voorbij Tot, dan schuift Tot mee.
@@ -948,6 +964,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         title="Dienstruil"
         description="Ruil een dienst met een collega, die accepteert eerst, daarna keurt de planning goed."
         actions={(
+          <>
+          {/* De chip verschijnt live en mag de kop niet hoger maken of de knop
+              verplaatsen terwijl de planner beslist: daarom een vaste grootste
+              breedte (14rem) en pas vanaf 2xl. De uitleg is hier lang; gemeten
+              op 15-11 duwt de chip haar tot en met 1440 px naar een tweede
+              regel en zakt alles eronder 25 px. */}
+          {kijktMee && Meekijkers && <Meekijkers className="hidden 2xl:inline-flex max-w-56" />}
           <Button
             variant="primary"
             icon={<Plus size={16} />}
@@ -968,6 +991,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           >
             Dienstruil aanvragen
           </Button>
+          </>
         )}
       />
 
