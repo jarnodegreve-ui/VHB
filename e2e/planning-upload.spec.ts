@@ -140,6 +140,48 @@ const venster = (page: Page) => page.getByRole('dialog').filter({ hasText: 'Cont
 const planVak = (page: Page) => venster(page).getByRole('region', { name: 'Wat verandert voor de chauffeurs' });
 const importKnop = (page: Page) => venster(page).getByRole('button', { name: 'Vervang deze periode' });
 const KLEIN = Buffer.from('synthetische werkmap');
+
+// --- De importperiode start leeg (regel van de eigenaar, 22-11) ---------------
+//
+// Na het kiezen van een bestand staan Van en Tot en met leeg: er vertrekt geen
+// import zolang de planner de periode niet zelf gekozen heeft, en het plan
+// staat pas in beeld als het voorbeeld voor precies die periode berekend is.
+// De proeven kiezen de periode daarom zoals een gebruiker: typen en het veld
+// verlaten. De periode is bewust NIET het hele bestand (01/09/2030 t/m
+// 01/01/2031): dan zou het voorbeeld van de upload al "van die periode" zijn
+// en bewees een proef niets over de herberekening of over wat de import stuurt.
+const PERIODE = { van: '2030-09-02', tot: '2030-09-30' };
+const ANDERE_VAN = '2030-09-03';
+const dmj = (iso: string) => iso.split('-').reverse().join('/');
+const veldVan = (page: Page) => venster(page).getByLabel('Van', { exact: true });
+const veldTot = (page: Page) => venster(page).getByLabel('Tot en met', { exact: true });
+/** De importknop, welk label hij ook draagt. */
+const importKnopElk = (page: Page) => venster(page).getByRole('button', { name: /^(Vervang deze periode|Kies eerst de periode|Eerst fouten oplossen|Importeren…)$/ });
+const geenPeriodeRegel = (page: Page) => venster(page).getByText(/^Nog geen periode gekozen\. Kies Van en Tot en met: zonder periode wordt er niets geïmporteerd\./);
+const periodeBerekend = (page: Page) => venster(page).getByText(/geselecteerd\. Alleen dit bereik wordt vervangen/);
+const typDatum = async (veld: ReturnType<typeof veldVan>, iso: string) => {
+  await veld.fill(iso ? dmj(iso) : '');
+  await veld.blur();
+};
+/** Kiest Van en Tot en met zoals een gebruiker (typen, veld verlaten) en wacht
+ *  tot het voorbeeld voor die periode in beeld staat. `wacht: false` voor een
+ *  proef waarin die herberekening vastgehouden wordt of mislukt. */
+const kiesPeriode = async (page: Page, periode: { van: string; tot: string } = PERIODE, opties: { wacht?: boolean } = {}) => {
+  await typDatum(veldVan(page), periode.van);
+  await typDatum(veldTot(page), periode.tot);
+  await expect(veldVan(page)).toHaveValue(dmj(periode.van));
+  await expect(veldTot(page)).toHaveValue(dmj(periode.tot));
+  if (opties.wacht !== false) await expect(periodeBerekend(page)).toBeVisible();
+};
+/** Na het kiezen van een bestand: lege velden, de amber regel, de knop uit. */
+const verwachtGeenPeriode = async (page: Page) => {
+  await expect(veldVan(page)).toHaveValue('');
+  await expect(veldTot(page)).toHaveValue('');
+  await expect(geenPeriodeRegel(page)).toBeVisible();
+  await expect(importKnopElk(page)).toHaveText('Kies eerst de periode');
+  await expect(importKnopElk(page)).toBeDisabled();
+  await expect(importKnop(page)).toHaveCount(0);
+};
 const GRENS = 'Codes zonder uren (bureau, schoolrit, garage) en ruilen daarvan staan niet in dit overzicht.';
 
 test('het voorbeeld toont per chauffeur de dagen die veranderen, de waarschuwing over de ruil en de knop blijven', async ({ page }) => {
@@ -149,6 +191,10 @@ test('het voorbeeld toont per chauffeur de dagen die veranderen, de waarschuwing
 
   const vak = planVak(page);
   await expect(vak).toBeVisible({ timeout: 15_000 });
+  // Zonder gekozen periode staat er nog geen plan.
+  await expect(vak).toContainText('Kies eerst de importperiode hierboven.');
+  await expect(vak.getByRole('listitem')).toHaveCount(0);
+  await kiesPeriode(page);
   await expect(vak).toContainText('3 chauffeurs, 4 dagen veranderen (1 erbij, 1 weg, 2 gewijzigd).');
   // De ruil die de import zou terugdraaien: de dienst gaat weg bij wie hem kreeg en komt bij een derde.
   const rijen = vak.getByRole('listitem');
@@ -169,10 +215,12 @@ test('verandert er niets, dan zegt het voorbeeld dat; zonder plan staat er één
   await openBeheerPlanning(page);
   await voorbeeldMet(page, { ...VOORBEELD, plan: GEEN_WIJZIGINGEN });
   await kiesBestand(page, KLEIN);
+  await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+  await kiesPeriode(page);
   // Het plan vergelijkt de rijen van de planning: de lege staat belooft dus
   // alleen iets over de diensten met uren, en zegt erbij wat er niet in staat
   // (een schoolrit of bureaudag die van chauffeur wisselt; tegenlezing ronde 6).
-  await expect(planVak(page)).toContainText('Geen wijzigingen in de diensten met uren.', { timeout: 15_000 });
+  await expect(planVak(page)).toContainText('Geen wijzigingen in de diensten met uren.');
   await expect(planVak(page)).not.toContainText('Geen wijzigingen voor de chauffeurs');
   await expect(planVak(page)).toContainText(GRENS);
   await expect(importKnop(page)).toBeEnabled();
@@ -192,7 +240,12 @@ test('verandert er niets, dan zegt het voorbeeld dat; zonder plan staat er één
     await page.unroute('**/api/planning-matrix/preview');
     await voorbeeldMet(page, antwoord);
     await kiesBestand(page, KLEIN);
-    await expect(planVak(page)).toContainText('Het verschil per chauffeur kon niet berekend worden.', { timeout: 15_000 });
+    await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+    // De periode is gekozen en het voorbeeld is ervoor berekend (kiesPeriode
+    // wacht daarop): de neutrale regel gaat dus over het plan, niet over een
+    // periode die nog ontbreekt.
+    await kiesPeriode(page);
+    await expect(planVak(page)).toContainText('Het verschil per chauffeur kon niet berekend worden.');
     await expect(planVak(page)).not.toContainText('Geen wijzigingen');
     // Zonder plan ook geen regel over wat er niet in staat.
     await expect(planVak(page)).not.toContainText(GRENS);
@@ -222,7 +275,9 @@ test('een lang plan: de eerste tien chauffeurs, de rest met Toon meer', async ({
   await kiesBestand(page, KLEIN);
 
   const vak = planVak(page);
-  await expect(vak).toContainText('12 chauffeurs, 12 dagen veranderen (12 erbij).', { timeout: 15_000 });
+  await expect(vak).toBeVisible({ timeout: 15_000 });
+  await kiesPeriode(page);
+  await expect(vak).toContainText('12 chauffeurs, 12 dagen veranderen (12 erbij).');
   await expect(vak.getByText('Testchauffeur 10', { exact: true })).toBeVisible();
   await expect(vak.getByText('Testchauffeur 11', { exact: true })).toHaveCount(0);
   const meer = vak.getByRole('button', { name: /Toon 2 meer/ });
@@ -242,22 +297,26 @@ test('een ander bestand terwijl het vorige nog rekent: alleen het antwoord van h
   let laatAntwoordVerstuurd = false;
   await page.route('**/api/planning-matrix/preview', async (route) => {
     const body = JSON.parse(route.request().postData() ?? '{}');
-    if (body.periode) {
+    if (body.periode?.van === ANDERE_VAN) {
       // De herberekening van het EERSTE bestand: komt pas terug nadat het tweede bestand er al staat.
       await vastgehouden;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...VOORBEELD, startDate: body.periode.van, generatedShifts: 111, plan: planVan('Vorig Bestand') }) });
       laatAntwoordVerstuurd = true;
       return;
     }
-    uploads += 1;
+    // Het bestand zelf, of de eerste periode die de planner kiest: meteen een
+    // antwoord, met het plan van het bestand dat er op dat moment staat.
+    if (!body.periode) uploads += 1;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...VOORBEELD, plan: planVan(uploads === 1 ? 'Eerste Bestand' : 'Tweede Bestand') }) });
   });
 
   await kiesBestand(page, KLEIN);
-  await expect(planVak(page)).toContainText('Eerste Bestand', { timeout: 15_000 });
+  await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+  await kiesPeriode(page);
+  await expect(planVak(page)).toContainText('Eerste Bestand');
   // Een andere periode: het plan van de vorige periode verdwijnt meteen.
-  const van = venster(page).getByLabel('Van', { exact: true });
-  await van.fill('02/09/2030');
+  const van = veldVan(page);
+  await van.fill(dmj(ANDERE_VAN));
   await van.press('Enter');
   await expect(planVak(page)).toContainText('Het verschil per chauffeur wordt opnieuw berekend…');
   await expect(planVak(page)).not.toContainText('Eerste Bestand');
@@ -268,7 +327,15 @@ test('een ander bestand terwijl het vorige nog rekent: alleen het antwoord van h
   await page.keyboard.press('Escape');
   await expect(venster(page)).toHaveCount(0);
   await kiesBestand(page, Buffer.from('een andere werkmap'));
-  await expect(planVak(page)).toContainText('Tweede Bestand', { timeout: 15_000 });
+  await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+  // Het nieuwe bestand begint zonder periode, ook al stond er net een (Escape
+  // wist niets), en wacht niet op de herberekening van het vorige bestand die
+  // nog altijd onderweg is: geen "Bijwerken…", geen "wordt opnieuw berekend".
+  await verwachtGeenPeriode(page);
+  await expect(venster(page).getByText('Bijwerken…')).toHaveCount(0);
+  await expect(planVak(page)).toContainText('Kies eerst de importperiode hierboven.');
+  await kiesPeriode(page);
+  await expect(planVak(page)).toContainText('Tweede Bestand');
 
   // Nu pas komt het antwoord van het eerste bestand: het raakt niets meer.
   laatLos();
@@ -276,7 +343,8 @@ test('een ander bestand terwijl het vorige nog rekent: alleen het antwoord van h
   await page.waitForTimeout(400);
   await expect(planVak(page)).toContainText('Tweede Bestand');
   await expect(venster(page)).not.toContainText('Vorig Bestand');
-  await expect(venster(page).getByLabel('Van', { exact: true })).toHaveValue('01/09/2030');
+  await expect(veldVan(page)).toHaveValue(dmj(PERIODE.van));
+  await expect(veldTot(page)).toHaveValue(dmj(PERIODE.tot));
   // En de knop wacht niet eeuwig op een herberekening die niet meer meetelt.
   await expect(importKnop(page)).toBeEnabled();
 });
@@ -285,19 +353,61 @@ test('mislukt de herberekening voor een andere periode, dan staat er geen plan v
   await openBeheerPlanning(page);
   await page.route('**/api/planning-matrix/preview', (route) => {
     const body = JSON.parse(route.request().postData() ?? '{}');
-    return body.periode
+    // Het bestand en de eerste gekozen periode slagen; de andere periode mislukt.
+    return body.periode?.van === ANDERE_VAN
       ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Import-voorbeeld maken is mislukt.' }) })
       : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...VOORBEELD, plan: PLAN }) });
   });
   await kiesBestand(page, KLEIN);
-  await expect(planVak(page)).toContainText('Testchauffeur 03', { timeout: 15_000 });
+  await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+  await kiesPeriode(page);
+  await expect(planVak(page)).toContainText('Testchauffeur 03');
 
-  const van = venster(page).getByLabel('Van', { exact: true });
-  await van.fill('02/09/2030');
+  const van = veldVan(page);
+  await van.fill(dmj(ANDERE_VAN));
   await van.press('Enter');
   await expect(planVak(page)).toContainText('Het verschil per chauffeur kon niet berekend worden.');
   await expect(planVak(page)).not.toContainText('Testchauffeur');
   await expect(planVak(page)).not.toContainText(GRENS);
+  // Beide datums staan er, maar het voorbeeld in beeld is van de vorige
+  // periode: de import blijft dicht, en het scherm zegt waarom (niet "kies
+  // eerst de periode": die is gekozen).
+  await expect(importKnop(page)).toBeDisabled();
+  await expect(geenPeriodeRegel(page)).toHaveCount(0);
+  await expect(venster(page).getByText('Het voorbeeld voor deze periode is niet berekend. Tot dan wordt er niets geïmporteerd.')).toBeVisible();
+});
+
+test('na een mislukte herberekening brengt Opnieuw berekenen het voorbeeld van de gekozen periode terug', async ({ page }) => {
+  await openBeheerPlanning(page);
+  const periodes: Array<{ van: string; tot: string }> = [];
+  let pogingen = 0;
+  await page.route('**/api/planning-matrix/preview', (route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}');
+    if (body.periode) periodes.push(body.periode);
+    if (body.periode?.van === ANDERE_VAN && (pogingen += 1) === 1) {
+      return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Import-voorbeeld maken is mislukt.' }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...VOORBEELD, plan: planVan(body.periode?.van === ANDERE_VAN ? 'Andere Periode' : 'Eerste Periode') }) });
+  });
+  await kiesBestand(page, KLEIN);
+  await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+  await kiesPeriode(page);
+  await expect(planVak(page)).toContainText('Eerste Periode');
+
+  const van = veldVan(page);
+  await van.fill(dmj(ANDERE_VAN));
+  await van.press('Enter');
+  const opnieuw = venster(page).getByRole('button', { name: 'Opnieuw berekenen' });
+  await expect(opnieuw).toBeVisible();
+  await expect(importKnop(page)).toBeDisabled();
+  // Dezelfde datum opnieuw intikken geeft niets door: zonder deze knop zat de
+  // planner vast zodra de melding met "Opnieuw proberen" weg is.
+  await van.blur();
+  await opnieuw.click();
+  await expect(planVak(page)).toContainText('Andere Periode');
+  await expect(opnieuw).toHaveCount(0);
+  await expect(importKnop(page)).toBeEnabled();
+  expect(periodes).toEqual([PERIODE, { van: ANDERE_VAN, tot: PERIODE.tot }, { van: ANDERE_VAN, tot: PERIODE.tot }]);
 });
 
 test('Opnieuw proberen van een mislukte herberekening raakt het voorbeeld van een ander bestand niet', async ({ page }) => {
@@ -306,21 +416,25 @@ test('Opnieuw proberen van een mislukte herberekening raakt het voorbeeld van ee
   let herberekeningen = 0;
   await page.route('**/api/planning-matrix/preview', (route) => {
     const body = JSON.parse(route.request().postData() ?? '{}');
-    if (body.periode) {
+    if (body.periode?.van === ANDERE_VAN) {
       herberekeningen += 1;
       // De eerste herberekening mislukt; een volgende zou het plan van het EERSTE bestand geven.
       return herberekeningen === 1
         ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Import-voorbeeld maken is mislukt.' }) })
         : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...VOORBEELD, startDate: body.periode.van, generatedShifts: 111, plan: planVan('Vorig Bestand') }) });
     }
-    uploads += 1;
+    // Het bestand zelf, of de eerste periode die de planner kiest: het plan
+    // van het bestand dat er op dat moment staat.
+    if (!body.periode) uploads += 1;
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...VOORBEELD, plan: planVan(uploads === 1 ? 'Eerste Bestand' : 'Tweede Bestand') }) });
   });
 
   await kiesBestand(page, KLEIN);
-  await expect(planVak(page)).toContainText('Eerste Bestand', { timeout: 15_000 });
-  const van = venster(page).getByLabel('Van', { exact: true });
-  await van.fill('02/09/2030');
+  await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+  await kiesPeriode(page);
+  await expect(planVak(page)).toContainText('Eerste Bestand');
+  const van = veldVan(page);
+  await van.fill(dmj(ANDERE_VAN));
   await van.press('Enter');
   const opnieuw = page.getByRole('button', { name: 'Opnieuw proberen' });
   await expect(opnieuw).toBeVisible();
@@ -330,7 +444,10 @@ test('Opnieuw proberen van een mislukte herberekening raakt het voorbeeld van ee
   await page.keyboard.press('Escape');
   await expect(venster(page)).toHaveCount(0);
   await kiesBestand(page, Buffer.from('een andere werkmap'));
-  await expect(planVak(page)).toContainText('Tweede Bestand', { timeout: 15_000 });
+  await expect(planVak(page)).toBeVisible({ timeout: 15_000 });
+  await verwachtGeenPeriode(page);
+  await kiesPeriode(page);
+  await expect(planVak(page)).toContainText('Tweede Bestand');
   await expect(opnieuw).toBeVisible();
   await opnieuw.click();
 
@@ -339,8 +456,148 @@ test('Opnieuw proberen van een mislukte herberekening raakt het voorbeeld van ee
   expect(herberekeningen).toBe(1);
   await expect(planVak(page)).toContainText('Tweede Bestand');
   await expect(venster(page)).not.toContainText('Vorig Bestand');
-  await expect(venster(page).getByLabel('Van', { exact: true })).toHaveValue('01/09/2030');
+  await expect(veldVan(page)).toHaveValue(dmj(PERIODE.van));
+  await expect(veldTot(page)).toHaveValue(dmj(PERIODE.tot));
   await expect(importKnop(page)).toBeEnabled();
+});
+
+// --- Zonder zelf gekozen periode vertrekt er geen import (eigenaar, 22-11) ----
+//
+// "Zolang ik niet expliciet aanduid … mag er niks geimporteerd worden, enkel de
+// gekozen periode." De server is hier nagebootst: de proeven tellen elke POST
+// naar /api/planning-matrix/import en lezen wat erin staat.
+
+const volgVerzoeken = async (page: Page) => {
+  const voorbeelden: Array<{ periode?: { van: string; tot: string } }> = [];
+  const imports: Array<Record<string, unknown>> = [];
+  await page.route('**/api/planning-matrix/preview', (route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}');
+    voorbeelden.push(body.periode ? { periode: body.periode } : {});
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...VOORBEELD, importedDays: body.periode ? 29 : 123, plan: PLAN }) });
+  });
+  await page.route('**/api/planning-matrix/import', (route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}');
+    imports.push(body);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ importedDays: 29, generatedShifts: 400, startDate: body.periode?.van, endDate: body.periode?.tot, unknownCodes: [], unmatchedDrivers: [] }) });
+  });
+  return { voorbeelden, imports };
+};
+
+test('na het kiezen van een bestand zijn Van en Tot en met leeg, staat de knop uit en vertrekt er geen import', async ({ page }) => {
+  await openBeheerPlanning(page);
+  const { voorbeelden, imports } = await volgVerzoeken(page);
+  await kiesBestand(page, KLEIN);
+  await expect(venster(page)).toBeVisible({ timeout: 15_000 });
+
+  await verwachtGeenPeriode(page);
+  await expect(geenPeriodeRegel(page)).toContainText('De cijfers op dit scherm gelden tot dan voor het hele bestand.');
+  // Geen plan van het hele bestand in beeld, en geen regel die doet alsof er al een periode is.
+  await expect(planVak(page)).toContainText('Kies eerst de importperiode hierboven.');
+  await expect(planVak(page).getByRole('listitem')).toHaveCount(0);
+  await expect(periodeBerekend(page)).toHaveCount(0);
+  // Een klik op de uitgeschakelde knop doet niets (de browser geeft hem niet door).
+  await importKnopElk(page).click({ force: true });
+  await page.waitForTimeout(300);
+  expect(imports).toHaveLength(0);
+  // Het voorbeeld van het bestand is één keer gevraagd, zonder periode.
+  expect(voorbeelden).toEqual([{}]);
+  await expect(venster(page)).toBeVisible();
+});
+
+test('met alleen Van of alleen Tot en met blijft de import dicht', async ({ page }) => {
+  await openBeheerPlanning(page);
+  const { voorbeelden, imports } = await volgVerzoeken(page);
+  await kiesBestand(page, KLEIN);
+  await expect(venster(page)).toBeVisible({ timeout: 15_000 });
+
+  await typDatum(veldVan(page), PERIODE.van);
+  await expect(veldVan(page)).toHaveValue(dmj(PERIODE.van));
+  await expect(veldTot(page)).toHaveValue('');
+  await expect(geenPeriodeRegel(page)).toBeVisible();
+  await expect(importKnopElk(page)).toHaveText('Kies eerst de periode');
+  await expect(importKnopElk(page)).toBeDisabled();
+
+  // Omgekeerd: alleen Tot en met.
+  await typDatum(veldVan(page), '');
+  await typDatum(veldTot(page), PERIODE.tot);
+  await expect(veldVan(page)).toHaveValue('');
+  await expect(veldTot(page)).toHaveValue(dmj(PERIODE.tot));
+  await expect(geenPeriodeRegel(page)).toBeVisible();
+  await expect(importKnopElk(page)).toHaveText('Kies eerst de periode');
+  await expect(importKnopElk(page)).toBeDisabled();
+  await expect(planVak(page)).toContainText('Kies eerst de importperiode hierboven.');
+
+  await importKnopElk(page).click({ force: true });
+  await page.waitForTimeout(300);
+  expect(imports).toHaveLength(0);
+  // Een halve periode vraagt ook geen nieuw voorbeeld.
+  expect(voorbeelden).toEqual([{}]);
+});
+
+test('met beide datums gaat de knop aan en draagt de import precies de periode van de velden', async ({ page }) => {
+  await openBeheerPlanning(page);
+  const { voorbeelden, imports } = await volgVerzoeken(page);
+  await kiesBestand(page, KLEIN);
+  await expect(venster(page)).toBeVisible({ timeout: 15_000 });
+  await verwachtGeenPeriode(page);
+
+  await kiesPeriode(page);
+  await expect(geenPeriodeRegel(page)).toHaveCount(0);
+  await expect(periodeBerekend(page)).toContainText('29 dagen geselecteerd.');
+  await expect(planVak(page)).toContainText('3 chauffeurs, 4 dagen veranderen');
+  await expect(importKnopElk(page)).toHaveText('Vervang deze periode');
+  await expect(importKnop(page)).toBeEnabled();
+  // Het voorbeeld in beeld is voor dezelfde periode gevraagd.
+  expect(voorbeelden).toEqual([{}, { periode: PERIODE }]);
+  expect(imports).toHaveLength(0);
+
+  // Een veld weer leegmaken sluit de import opnieuw, en de regel zegt over
+  // welke periode de cijfers in beeld dan nog gaan (niet meer het hele bestand).
+  await typDatum(veldTot(page), '');
+  await expect(importKnopElk(page)).toHaveText('Kies eerst de periode');
+  await expect(importKnopElk(page)).toBeDisabled();
+  await expect(geenPeriodeRegel(page)).toContainText('De cijfers op dit scherm gelden tot dan voor 02/09/2030 t/m 30/09/2030.');
+  await expect(planVak(page)).toContainText('Kies eerst de importperiode hierboven.');
+  await typDatum(veldTot(page), PERIODE.tot);
+  await expect(periodeBerekend(page)).toBeVisible();
+  await expect(importKnop(page)).toBeEnabled();
+  await expect.poll(() => voorbeelden).toEqual([{}, { periode: PERIODE }, { periode: PERIODE }]);
+
+  await importKnop(page).click();
+  await expect(venster(page)).toHaveCount(0);
+  expect(imports).toHaveLength(1);
+  expect(imports[0].periode).toEqual({ van: PERIODE.van, tot: PERIODE.tot });
+  expect(imports[0].filename).toBe('Dienstregeling test.xls');
+  await expect(page.getByRole('status').filter({ hasText: 'Matrixplanning geïmporteerd' })).toContainText('02/09/2030 t/m 30/09/2030 vervangen');
+});
+
+test('Annuleren of Escape en hetzelfde bestand opnieuw kiezen: de periode is weer leeg', async ({ page }) => {
+  await openBeheerPlanning(page);
+  const { voorbeelden, imports } = await volgVerzoeken(page);
+  await kiesBestand(page, KLEIN);
+  await expect(venster(page)).toBeVisible({ timeout: 15_000 });
+  await kiesPeriode(page);
+  await expect(importKnop(page)).toBeEnabled();
+
+  await venster(page).getByRole('button', { name: 'Annuleren' }).click();
+  await expect(venster(page)).toHaveCount(0);
+  await kiesBestand(page, KLEIN);
+  await expect(venster(page)).toBeVisible({ timeout: 15_000 });
+  await verwachtGeenPeriode(page);
+  await expect(planVak(page)).toContainText('Kies eerst de importperiode hierboven.');
+
+  // Escape wist niets bij het sluiten; het volgende bestand begint toch leeg.
+  await kiesPeriode(page);
+  await expect(importKnop(page)).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await expect(venster(page)).toHaveCount(0);
+  await kiesBestand(page, KLEIN);
+  await expect(venster(page)).toBeVisible({ timeout: 15_000 });
+  await verwachtGeenPeriode(page);
+
+  // Elk bestand is zonder periode gevraagd, en er is niets geïmporteerd.
+  expect(voorbeelden).toEqual([{}, { periode: PERIODE }, {}, { periode: PERIODE }, {}]);
+  expect(imports).toHaveLength(0);
 });
 
 // --- Het herstel van een import noemt overal hetzelfde moment (ronde 6, punt 8, deel 3) ---
