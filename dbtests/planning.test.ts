@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../api/_lib/db';
-import { getPlanningData, getPlanningMatrixRows, replacePlanningAndMatrix, replacePlanningData } from '../api/_lib/storage';
+import { clearPlanningData, getPlanningData, getPlanningHorizon, getPlanningMatrixGrenzen, getPlanningMatrixRows, replacePlanningAndMatrix, replacePlanningData, savePlanningCodesData } from '../api/_lib/storage';
 import { dienst, leegDatabase, matrixRij, planningKort, planningVersie } from './hulp';
 
 beforeEach(leegDatabase);
@@ -97,5 +97,93 @@ describe('replacePlanningAndMatrix (periode-import)', () => {
     expect(await planningKort()).toEqual(['2026-10-30 2501 c1', '2026-10-31 2501 c1']);
     const { data } = await db!.from('planning_matrix_rows').select('assignments').order('source_date');
     expect(data).toEqual([{ assignments: { c1: '2501' } }, { assignments: { c1: '2501' } }]);
+  });
+});
+
+/**
+ * De grens van de planning (Jarno 22-11): de laatste matrixdag met minstens
+ * één dienst. Lege dagen en dagen met alleen afwezigheid op het einde van de
+ * matrix tellen niet. Hier de echte lezingen: de sortering op een datumkolom
+ * en op de tekstkolom `planning.date`, het filter "na de laatste planningdag"
+ * en de jsonb-cellen zoals PostgREST ze teruggeeft.
+ */
+describe('getPlanningHorizon en getPlanningMatrixGrenzen', () => {
+  const code = (c: string, category: 'service' | 'absence' | 'leave') => ({
+    code: c, category, description: c, countsAsShift: category === 'service', isPaidAbsence: category === 'leave', isDayOff: false,
+  });
+  // Elke test begint met een save van de planningscodes: die wist ook wat de
+  // opslaglaag van een vorige test onthield.
+  const codes = () => savePlanningCodesData([code('bv', 'leave'), code('ziek', 'absence'), code('eek1', 'service')]);
+  const dagNa = (n: number) => new Date(Date.UTC(2027, 0, 3 + n)).toISOString().slice(0, 10);
+  const beide = async () => ({ horizon: await getPlanningHorizon(), grenzen: await getPlanningMatrixGrenzen() });
+
+  it('planning tot 03/01, lege rijen en afwezigheid tot 31/01: de grens is 03/01 voor rooster en maandplanning', async () => {
+    await codes();
+    const staart = Array.from({ length: 28 }, (_, i) => matrixRij(dagNa(i + 1), i % 3 === 0 ? {} : i % 3 === 1 ? { c1: '', c2: ' ' } : { c1: 'BV', c2: 'ziek' }));
+    await replacePlanningAndMatrix(
+      [matrixRij('2026-12-30', { c1: '2501' }), matrixRij('2027-01-03', { c1: '2501', c2: 'bv' }), ...staart],
+      [
+        dienst({ id: 'd-30', date: '2026-12-30', line: '2501', driverId: 'c1' }),
+        dienst({ id: 'd-03', date: '2027-01-03', line: '2501', driverId: 'c1' }),
+      ],
+    );
+    expect(await beide()).toEqual({ horizon: '2027-01-03', grenzen: { eerste: '2026-12-30', laatste: '2027-01-03' } });
+  });
+
+  it('een code-dienst zonder rijen in de planning na de laatste planningdag telt wel', async () => {
+    await codes();
+    await replacePlanningAndMatrix(
+      [matrixRij('2027-01-03', { c1: '2501' }), matrixRij('2027-01-04', { c1: 'bv' }), matrixRij('2027-01-05', { c1: 'bv', c2: 'EEK1' }), matrixRij('2027-01-06', {})],
+      [dienst({ id: 'd-03', date: '2027-01-03', line: '2501', driverId: 'c1' })],
+    );
+    expect(await beide()).toEqual({ horizon: '2027-01-05', grenzen: { eerste: '2027-01-03', laatste: '2027-01-05' } });
+  });
+
+  it('gewone toestand: op de laatste matrixdag staat een dienst', async () => {
+    await codes();
+    await replacePlanningAndMatrix(
+      [matrixRij('2027-01-02', { c1: '2501' }), matrixRij('2027-01-03', { c1: '2501' })],
+      [dienst({ id: 'd-02', date: '2027-01-02', line: '2501', driverId: 'c1' }), dienst({ id: 'd-03', date: '2027-01-03', line: '2501', driverId: 'c1' })],
+    );
+    expect(await beide()).toEqual({ horizon: '2027-01-03', grenzen: { eerste: '2027-01-02', laatste: '2027-01-03' } });
+  });
+
+  it('een staart langer dan één lezing wordt in stukken gelezen', async () => {
+    await codes();
+    // 50 dagen na de laatste planningdag, de schoolrit op dag 5: pas in de tweede lezing.
+    const staart = Array.from({ length: 50 }, (_, i) => matrixRij(dagNa(i + 1), i === 4 ? { c2: 'eek1' } : { c1: 'bv' }));
+    await replacePlanningAndMatrix(
+      [matrixRij('2027-01-03', { c1: '2501' }), ...staart],
+      [dienst({ id: 'd-03', date: '2027-01-03', line: '2501', driverId: 'c1' })],
+    );
+    expect((await beide()).horizon).toBe(dagNa(5));
+  });
+
+  it('een planningrij zonder datum telt niet als "geen planning"', async () => {
+    await codes();
+    await replacePlanningAndMatrix(
+      [matrixRij('2027-01-03', { c1: '2501' }), matrixRij('2027-01-04', {})],
+      [dienst({ id: 'd-03', date: '2027-01-03', line: '2501', driverId: 'c1' })],
+    );
+    const { error } = await db!.from('planning').insert({ id: 'zonder-datum', driverId: 'c1', line: '2501', startTime: '06:00', endTime: '14:00' });
+    expect(error).toBeNull();
+    expect(await beide()).toEqual({ horizon: '2027-01-03', grenzen: { eerste: '2027-01-03', laatste: '2027-01-03' } });
+  });
+
+  it('planning gewist terwijl de matrix er staat: de grens van vroeger, niet de laatste schoolrit', async () => {
+    await codes();
+    await replacePlanningAndMatrix(
+      [matrixRij('2026-12-18', { c1: '2501', c2: 'EEK1' }), matrixRij('2026-12-19', { c1: '2501' }), matrixRij('2027-01-03', { c1: '2501' })],
+      [dienst({ id: 'd-18', date: '2026-12-18', line: '2501', driverId: 'c1' })],
+    );
+    await clearPlanningData();
+    expect(await beide()).toEqual({ horizon: '2027-01-03', grenzen: { eerste: '2026-12-18', laatste: '2027-01-03' } });
+  });
+
+  it('zonder matrix: de laatste opgebouwde dienst als horizon, geen grenzen; helemaal leeg: niets', async () => {
+    await codes();
+    expect(await beide()).toEqual({ horizon: null, grenzen: { eerste: null, laatste: null } });
+    await replacePlanningData([dienst({ id: 'los', date: '2026-12-20', line: '2501', driverId: 'c1' })]);
+    expect(await beide()).toEqual({ horizon: '2026-12-20', grenzen: { eerste: null, laatste: null } });
   });
 });

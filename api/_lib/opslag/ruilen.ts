@@ -2,6 +2,7 @@ import type { ShiftRecord, SwapRecord } from "../types.js";
 import { toDatabaseSwap, toPublicSwap } from "../helpers.js";
 import { IN_FILTER_MAX, inStukken, verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
+import { getPlanningGrens } from "./planning.js";
 import { OPEN_RUIL_STATUSSEN } from "../../../shared/ruilVenster.js";
 
 // --- Swaps ---
@@ -112,24 +113,27 @@ export const getSwapsArchief = async (f: SwapArchiefFilter & { vanaf: number; aa
 
 /** Alleen de gevraagde wissels — het weekoverzicht heeft er een handvol nodig
  *  en hoefde daarvoor niet de hele tabel te lezen. */
-/** Eerste en laatste dag waarvoor er planning geïmporteerd is (grenzen van
- *  planning_matrix_rows). De maandplanning stopt daarop: voorbij de import is
- *  er niets te zien en een leeg bord leest als "er staat niemand ingepland"
- *  in plaats van "hier is nog niets geïmporteerd" (Jarno 18-09). */
+/** De grenzen van de geïmporteerde planning. De maandplanning stopt daarop:
+ *  voorbij de planning is er niets te zien en een leeg bord leest als "er
+ *  staat niemand ingepland" in plaats van "hier is nog niets geïmporteerd"
+ *  (Jarno 18-09). `eerste` = de eerste rij van planning_matrix_rows;
+ *  `laatste` = de laatste matrixdag met minstens één dienst, dezelfde dag als
+ *  de horizon van het rooster (`getPlanningGrens`, Jarno 22-11: lege dagen en
+ *  dagen met alleen afwezigheid op het einde tellen niet). */
 export const getPlanningMatrixGrenzen = async (): Promise<{ eerste: string | null; laatste: string | null }> => {
   const client = requireDb();
-  const rand = async (ascending: boolean) => {
+  const eersteRij = async () => {
     const { data, error } = await client
       .from('planning_matrix_rows')
       .select('source_date')
-      .order('source_date', { ascending })
+      .order('source_date', { ascending: true })
       .limit(1);
     if (error) throw error;
     const rij = (data ?? [])[0] as { source_date?: string } | undefined;
     return rij?.source_date ? String(rij.source_date) : null;
   };
-  const [eerste, laatste] = await Promise.all([rand(true), rand(false)]);
-  return { eerste, laatste };
+  const [eerste, grens] = await Promise.all([eersteRij(), getPlanningGrens()]);
+  return { eerste, laatste: grens.laatste };
 };
 
 /** De ruilen waarvan de dienst op een dag in [van, tot] valt (ruiloverzicht

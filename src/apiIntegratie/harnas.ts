@@ -419,6 +419,20 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
   const dr = await import('../../shared/dienstregeling');
   const dt = await import('../../shared/dagtype');
   const dk = await import('../../shared/dagtypeKalender');
+  // De grens van de planning (22-11): de échte beslissing (api/_lib/planningGrens.ts)
+  // op de mem-store, met dezelfde vier lezingen als de opslaglaag.
+  const { bepaalPlanningGrens, dienstCodeTokens, horizonUitGrens } = await import('../../api/_lib/planningGrens');
+  const laatsteDag = (dagen: unknown[]) => dagen.map((d) => String(d ?? '')).filter(Boolean).sort().pop() ?? null;
+  const planningGrensMock = () => bepaalPlanningGrens({
+    matrixLaatste: async () => laatsteDag(mem.planningMatrix.map((r: any) => r.source_date)),
+    planningLaatste: async () => laatsteDag(mem.planning.map((r: any) => r.date)),
+    staart: async (na, vanaf, aantal) => mem.planningMatrix
+      .filter((r: any) => !na || String(r.source_date ?? '') > na)
+      .sort((a: any, b: any) => String(b.source_date ?? '').localeCompare(String(a.source_date ?? '')))
+      .slice(vanaf, vanaf + aantal),
+    dienstCodes: async () => dienstCodeTokens(mem.planningCodes),
+    waarschuw: () => {},
+  });
   // De dagtypekalender uit de dekkingsconfig én de kalenderrijen van de mem-store (10-10, 11-10).
   const kalenderMock = () => ({ ...dt.kalenderUitDekking(mem.coverageExpectations ?? {}), perDag: dk.perDagVan(mem.dagtypeKalender ?? []) });
   const vandaagMock = () => new Date().toISOString().slice(0, 10);
@@ -674,11 +688,7 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
       return { offeredMoved, returnMoved };
     },
     // Horizon: matrix wint, anders de opgebouwde planning (zoals de echte).
-    getPlanningHorizon: async () => {
-      const uitMatrix = mem.planningMatrix.map((r: any) => String(r.source_date ?? '')).filter((d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop();
-      if (uitMatrix) return uitMatrix;
-      return mem.planning.map((r: any) => String(r.date ?? '')).filter((d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop() ?? null;
-    },
+    getPlanningHorizon: async () => horizonUitGrens(await planningGrensMock()),
     getPlanningData: async (f?: { driverId?: string; monthIso?: string }) => {
       mem.planningMaandFilters.push(f?.monthIso ?? null);
       mem.planningLezingen += 1;
@@ -970,7 +980,7 @@ vi.mock('../../api/_lib/storage.js', async (importOriginal) => {
     },
     getPlanningMatrixGrenzen: async () => {
       const dagen = mem.planningMatrix.map((r: any) => String(r.source_date ?? '')).filter(Boolean).sort();
-      return { eerste: dagen[0] ?? null, laatste: dagen[dagen.length - 1] ?? null };
+      return { eerste: dagen[0] ?? null, laatste: (await planningGrensMock()).laatste };
     },
     // Sinds de golden import-keten-suite (01-09) draait hier de ÉCHTE
     // opbouw-kern (bouwPlanningUitMatrix, pure functie) op de mem-store —

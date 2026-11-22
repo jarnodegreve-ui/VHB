@@ -10,6 +10,7 @@ import { supabaseAdmin } from "../db.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { BACKUPS_BUCKET } from "./backups.js";
 import { isEchteIsoDag, isMissingDbFunction, paginatedFetch, requireDb } from "./basis.js";
+import { bepaalPlanningGrens, dienstCodeTokens, horizonUitGrens, type PlanningGrens, type StaartRij } from "../planningGrens.js";
 
 // --- Planning ---
 
@@ -34,31 +35,95 @@ export const getPlanningData = async (filters?: PlanningFilters) => {
   });
 };
 
+// De planningscodes van de categorie dienst, voor de grens van de planning.
+// Kort onthouden per instantie: de grens wordt bij elke opstart van elke
+// gebruiker gevraagd en de lijst wijzigt zelden. Een save van de
+// planningscodes wist ze (op deze instantie; een andere volgt binnen de TTL).
+const DIENSTCODES_TTL_MS = 60_000;
+let dienstCodesOnthouden: { tokens: ReadonlySet<string>; tot: number } | null = null;
+const vergeetDienstCodes = () => { dienstCodesOnthouden = null; };
+
+const leesDienstCodes = async (): Promise<ReadonlySet<string>> => {
+  if (dienstCodesOnthouden && Date.now() < dienstCodesOnthouden.tot) return dienstCodesOnthouden.tokens;
+  const client = requireDb();
+  const { data, error } = await client.from('planning_codes').select('code,category').eq('category', 'service');
+  if (error) throw error;
+  const tokens = dienstCodeTokens((data ?? []) as Array<{ code?: unknown; category?: unknown }>);
+  dienstCodesOnthouden = { tokens, tot: Date.now() + DIENSTCODES_TTL_MS };
+  return tokens;
+};
+
+/** De laatste planningrij met een datum: een achterwaartse lezing van `planning_date_idx`. */
+const laatstePlanningDag = (client: ReturnType<typeof requireDb>) =>
+  client.from('planning').select('date').not('date', 'is', null).order('date', { ascending: false }).limit(1);
+
 /**
- * Tot wanneer reikt de planning in het portaal? De geïmporteerde matrix is de
- * bron: die bepaalt tot welke dag de planning bekend is, ook als er op de
- * laatste dagen toevallig niemand rijdt. Staat de matrix er (nog) niet, dan
- * valt hij terug op de laatste dag waarvoor een dienst is opgebouwd.
+ * De grens van de planning: de laatste matrixdag met minstens één dienst
+ * (Jarno 22-11; regel en uitleg in api/_lib/planningGrens.ts). Eén bron voor
+ * `getPlanningHorizon` (x-planning-tot) en `getPlanningMatrixGrenzen`
+ * (geimporteerd.laatste).
  *
- * Eén rij, op de bestaande index `planning_matrix_rows_source_date_idx`.
- * null = geen planning (leeg portaal, of de tabel bestaat nog niet).
+ * Kosten: twee lezingen van één rij (laatste matrixdag op
+ * `planning_matrix_rows_source_date_idx`, laatste planningdag op
+ * `planning_date_idx`), samen vertrokken. Allebei een gewone aflopende
+ * sortering, zodat Postgres de index achterwaarts kan lezen; `NULLS LAST` bij
+ * aflopend past op geen van beide indexen en vraagt een sortering van de
+ * hele tabel. Alleen als de matrix verder loopt
+ * dan de planning komt daar de staart bij: de matrixrijen ná de laatste
+ * planningdag, met alleen `source_date` en `assignments`, in stukken van
+ * STAART_STUK tot hoogstens STAART_MAX_STUKKEN.
+ */
+export const getPlanningGrens = async (): Promise<PlanningGrens> => {
+  const client = requireDb();
+  return bepaalPlanningGrens({
+    // `source_date` is not null: de laatste rij van de index.
+    matrixLaatste: async () => {
+      const { data, error } = await client.from('planning_matrix_rows').select('source_date').order('source_date', { ascending: false }).limit(1);
+      if (error) throw error;
+      return data?.[0]?.source_date ?? null;
+    },
+    // `planning.date` is een tekstkolom in ISO-vorm: lexicografisch sorteren
+    // geeft daar dezelfde volgorde als chronologisch. De kolom mag leeg zijn
+    // en Postgres zet null bij aflopend sorteren vooraan: één zo'n rij las
+    // anders als "geen planning". Uitgesloten met een filter, niet met de
+    // sorteerrichting (zie de kosten hierboven).
+    planningLaatste: async () => {
+      const { data, error } = await laatstePlanningDag(client);
+      if (error) throw error;
+      return data?.[0]?.date ?? null;
+    },
+    staart: async (na, vanaf, aantal) => {
+      // `id` erbij: een vaste volgorde, ook als twee rijen dezelfde dag dragen.
+      const { data, error } = await client.from('planning_matrix_rows').select('source_date,assignments').gt('source_date', na)
+        .order('source_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(vanaf, vanaf + aantal - 1);
+      if (error) throw error;
+      return (data ?? []) as StaartRij[];
+    },
+    dienstCodes: leesDienstCodes,
+  });
+};
+
+/**
+ * Tot wanneer reikt de planning in het portaal? De laatste dag van de
+ * geïmporteerde matrix waarop minstens één dienst staat: lege dagen en dagen
+ * met alleen afwezigheid op het einde van de matrix tellen niet (Jarno 22-11).
+ * Staat de matrix er (nog) niet of is ze niet te lezen, dan valt hij terug op
+ * de laatste dag waarvoor een dienst is opgebouwd.
+ *
+ * null = geen planning (leeg portaal of de tabel bestaat nog niet). Staat de
+ * matrix er zonder één opgebouwde dienst, dan is het de laatste matrixrij,
+ * zoals vóór 22-11.
  */
 export const getPlanningHorizon = async (): Promise<string | null> => {
   const client = requireDb();
-  const uitMatrix = await client
-    .from('planning_matrix_rows')
-    .select('source_date')
-    .order('source_date', { ascending: false })
-    .limit(1);
-  const matrixDag = String(uitMatrix.data?.[0]?.source_date ?? '').slice(0, 10);
-  if (!uitMatrix.error && /^\d{4}-\d{2}-\d{2}$/.test(matrixDag)) return matrixDag;
-  // `planning.date` is een tekstkolom in ISO-vorm: lexicografisch sorteren
-  // geeft daar dezelfde volgorde als chronologisch.
-  const uitPlanning = await client
-    .from('planning')
-    .select('date')
-    .order('date', { ascending: false })
-    .limit(1);
+  try {
+    return horizonUitGrens(await getPlanningGrens());
+  } catch {
+    // Matrix niet leesbaar: de terugval hieronder, zoals vroeger.
+  }
+  const uitPlanning = await laatstePlanningDag(client);
   if (uitPlanning.error) throw uitPlanning.error;
   const planningDag = String(uitPlanning.data?.[0]?.date ?? '').slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(planningDag) ? planningDag : null;
@@ -325,6 +390,8 @@ export const getPlanningCodesData = async (): Promise<PlanningCodeRecord[]> => {
 
 export const savePlanningCodesData = async (codes: PlanningCodeRecord[]) => {
   const client = requireDb();
+  // Ook bij een save die halverwege strandt: liever één lezing te veel.
+  vergeetDienstCodes();
   const normalizedCodes = codes
     .map(toPublicPlanningCode)
     .filter((code) => code.code.length > 0);
