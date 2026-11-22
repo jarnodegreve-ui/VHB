@@ -55,7 +55,11 @@ const bord = (maand: string) => {
       u.id,
       Object.fromEntries(dates.map((d, k) => [d, { code: String(2101 + ((i + k) % 30)), kind: 'service', label: '', segments: ['05:30 - 13:45'] }])),
     ])),
-    geimporteerd: { eerste: dates[0], laatste: dates[dates.length - 1] },
+    // Zoals de server: één grens voor het hele bord, niet per maand. Met het
+    // einde van de gevraagde maand als `laatste` waren de kolommen van de
+    // volgende maand in een venster over de maandgrens sinds de planning-grens
+    // (22-11) leeg, en hing toetssteen 4 (kolom 6) af van de datum.
+    geimporteerd: { eerste: dates[0], laatste: '2099-12-31' },
   };
 };
 const metBord = (pad: string, request: Request) => (
@@ -344,4 +348,93 @@ test.describe('toetssteen 4: klik en tik openen het celdetail zoals vandaag, en 
       }
     });
   }
+});
+
+/**
+ * Planning-grens (Jarno 22-11: "na 3 januari kan er wel gebladerd worden omdat
+ * er verlof instaat"): kolommen na de laatste geïmporteerde dag tonen niets,
+ * ook geen verlof, en openen geen celdetail; de kolomkop blijft staan. De
+ * telefoonkant en het Rooster staan in e2e/planning-grens.spec.ts; het raster
+ * staat hier omdat dit bestand in het desktopproject draait. Vaste klok en een
+ * eigen bord, zodat de proef niet van vandaag afhangt.
+ */
+test.describe('planning-grens: het raster toont niets na de laatste geïmporteerde dag', () => {
+  const LAATSTE = '2027-01-03';
+  const DRIE = RIJDERS.slice(0, 3);
+  /** Elke chauffeur rijdt elke dag; de eerste heeft vanaf 4 januari verlof (de cel-waarheid legt dat over een lege cel). */
+  const grensBord = (maand: string, metGrens: boolean) => {
+    const dates = dagenVan(maand);
+    return {
+      month: maand,
+      dates,
+      drivers: DRIE.map((u) => ({ ...u, section: null })),
+      cells: Object.fromEntries(DRIE.map((u, i) => [
+        u.id,
+        Object.fromEntries(dates.map((d): [string, unknown] => [d, d > LAATSTE
+          ? (i === 0 ? { code: 'bv', kind: 'leave', label: 'Betaald verlof', segments: [] } : null)
+          : { code: String(2101 + i), kind: 'service', label: '', segments: ['05:30 - 13:45'] }]).filter(([, c]) => c)),
+      ])),
+      ...(metGrens ? { geimporteerd: { eerste: '2026-01-01', laatste: LAATSTE } } : {}),
+    };
+  };
+  async function openGrens(page: Page, nu: string, metGrens: boolean) {
+    await page.clock.setFixedTime(new Date(nu));
+    await seed(page, {
+      user: ADMIN, view: 'bezetting', thema: 'light',
+      extra: (pad, request) => (
+        request.method() === 'GET' && pad.endsWith('/api/month-planning') && !new URL(request.url()).searchParams.get('format')
+          ? grensBord(new URL(request.url()).searchParams.get('month') ?? '', metGrens)
+          : undefined
+      ),
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/maandplanning/2027-01');
+    await expect(page.locator(RASTER)).toBeVisible({ timeout: 15_000 });
+  }
+  const koppen = (page: Page) => page.locator(RASTER).getByRole('columnheader').filter({ hasNotText: 'Chauffeur' });
+  const rij = (page: Page, naam: string) => page.locator(RASTER).getByRole('row').filter({ has: page.getByRole('rowheader', { name: naam, exact: true }) });
+
+  // Begin en midden van de maand vóór de grens: het venster van januari begint telkens op maandag 28/12.
+  for (const nu of ['2026-12-01T09:00:00Z', '2026-12-15T09:00:00Z']) {
+    test(`kolommen na 03/01 zijn leeg en openen niets (klok ${nu.slice(0, 10)})`, async ({ page }, info) => {
+      alleenIn(info, DESKTOP);
+      await openGrens(page, nu, true);
+      // Het venster verschuift niet anders dan vroeger: 14 koppen, van maandag 28/12 tot zondag 10/01.
+      await expect(koppen(page)).toHaveCount(14);
+      await expect(koppen(page).first()).toContainText('maandag 28 december');
+      await expect(koppen(page).last()).toContainText('zondag 10 januari');
+      // De koppen na de grens blijven staan en zeggen waarom ze leeg zijn; die ervoor niet.
+      await expect(koppen(page).nth(6)).toContainText('zondag 3 januari');
+      await expect(koppen(page).nth(6)).not.toContainText('nog geen planning');
+      for (let k = 7; k < 14; k++) await expect(koppen(page).nth(k)).toContainText('nog geen planning');
+      // Zeven cellen per rij (28/12 tot 03/01); het verlof van de eerste chauffeur na de grens staat er niet.
+      for (const u of DRIE) await expect(rij(page, u.name).getByRole('button')).toHaveCount(7);
+      await expect(page.locator(RASTER).getByRole('button', { name: 'bv' })).toHaveCount(0);
+      // Een klik in een kolom na de grens opent geen celdetail en schrijft niets.
+      const schrijf = schrijfacties(page);
+      const leeg = rij(page, DRIE[0].name).getByRole('cell').nth(9);
+      await expect(leeg).toHaveText('');
+      const punt = await midden(leeg);
+      await page.mouse.click(punt.x, punt.y);
+      await page.waitForTimeout(300);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      expect(schrijf).toEqual([]);
+      // Verder vooruit kan niet (ongewijzigd), terug wel.
+      await expect(page.getByRole('button', { name: 'Volgende 2 weken' })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Vorige 2 weken' })).toBeEnabled();
+      // Een cel vóór de grens opent zoals altijd.
+      await rij(page, DRIE[0].name).getByRole('button').nth(6).click();
+      await expect(celdetail(page, DRIE[0].name)).toBeVisible();
+    });
+  }
+
+  test('zonder grens van de server verandert er niets: elke kolom toont zijn cel, ook het verlof', async ({ page }, info) => {
+    alleenIn(info, DESKTOP);
+    await openGrens(page, '2026-12-15T09:00:00Z', false);
+    await expect(koppen(page)).toHaveCount(14);
+    for (let k = 0; k < 14; k++) await expect(koppen(page).nth(k)).not.toContainText('nog geen planning');
+    await expect(rij(page, DRIE[0].name).getByRole('button')).toHaveCount(14);
+    await expect(rij(page, DRIE[0].name).getByRole('button', { name: 'bv' })).toHaveCount(7);
+    await expect(page.getByRole('button', { name: 'Volgende 2 weken' })).toBeEnabled();
+  });
 });

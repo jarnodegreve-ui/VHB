@@ -40,22 +40,30 @@ export type MaandVeeg = {
  * scroll en de pull-to-refresh op de scroll-container ongemoeid blijven
  * (die laat op haar beurt horizontale bewegingen los). Alleen op touch.
  * Reduced motion: geen meebewegen, wel de actie op de drempel.
+ *
+ * `kanVolgende: false` (ronde 6, planning-grens) blokkeert alleen de richting
+ * vooruit: een veeg naar links veert dan mee en komt terug zoals onder de
+ * drempel, zonder `onVolgende`; terug blijft werken. Anders dan `enabled`,
+ * dat de hele veeg uitzet.
  */
-export function useMaandVeeg({ onVorige, onVolgende, enabled = true }: {
+export function useMaandVeeg({ onVorige, onVolgende, enabled = true, kanVolgende = true }: {
   onVorige: () => void;
   onVolgende: () => void;
   enabled?: boolean;
+  /** Mag er nog een maand vooruit? Standaard ja. */
+  kanVolgende?: boolean;
 }): MaandVeeg {
   const ref = useRef<HTMLDivElement | null>(null);
   const reduced = useReducedMotion() ?? false;
   const [wissel, setWissel] = useState<{ richting: VeegRichting; viaVeeg: boolean }>({ richting: 1, viaVeeg: false });
-  const callbacks = useRef({ onVorige, onVolgende });
-  callbacks.current = { onVorige, onVolgende };
+  const callbacks = useRef({ onVorige, onVolgende, kanVolgende });
+  callbacks.current = { onVorige, onVolgende, kanVolgende };
 
   // Richting en callback in dezelfde tick: React bundelt beide updates, dus
   // de wissel-animatie ziet de nieuwe richting in dezelfde render als de
   // nieuwe maand.
   const wisselNaar = useCallback((richting: VeegRichting, viaVeeg: boolean) => {
+    if (richting === 1 && !callbacks.current.kanVolgende) return;
     setWissel({ richting, viaVeeg });
     if (richting === 1) callbacks.current.onVolgende();
     else callbacks.current.onVorige();
@@ -121,7 +129,7 @@ export function useMaandVeeg({ onVorige, onVolgende, enabled = true }: {
       tracking = false;
       slepen = false;
       const richting: VeegRichting = dx < 0 ? 1 : -1;
-      if (Math.abs(dx) < VEEG_DREMPEL) {
+      if (Math.abs(dx) < VEEG_DREMPEL || (richting === 1 && !callbacks.current.kanVolgende)) {
         // Terugveren: ease uit, niets dat nazwaait.
         paint(0, 'transform var(--duration-fast) var(--ease-standard)');
         offset = 0;

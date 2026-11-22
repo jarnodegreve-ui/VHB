@@ -17,8 +17,11 @@ let laatste: MaandVeeg | null = null;
 const onVorige = vi.fn();
 const onVolgende = vi.fn();
 
+/** Mag er vooruit? De proeven van de grens zetten dit uit en renderen opnieuw. */
+let kanVolgende: boolean | undefined;
+
 function Harnas() {
-  laatste = useMaandVeeg({ onVorige, onVolgende });
+  laatste = useMaandVeeg({ onVorige, onVolgende, kanVolgende });
   return <div ref={laatste.ref} data-testid="veeg" style={{ width: 300 }} />;
 }
 
@@ -42,6 +45,7 @@ function sleep(dx: number, dy: number) {
 }
 
 beforeEach(async () => {
+  kanVolgende = undefined;
   vi.useFakeTimers();
   onVorige.mockReset();
   onVolgende.mockReset();
@@ -139,5 +143,53 @@ describe('useMaandVeeg', () => {
     await act(async () => { laatste!.volgende(); });
     expect(onVolgende).toHaveBeenCalledTimes(1);
     expect(laatste!.richting).toBe(1);
+  });
+
+  describe('grens vooruit (kanVolgende: false)', () => {
+    const zetGrens = async (waarde: boolean) => {
+      kanVolgende = waarde;
+      await act(async () => { root!.render(<Harnas />); });
+    };
+
+    it('een veeg naar links voorbij de drempel veert mee en komt terug, zonder wissel', async () => {
+      await zetGrens(false);
+      touch('touchstart', 0, 0);
+      touch('touchmove', -(VEEG_DREMPEL + 40), 2);
+      // De kaart veert mee, zoals bij elke veeg.
+      expect(el().style.transform).toMatch(/translateX\(-/);
+      await act(async () => { touch('touchend', -(VEEG_DREMPEL + 40), 2); vi.advanceTimersByTime(400); });
+      expect(onVolgende).not.toHaveBeenCalled();
+      expect(onVorige).not.toHaveBeenCalled();
+      // Terug op zijn plaats, met de rustige curve van "onder de drempel", niet vervaagd.
+      expect(el().style.transform).toBe('');
+      expect(el().style.opacity).toBe('');
+      expect(el().style.transition).toContain('var(--ease-standard)');
+      expect(laatste!.viaVeeg).toBe(false);
+    });
+
+    it('terug vegen blijft werken', async () => {
+      await zetGrens(false);
+      await act(async () => { sleep(VEEG_DREMPEL + 20, -3); vi.advanceTimersByTime(200); });
+      expect(onVorige).toHaveBeenCalledTimes(1);
+      expect(laatste!.richting).toBe(-1);
+    });
+
+    it('de pijl Volgende doet niets en laat de richting staan, Vorige wel', async () => {
+      await zetGrens(false);
+      await act(async () => { laatste!.vorige(); });
+      await act(async () => { laatste!.volgende(); });
+      expect(onVolgende).not.toHaveBeenCalled();
+      expect(onVorige).toHaveBeenCalledTimes(1);
+      expect(laatste!.richting).toBe(-1);
+    });
+
+    it('de grens volgt de prop zonder opnieuw te binden: weer open = weer vegen', async () => {
+      await zetGrens(false);
+      await act(async () => { sleep(-(VEEG_DREMPEL + 20), 2); vi.advanceTimersByTime(400); });
+      expect(onVolgende).not.toHaveBeenCalled();
+      await zetGrens(true);
+      await act(async () => { sleep(-(VEEG_DREMPEL + 20), 2); vi.advanceTimersByTime(400); });
+      expect(onVolgende).toHaveBeenCalledTimes(1);
+    });
   });
 });

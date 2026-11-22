@@ -31,6 +31,31 @@ export const addDaysIso = (iso: string, n: number) => {
 };
 export const monthOf = (iso: string) => iso.slice(0, 7);
 
+/**
+ * Ligt deze dag ná de laatste geïmporteerde dag (`geimporteerd.laatste` van
+ * de server)? Daar staat geen planning: het bord toont er niets (ook geen
+ * verlof of ziekte, dat las als "er is planning", Jarno 22-11) en de dag is
+ * niet te kiezen. Zonder grens, of met iets wat geen ISO-dag is (nog niet
+ * geladen, oude server), nooit: dan blijft alles bereikbaar zoals vroeger.
+ */
+export const naImport = (iso: string, laatste: string | null | undefined) =>
+  !!laatste && /^\d{4}-\d{2}-\d{2}$/.test(laatste) && iso > laatste;
+
+/**
+ * De dag van de mobiele dagweergave: de eerste kandidaat die in de geladen
+ * maand ligt (de dag uit het adres, de huidige keuze, vandaag), anders de
+ * eerste dag. Ligt die keuze na de laatste geïmporteerde dag, dan wordt het
+ * de laatste dag van de maand die nog planning heeft; heeft geen enkele dag
+ * van de maand planning, dan is er geen keuze (null).
+ */
+export const kiesDagBinnenImport = (dates: string[], kandidaten: Array<string | null | undefined>, laatste: string | null | undefined): string | null => {
+  const metPlanning = dates.filter((d) => !naImport(d, laatste));
+  if (metPlanning.length === 0) return null;
+  const keuze = kandidaten.find((k): k is string => !!k && dates.includes(k));
+  if (!keuze) return metPlanning[0];
+  return naImport(keuze, laatste) ? metPlanning[metPlanning.length - 1] : keuze;
+};
+
 /** Hoofdmaand in de URL (`/maandplanning/2026-10`) — spiegel van `viewMonth`;
  *  een ongeldige waarde wordt genegeerd. */
 const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;

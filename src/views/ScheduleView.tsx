@@ -375,6 +375,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
               maandParam={maandParam}
               onMaandParam={zetMaandParam}
               planningTel={planningTel}
+              planningTot={planningTot}
               detailVandaag={!(xl && toonLijst)}
             />
           )}
@@ -395,6 +396,7 @@ function MonthCalendar({
   maandParam,
   onMaandParam,
   planningTel,
+  planningTot = null,
   detailVandaag = true,
 }: {
   groups: GroupedShift[];
@@ -411,6 +413,8 @@ function MonthCalendar({
   onMaandParam: (waarde: string | null) => void;
   /** tel:-link naar de planning voor de verlof-conflict-uitweg. */
   planningTel?: string;
+  /** Laatste dag met planning in het portaal (ISO, van de server), of null zolang onbekend. */
+  planningTot?: string | null;
 }) {
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
@@ -424,13 +428,6 @@ function MonthCalendar({
     if ((maandParam ?? null) !== gewenst) onMaandParam(gewenst);
   }, [monthParam, maandParam, onMaandParam]);
   const [selected, setSelected] = useState<string>(today);
-  // Veeg en pijltjes wisselen de maand met richting (golf 4, punt 11): het
-  // raster beweegt op touch met de vinger mee en de nieuwe maand schuift in
-  // van de kant waar hij vandaan komt (MaandWissel hieronder).
-  const veeg = useMaandVeeg({
-    onVorige: () => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)),
-    onVolgende: () => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)),
-  });
 
   // Planning-horizon: de periode waarvoor er überhaupt planning voor deze
   // chauffeur is ingelezen. Daarbuiten weten we niets — een maand die nog niet
@@ -448,6 +445,35 @@ function MonthCalendar({
     return { van, tot };
   }, [groups]);
   const isVrijeDag = (iso: string) => !!planningRange && iso >= planningRange.van && iso <= planningRange.tot;
+
+  // Grens vooruit (Jarno 22-11: "na 3 januari kan er wel gebladerd worden
+  // omdat er verlof instaat"): voorbij de laatste dag met planning is er niets
+  // te tonen, en verlof op zo'n dag las als "er is planning". De grens komt
+  // alleen van de server (`planningTot`); zolang die onbekend is blijft alles
+  // bereikbaar zoals vroeger, er wordt niets uit de eigen diensten geraden.
+  // Staat er toch een eigen dienst ná die dag, dan schuift de grens mee tot
+  // die dienst (dezelfde regel als de horizon van Mijn week): een echte dienst
+  // verdwijnt hier nooit.
+  const grens = planningTot ? (planningRange && planningRange.tot > planningTot ? planningRange.tot : planningTot) : null;
+  // De laatste maand waarin je kan staan: die van de grens, maar nooit vóór de
+  // lopende maand (loopt de planning achter, dan blijft vandaag bereikbaar).
+  const eindMaand = grens ? [grens.slice(0, 7), today.slice(0, 7)].sort()[1] : null;
+  const kanVolgende = !eindMaand || monthParam < eindMaand;
+  const naGrens = (iso: string) => !!grens && iso > grens;
+  // Een maand voorbij de grens (uit het adres, of een grens die later
+  // binnenkomt of terugschuift) valt terug op die laatste maand.
+  useEffect(() => {
+    if (eindMaand && monthParam > eindMaand) setViewMonth(new Date(Number(eindMaand.slice(0, 4)), Number(eindMaand.slice(5, 7)) - 1, 1));
+  }, [eindMaand, monthParam]);
+  // Veeg en pijltjes wisselen de maand met richting (golf 4, punt 11): het
+  // raster beweegt op touch met de vinger mee en de nieuwe maand schuift in
+  // van de kant waar hij vandaan komt (MaandWissel hieronder). Op de grens
+  // veert een veeg vooruit mee en komt terug, zonder wissel.
+  const veeg = useMaandVeeg({
+    onVorige: () => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)),
+    onVolgende: () => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)),
+    kanVolgende,
+  });
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -490,7 +516,13 @@ function MonthCalendar({
           het glipte er structureel doorheen. Met de kleinere gap erbij zitten
           ze op ~44px. */}
       <Card padding="none" className="p-3 md:p-4">
-        <MaandNavigatie className="justify-between" label={monthName} veeg={veeg} />
+        <MaandNavigatie
+          className="justify-between"
+          label={monthName}
+          veeg={veeg}
+          volgendeUit={!kanVolgende}
+          volgendeTitel={!kanVolgende && grens ? `De planning loopt tot en met ${formatDatumDMJ(grens)}` : undefined}
+        />
 
         {/* Grid: wisselt van maand met richting en veegt op touch (MaandWissel;
             mt-2 + de 4 px speling van de knip = de oude mt-3). */}
@@ -506,8 +538,12 @@ function MonthCalendar({
           ))}
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
             const iso = dateIso(day);
-            const dayGroups = groupsByDate.get(iso) ?? [];
-            const leave = leaveFor(iso);
+            // Na de laatste dag met planning: geen dienst, geen verlof, niet te
+            // kiezen. Alleen het dagcijfer en een wettelijke feestdag (een
+            // kalenderfeit, geen planning) blijven staan.
+            const buiten = naGrens(iso);
+            const dayGroups = buiten ? [] : groupsByDate.get(iso) ?? [];
+            const leave = buiten ? undefined : leaveFor(iso);
             const td = typedagLabel(iso);
             const isSelected = iso === selected;
             const isToday = iso === today;
@@ -518,15 +554,17 @@ function MonthCalendar({
               <button
                 key={day}
                 type="button"
+                disabled={buiten}
                 onClick={() => setSelected(iso)}
                 // Geen aria-label: de naam komt uit de inhoud (dagnummer, code)
                 // plus de sr-only toelichting onderaan, zodat de zichtbare tekst
                 // vooraan in de naam staat (WCAG 2.5.3, axe 4.14) en niemand nog
                 // een ISO-datum hoort.
-                title={dayGroups.length > 0 ? `${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : undefined}
+                title={buiten ? 'Nog geen planning' : dayGroups.length > 0 ? `${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : undefined}
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
-                  !isSelected && 'hover:bg-surface-soft-hover',
+                  buiten && 'cursor-not-allowed opacity-40',
+                  !isSelected && !buiten && 'hover:bg-surface-soft-hover',
                   // Gekozen dag = neutraal (punt 4); "vandaag" houdt de gouden ring, ook als hij gekozen is.
                   // De gouden labels in de cel staan op oker-800: op het neutrale
                   // vlak haalt oker-700 de 4,5 niet (het haalde die op het oude
@@ -571,7 +609,7 @@ function MonthCalendar({
                 {/* De rest van de naam, onzichtbaar: datum voluit en toelichting
                     ná de zichtbare tekst. */}
                 <span className="sr-only">
-                  {`, ${formatDayLong(iso)}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}${td && td.kort === 'F' ? `, ${td.titel}` : ''}`}
+                  {`, ${formatDayLong(iso)}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}${td && td.kort === 'F' ? `, ${td.titel}` : ''}${buiten ? ', nog geen planning' : ''}`}
                 </span>
               </button>
             );

@@ -10,7 +10,7 @@ import { KIND_CLS, celChipClass } from '../../lib/planningKind';
 import type { MonthCell } from '../../lib/monthPlanning';
 import { formatDatumDMJ, formatDayLong, hoofdletter, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../../lib/format';
 import { DUR, EASE_SPRING } from '../../lib/motion';
-import { noteKey, sectieLabel, type bouwDagRijen, type Chauffeur } from '../../lib/maandplanning';
+import { naImport, noteKey, sectieLabel, type bouwDagRijen, type Chauffeur } from '../../lib/maandplanning';
 import { SECTIE_BAND, SECTIE_KOP, SECTIE_STREEP } from './sectiekop';
 
 /**
@@ -138,6 +138,10 @@ export function DagWeergave({ dag, acties }: { dag: DagGegevens; acties: DagActi
             const gekozen = iso === mobielDag;
             const vandaag = iso === todayIso;
             const td = typedagLabel(iso);
+            // Na de laatste geïmporteerde dag staat er geen planning: de dag
+            // blijft in de strip staan (de maand is volledig), gedempt en niet
+            // te kiezen, met dezelfde uitleg als de pijl Volgende maand.
+            const buiten = naImport(iso, laatsteDag);
             return (
               // rauw: dag-tab in de datumstrip (kalender-dagcel met schuivende motion-pil)
               <button
@@ -146,6 +150,8 @@ export function DagWeergave({ dag, acties }: { dag: DagGegevens; acties: DagActi
                 type="button"
                 role="tab"
                 aria-selected={gekozen}
+                disabled={buiten}
+                title={buiten ? `De planning is geïmporteerd tot ${formatDatumDMJ(laatsteDag)}` : undefined}
                 onClick={() => kiesDag(iso)}
                 className={cn(
                   // Kleuren via transition-colors; de keuzepil zelf is
@@ -154,6 +160,7 @@ export function DagWeergave({ dag, acties }: { dag: DagGegevens; acties: DagActi
                   // knop hard aan/uit te wippen.
                   'ios-pressable relative flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
                   gekozen ? 'text-slate-900' : 'text-slate-500',
+                  buiten && 'cursor-not-allowed opacity-40',
                   // Vandaag: zachte oker hairline (inset, 35%) + het oker
                   // cijfer. De eerdere 60%-ring las als een lege tweede
                   // pil; op verzoek Jarno tóch een omlijsting, maar
