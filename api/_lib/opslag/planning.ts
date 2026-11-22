@@ -71,7 +71,9 @@ export const getPlanningGrens = async (): Promise<PlanningGrens> => {
   const laatste = async (tabel: 'planning_matrix_rows' | 'planning', kolom: 'source_date' | 'date') => {
     // `planning.date` is een tekstkolom in ISO-vorm: lexicografisch sorteren
     // geeft daar dezelfde volgorde als chronologisch.
-    const { data, error } = await client.from(tabel).select(kolom).order(kolom, { ascending: false }).limit(1);
+    // `planning.date` mag leeg zijn (kolom zonder not null) en Postgres zet
+    // null bij aflopend sorteren vooraan: één zo'n rij las anders als "geen planning".
+    const { data, error } = await client.from(tabel).select(kolom).order(kolom, { ascending: false, nullsFirst: false }).limit(1);
     if (error) throw error;
     return ((data ?? [])[0] as Record<string, unknown> | undefined)?.[kolom] ?? null;
   };

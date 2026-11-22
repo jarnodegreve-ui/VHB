@@ -159,6 +159,17 @@ describe('getPlanningHorizon en getPlanningMatrixGrenzen', () => {
     expect((await beide()).horizon).toBe(dagNa(5));
   });
 
+  it('een planningrij zonder datum telt niet als "geen planning"', async () => {
+    await codes();
+    await replacePlanningAndMatrix(
+      [matrixRij('2027-01-03', { c1: '2501' }), matrixRij('2027-01-04', {})],
+      [dienst({ id: 'd-03', date: '2027-01-03', line: '2501', driverId: 'c1' })],
+    );
+    const { error } = await db!.from('planning').insert({ id: 'zonder-datum', driverId: 'c1', line: '2501', startTime: '06:00', endTime: '14:00' });
+    expect(error).toBeNull();
+    expect(await beide()).toEqual({ horizon: '2027-01-03', grenzen: { eerste: '2027-01-03', laatste: '2027-01-03' } });
+  });
+
   it('zonder matrix: de laatste opgebouwde dienst als horizon, geen grenzen; helemaal leeg: niets', async () => {
     await codes();
     expect(await beide()).toEqual({ horizon: null, grenzen: { eerste: null, laatste: null } });

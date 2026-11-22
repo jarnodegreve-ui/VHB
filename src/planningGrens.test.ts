@@ -266,6 +266,8 @@ describe('de opslagfuncties: welke lezingen vertrekken er', () => {
       ['planning_matrix_rows', 'source_date', 1],
       ['planning', 'date', 1],
     ]);
+    // Een planningrij zonder datum (de kolom laat null toe) mag niet vooraan komen.
+    expect(nep.lezingen.map((q) => stap(q, 'order')?.[2])).toEqual([{ ascending: false, nullsFirst: false }, { ascending: false, nullsFirst: false }]);
   });
 
   it('matrix loopt verder dan de planning: één staartlezing met alleen datum en cellen, na de laatste planningdag', async () => {
