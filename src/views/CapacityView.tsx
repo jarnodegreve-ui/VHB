@@ -18,7 +18,7 @@ import { formatDatumDMJ, hoofdletter, MONTH_NAMES } from '../lib/format';
 import { useRecordParam, useRouteParam } from '../app/router';
 import { eersteZichtbareDag } from '../../shared/maandplanningTerugblik';
 import {
-  berekenCodeLegend, bouwDagRijen, dagtypeMarkering, groepeerPerSectie, kiesDagBinnenImport, maandNaarParam, maandUitParam, monthOf, noteKey,
+  berekenCodeLegend, bouwDagRijen, dagtypeMarkering, groepeerPerSectie, kiesDagBinnenImport, maandNaarParam, maandUitParam, monthOf, noteKey, teltAlsDagkeuze,
   voegCellenSamen, voegChauffeursSamen, werkdagenUitCellen, WISSEL_REDENEN, wisselOverzichtSortering,
   type MaandOverzicht, type OverzichtRij, type OverzichtSortering,
 } from '../lib/maandplanning';
@@ -183,8 +183,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     venster.naarVandaag();
     // Mobiele dag-weergave springt mee; valt vandaag buiten de al geladen
     // maand, dan corrigeert het dates-effect zodra de nieuwe maand binnen is.
-    // Ligt vandaag na de laatste geïmporteerde dag, dan de laatste dag met planning.
-    setMobielDag(dates.includes(todayIso) ? kiesDagBinnenImport(dates, [todayIso], laatsteDag) : todayIso);
+    // Ligt vandaag na de laatste geïmporteerde dag, dan de laatste dag met
+    // planning; de server geeft zo'n dag niet mee in `dates`, dus de toets is
+    // teltAlsDagkeuze en niet alleen "staat hij in de lijst".
+    setMobielDag(teltAlsDagkeuze(dates, todayIso, laatsteDag) ? kiesDagBinnenImport(dates, [todayIso], laatsteDag) : todayIso);
   };
 
   const visibleDates = venster.windowDates;
@@ -218,8 +220,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     // geïmporteerde dag is niet te kiezen. Een dag uit het adres, de huidige
     // keuze of vandaag voorbij die grens valt terug op de laatste dag met
     // planning (kiesDagBinnenImport), en het adres volgt. Zonder grens van de
-    // server verandert er niets.
-    const uitUrl = dagParam && dates.includes(dagParam) ? kiesDagBinnenImport(dates, [dagParam], laatsteDag) : null;
+    // server verandert er niets. De server geeft alleen dagen tot en met de
+    // grens: een dag van deze maand voorbij de grens staat dus niet in `dates`
+    // en telt toch (teltAlsDagkeuze), anders viel hij op de eerste dag.
+    const uitUrl = teltAlsDagkeuze(dates, dagParam, laatsteDag) ? kiesDagBinnenImport(dates, [dagParam], laatsteDag) : null;
     if (dagParam && uitUrl !== dagParam) zetDagParam(uitUrl);
     setMobielDag((cur) => uitUrl ?? kiesDagBinnenImport(dates, [cur, todayIso], laatsteDag));
   }, [dates, todayIso, dagParam, zetDagParam, laatsteDag]);

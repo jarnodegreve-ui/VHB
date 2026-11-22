@@ -295,6 +295,15 @@ describe('useImportGrenzen', () => {
     expect(extra.nu()).toMatchObject({ laatsteDag: '2026-10-25', kanVooruit: false });
   });
 
+  it('de laatste dag is de laatste van de twee geladen maanden: een oude grens uit de cache verbergt de verse tweede maand niet', () => {
+    const oud = met({ geimporteerd: { eerste: '2026-10-05', laatste: '2026-10-25' } });
+    const vers = met({ geimporteerd: { eerste: '2026-10-05', laatste: '2026-11-22' } });
+    expect(opzet({ data: oud, extraData: vers }).nu()).toMatchObject({ laatsteDag: '2026-11-22', kanVooruit: true, kanMaandVooruit: true });
+    expect(opzet({ data: vers, extraData: oud }).nu()).toMatchObject({ laatsteDag: '2026-11-22' });
+    // Een tweede maand zonder grens (oude server) verandert niets.
+    expect(opzet({ data: oud, extraData: met({}) }).nu()).toMatchObject({ laatsteDag: '2026-10-25', kanVooruit: false });
+  });
+
   it('wie geen staf is: de terugblikgrens trekt het venster mee en de uitleg zegt het; een voorbije maand wordt de maand van het venster', () => {
     const zicht = met({ zichtbaarVanaf: '2026-10-12', geimporteerd: { eerste: '2026-10-12', laatste: '2026-12-31' } });
     const a = opzet({ data: zicht, windowStart: '2026-10-05' });

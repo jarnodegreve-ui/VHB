@@ -362,9 +362,16 @@ test.describe('toetssteen 4: klik en tik openen het celdetail zoals vandaag, en 
 test.describe('planning-grens: het raster toont niets na de laatste geïmporteerde dag', () => {
   const LAATSTE = '2027-01-03';
   const DRIE = RIJDERS.slice(0, 3);
-  /** Elke chauffeur rijdt elke dag; de eerste heeft vanaf 4 januari verlof (de cel-waarheid legt dat over een lege cel). */
-  const grensBord = (maand: string, metGrens: boolean) => {
-    const dates = dagenVan(maand);
+  /**
+   * Het bord zoals de server het geeft (api/_lib/celWaarheid.ts): `dates` zijn
+   * de dagen met een matrixrij, dus tot en met `laatste`, en na die dag bestaat
+   * er geen cel, ook geen verlofcel. `'vol'` is het vangnet: een bord dat tóch
+   * dagen en verlofcellen na de grens meestuurt (de eerste chauffeur heeft dan
+   * vanaf 4 januari verlof). `'zonder'` is een server zonder grens: de volle maand.
+   */
+  type Vorm = 'server' | 'vol' | 'zonder';
+  const grensBord = (maand: string, vorm: Vorm) => {
+    const dates = dagenVan(maand).filter((d) => vorm !== 'server' || d <= LAATSTE);
     return {
       month: maand,
       dates,
@@ -375,16 +382,16 @@ test.describe('planning-grens: het raster toont niets na de laatste geïmporteer
           ? (i === 0 ? { code: 'bv', kind: 'leave', label: 'Betaald verlof', segments: [] } : null)
           : { code: String(2101 + i), kind: 'service', label: '', segments: ['05:30 - 13:45'] }]).filter(([, c]) => c)),
       ])),
-      ...(metGrens ? { geimporteerd: { eerste: '2026-01-01', laatste: LAATSTE } } : {}),
+      ...(vorm !== 'zonder' ? { geimporteerd: { eerste: '2026-01-01', laatste: LAATSTE } } : {}),
     };
   };
-  async function openGrens(page: Page, nu: string, metGrens: boolean, pad = '/maandplanning/2027-01') {
+  async function openGrens(page: Page, nu: string, vorm: Vorm, pad = '/maandplanning/2027-01') {
     await page.clock.setFixedTime(new Date(nu));
     await seed(page, {
       user: ADMIN, view: 'bezetting', thema: 'light',
       extra: (pad, request) => (
         request.method() === 'GET' && pad.endsWith('/api/month-planning') && !new URL(request.url()).searchParams.get('format')
-          ? grensBord(new URL(request.url()).searchParams.get('month') ?? '', metGrens)
+          ? grensBord(new URL(request.url()).searchParams.get('month') ?? '', vorm)
           : undefined
       ),
     });
@@ -396,10 +403,11 @@ test.describe('planning-grens: het raster toont niets na de laatste geïmporteer
   const rij = (page: Page, naam: string) => page.locator(RASTER).getByRole('row').filter({ has: page.getByRole('rowheader', { name: naam, exact: true }) });
 
   // Begin en midden van de maand vóór de grens: het venster van januari begint telkens op maandag 28/12.
-  for (const nu of ['2026-12-01T09:00:00Z', '2026-12-15T09:00:00Z']) {
-    test(`kolommen na 03/01 zijn leeg en openen niets (klok ${nu.slice(0, 10)})`, async ({ page }, info) => {
+  // Twee keer met het bord van de server, één keer met het vangnet (verlofcellen na de grens).
+  for (const [nu, vorm] of [['2026-12-01T09:00:00Z', 'server'], ['2026-12-15T09:00:00Z', 'server'], ['2026-12-15T09:00:00Z', 'vol']] as Array<[string, Vorm]>) {
+    test(`kolommen na 03/01 zijn leeg en openen niets (klok ${nu.slice(0, 10)}, bord ${vorm})`, async ({ page }, info) => {
       alleenIn(info, DESKTOP);
-      await openGrens(page, nu, true);
+      await openGrens(page, nu, vorm);
       // Het venster verschuift niet anders dan vroeger: 14 koppen, van maandag 28/12 tot zondag 10/01.
       await expect(koppen(page)).toHaveCount(14);
       await expect(koppen(page).first()).toContainText('maandag 28 december');
@@ -429,23 +437,24 @@ test.describe('planning-grens: het raster toont niets na de laatste geïmporteer
     });
   }
 
-  test('axe op het raster met gedempte kolommen: niets behalve het contrast van de microlabels in de dagkop', async ({ page }, info) => {
+  test('axe op het raster met gedempte kolommen: schoon, de kop van het raster uitgezonderd', async ({ page }, info) => {
     alleenIn(info, DESKTOP);
-    await openGrens(page, '2026-12-15T09:00:00Z', true);
+    await openGrens(page, '2026-12-15T09:00:00Z', 'server');
     await expect(koppen(page).nth(7)).toContainText('nog geen planning');
-    // color-contrast staat hier uit: axe meldt het microlabel in ELKE dagkop van
-    // het raster (ook "Chauffeur" en de kolommen vóór de grens, ongewijzigde
-    // code), en de gedempte koppen na de grens komen daar bewust bij (de
-    // voorgelezen naam staat ongedempt in de sr-only tekst). Gemeld in het
-    // rapport van planning-grens; al de rest moet schoon zijn.
-    const { violations } = await new AxeBuilder({ page }).withTags(AXE_TAGS).disableRules(['color-contrast']).analyze();
+    // Alleen de kop van het raster valt buiten deze toets: axe meldt daar het
+    // contrast van het microlabel in ELKE dagkop (ook "Chauffeur" en de
+    // kolommen vóór de grens, ongewijzigde code, 4,2 tot 4,3:1), en de gedempte
+    // koppen na de grens komen daar bewust onder (de voorgelezen naam staat
+    // ongedempt in de sr-only tekst). Gemeld in het rapport van planning-grens.
+    // De cellen en al de rest blijven onder de volledige toets, contrast erbij.
+    const { violations } = await new AxeBuilder({ page }).withTags(AXE_TAGS).exclude(`${RASTER} thead`).analyze();
     expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([]);
   });
 
   test('vandaag ligt na de grens: het venster van deze week staat er, zonder inhoud, en terug kan', async ({ page }, info) => {
     alleenIn(info, DESKTOP);
     // Zondag 10/01/2027: het venster begint zoals altijd op de maandag van deze week (04/01), volledig na de grens.
-    await openGrens(page, '2027-01-10T09:00:00Z', true, '/maandplanning');
+    await openGrens(page, '2027-01-10T09:00:00Z', 'server', '/maandplanning');
     await expect(koppen(page)).toHaveCount(14);
     await expect(koppen(page).first()).toContainText('maandag 4 januari');
     for (let k = 0; k < 14; k++) await expect(koppen(page).nth(k)).toContainText('nog geen planning');
@@ -458,7 +467,7 @@ test.describe('planning-grens: het raster toont niets na de laatste geïmporteer
 
   test('zonder grens van de server verandert er niets: elke kolom toont zijn cel, ook het verlof', async ({ page }, info) => {
     alleenIn(info, DESKTOP);
-    await openGrens(page, '2026-12-15T09:00:00Z', false);
+    await openGrens(page, '2026-12-15T09:00:00Z', 'zonder');
     await expect(koppen(page)).toHaveCount(14);
     for (let k = 0; k < 14; k++) await expect(koppen(page).nth(k)).not.toContainText('nog geen planning');
     await expect(rij(page, DRIE[0].name).getByRole('button')).toHaveCount(14);

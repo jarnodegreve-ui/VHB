@@ -90,7 +90,7 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
                 >
                   {/* Zichtbaar: letter, dag, maand; voorgelezen: de volledige dag. */}
                   <span className="sr-only">{formatDayLong(iso)}{dagtype ? `, ${dagtype.label.toLowerCase()}` : feestdag ? ', feestdag' : ''}{today ? ', vandaag' : ''}{buiten ? ', nog geen planning' : ''}</span>
-                  <span aria-hidden="true" className={cn(buiten && 'opacity-40')}>
+                  <span aria-hidden="true" className={cn(buiten && 'opacity-60')}>
                     <span className={cn(microLabelClass, 'block')}>{h.letter}</span>
                     <span className={cn('mt-0.5 block text-xs font-semibold', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</span>
                     {/* 2xs: matrixcel van 3 px-hoog label onder de dag, dichte planningsmatrix */}

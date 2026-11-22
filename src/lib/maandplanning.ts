@@ -42,16 +42,31 @@ export const naImport = (iso: string, laatste: string | null | undefined) =>
   !!laatste && /^\d{4}-\d{2}-\d{2}$/.test(laatste) && iso > laatste;
 
 /**
- * De dag van de mobiele dagweergave: de eerste kandidaat die in de geladen
- * maand ligt (de dag uit het adres, de huidige keuze, vandaag), anders de
- * eerste dag. Ligt die keuze na de laatste geïmporteerde dag, dan wordt het
- * de laatste dag van de maand die nog planning heeft; heeft geen enkele dag
- * van de maand planning, dan is er geen keuze (null).
+ * Telt deze dag als keuze voor de geladen maand? Ja als hij in `dates` staat,
+ * en ook als hij een echte kalenderdag van dezelfde maand is die ná de laatste
+ * geïmporteerde dag ligt. Dat tweede is het gewone geval: de server geeft
+ * alleen dagen tot en met `laatste` (één per matrixrij), dus een dag uit het
+ * adres of vandaag voorbij de grens staat nooit in `dates`. Een dag uit een
+ * andere maand of een typefout telt niet (oud gedrag: die gaat stil weg).
+ */
+export const teltAlsDagkeuze = (dates: string[], dag: string | null | undefined, laatste: string | null | undefined): dag is string => {
+  if (!dag || dates.length === 0) return false;
+  if (dates.includes(dag)) return true;
+  return /^\d{4}-\d{2}-\d{2}$/.test(dag) && addDaysIso(dag, 0) === dag && monthOf(dag) === monthOf(dates[0]) && naImport(dag, laatste);
+};
+
+/**
+ * De dag van de mobiele dagweergave: de eerste kandidaat die voor de geladen
+ * maand telt (de dag uit het adres, de huidige keuze, vandaag; zie
+ * `teltAlsDagkeuze`), anders de eerste dag. Ligt die keuze na de laatste
+ * geïmporteerde dag, dan wordt het de laatste dag van de maand die nog
+ * planning heeft; heeft geen enkele dag van de maand planning, dan is er geen
+ * keuze (null). De uitkomst staat altijd in `dates`.
  */
 export const kiesDagBinnenImport = (dates: string[], kandidaten: Array<string | null | undefined>, laatste: string | null | undefined): string | null => {
   const metPlanning = dates.filter((d) => !naImport(d, laatste));
   if (metPlanning.length === 0) return null;
-  const keuze = kandidaten.find((k): k is string => !!k && dates.includes(k));
+  const keuze = kandidaten.find((k): k is string => teltAlsDagkeuze(dates, k, laatste));
   if (!keuze) return metPlanning[0];
   return naImport(keuze, laatste) ? metPlanning[metPlanning.length - 1] : keuze;
 };

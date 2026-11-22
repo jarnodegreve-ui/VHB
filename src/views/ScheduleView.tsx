@@ -448,18 +448,22 @@ function MonthCalendar({
 
   // Grens vooruit (Jarno 22-11: "na 3 januari kan er wel gebladerd worden
   // omdat er verlof instaat"): voorbij de laatste dag met planning is er niets
-  // te tonen, en verlof op zo'n dag las als "er is planning". De grens komt
-  // alleen van de server (`planningTot`); zolang die onbekend is blijft alles
-  // bereikbaar zoals vroeger, er wordt niets uit de eigen diensten geraden.
-  // Staat er toch een eigen dienst ná die dag, dan schuift de grens mee tot
-  // die dienst (dezelfde regel als de horizon van Mijn week): een echte dienst
-  // verdwijnt hier nooit.
-  const grens = planningTot ? (planningRange && planningRange.tot > planningTot ? planningRange.tot : planningTot) : null;
-  // De laatste maand waarin je kan staan: die van de grens, maar nooit vóór de
-  // lopende maand (loopt de planning achter, dan blijft vandaag bereikbaar).
-  const eindMaand = grens ? [grens.slice(0, 7), today.slice(0, 7)].sort()[1] : null;
-  const kanVolgende = !eindMaand || monthParam < eindMaand;
+  // te tonen, en verlof op zo'n dag las als "er is planning". De grens is
+  // alleen `planningTot` van de server, voor iedereen dezelfde dag en dezelfde
+  // als in de kop van het scherm; zolang die onbekend is blijft alles
+  // bereikbaar zoals vroeger. Er wordt geen grens uit de eigen diensten
+  // afgeleid. Eén uitzondering, per dag en niet op de grens: een dag ná
+  // `planningTot` waarop een eigen dienst staat (met de hand toegewezen) blijft
+  // zichtbaar en te kiezen, want een echte dienst verdwijnt hier nooit. De
+  // dagen ernaast blijven leeg, ook als er verlof op staat.
+  const grens = planningTot || null;
   const naGrens = (iso: string) => !!grens && iso > grens;
+  const laatsteEigen = grens && planningRange && planningRange.tot > grens ? planningRange.tot : null;
+  // De laatste maand waarin je kan staan: die van de grens, maar nooit vóór de
+  // lopende maand (loopt de planning achter, dan blijft vandaag bereikbaar) en
+  // nooit vóór de maand van zo'n late eigen dienst (die moet bereikbaar zijn).
+  const eindMaand = grens ? [grens.slice(0, 7), today.slice(0, 7), (laatsteEigen ?? grens).slice(0, 7)].sort()[2] : null;
+  const kanVolgende = !eindMaand || monthParam < eindMaand;
   // Een maand voorbij de grens (uit het adres, of een grens die later
   // binnenkomt of terugschuift) valt terug op die laatste maand.
   useEffect(() => {
@@ -541,7 +545,11 @@ function MonthCalendar({
             // Na de laatste dag met planning: geen dienst, geen verlof, niet te
             // kiezen. Alleen het dagcijfer en een wettelijke feestdag (een
             // kalenderfeit, geen planning) blijven staan.
-            const buiten = naGrens(iso);
+            const buiten = naGrens(iso) && !groupsByDate.has(iso);
+            // Vandaag blijft te kiezen, ook leeg en gedempt: loopt de planning
+            // achter, dan moet je na een tik op een andere dag terug kunnen
+            // naar het dagdetail van vandaag (het Rooster heeft geen knop Vandaag).
+            const uit = buiten && iso !== today;
             const dayGroups = buiten ? [] : groupsByDate.get(iso) ?? [];
             const leave = buiten ? undefined : leaveFor(iso);
             const td = typedagLabel(iso);
@@ -554,7 +562,7 @@ function MonthCalendar({
               <button
                 key={day}
                 type="button"
-                disabled={buiten}
+                disabled={uit}
                 onClick={() => setSelected(iso)}
                 // Geen aria-label: de naam komt uit de inhoud (dagnummer, code)
                 // plus de sr-only toelichting onderaan, zodat de zichtbare tekst
@@ -563,8 +571,9 @@ function MonthCalendar({
                 title={buiten ? 'Nog geen planning' : dayGroups.length > 0 ? `${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : undefined}
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
-                  buiten && 'cursor-not-allowed opacity-40',
-                  !isSelected && !buiten && 'hover:bg-surface-soft-hover',
+                  buiten && 'opacity-40',
+                  uit && 'cursor-not-allowed',
+                  !isSelected && !uit && 'hover:bg-surface-soft-hover',
                   // Gekozen dag = neutraal (punt 4); "vandaag" houdt de gouden ring, ook als hij gekozen is.
                   // De gouden labels in de cel staan op oker-800: op het neutrale
                   // vlak haalt oker-700 de 4,5 niet (het haalde die op het oude
