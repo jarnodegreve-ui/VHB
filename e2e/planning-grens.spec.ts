@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
-import { ADMIN, CHAUFFEUR, USERS, seed } from './helpers';
+import AxeBuilder from '@axe-core/playwright';
+import { ADMIN, AXE_TAGS, CHAUFFEUR, USERS, seed } from './helpers';
 
 /**
  * Planning-grens (Jarno 22-11: "ik heb ook gezien dat er na 3 januari wel kan
@@ -19,6 +20,14 @@ import { ADMIN, CHAUFFEUR, USERS, seed } from './helpers';
 
 const LAATSTE = '2027-01-03';
 const KLOKKEN = ['2026-12-01T09:00:00Z', '2026-12-15T09:00:00Z'];
+
+/** Vandaag ná de grens, in dezelfde maand: de planning loopt achter. */
+const NA_GRENS = '2027-01-10T09:00:00Z';
+/** axe op het scherm zoals het er staat, met de gedempte dagen erbij. */
+const axeSchoon = async (page: Page) => {
+  const { violations } = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([]);
+};
 
 const dagenVan = (maand: string) => {
   const [jaar, m] = maand.split('-').map(Number);
@@ -175,6 +184,18 @@ test.describe('Rooster', () => {
     await expect(volgende(page)).toBeDisabled();
   });
 
+  test('vandaag ligt na de grens in dezelfde maand: de maand blijft staan, vandaag is leeg en niet te kiezen, axe is schoon', async ({ page }) => {
+    await open(page, NA_GRENS, '/rooster/2027-01', LAATSTE);
+    await expect(maandkop(page, 'januari 2027')).toBeVisible();
+    await expect(volgende(page)).toBeDisabled();
+    await expect(dagcel(page, 'zondag 3 januari')).toBeEnabled();
+    await expect(dagcel(page, 'zondag 10 januari')).toBeDisabled();
+    await expect(dagcel(page, 'zondag 10 januari')).toHaveAccessibleName(/nog geen planning$/);
+    // Het dagdetail van vandaag (de standaardkeuze) blijft staan.
+    await expect(page.getByText('Zondag 10 januari 2027')).toBeVisible();
+    await axeSchoon(page);
+  });
+
   test('een eigen dienst ná de horizon van de server verdwijnt nooit: de grens schuift mee tot die dienst', async ({ page }) => {
     // De server zegt 20/12, maar er staat een eigen dienst op 28/12 en op 02/01.
     await open(page, KLOKKEN[0], '/rooster/2026-12', '2026-12-20');
@@ -251,6 +272,16 @@ test.describe('Maandplanning op de telefoon', () => {
       });
     }
   }
+
+  test('vandaag ligt na de grens in dezelfde maand: het scherm opent op de laatste dag met planning en Vandaag blijft daar, axe is schoon', async ({ page }) => {
+    await open(page, ADMIN, NA_GRENS, '/maandplanning', true);
+    await expect(gekozen(page)).toHaveText(/^zo\s*3$/i);
+    await expect(strip(page).nth(9)).toBeDisabled();
+    await page.locator('#hoofdinhoud').getByRole('button', { name: 'Vandaag', exact: true }).click();
+    await expect(gekozen(page)).toHaveText(/^zo\s*3$/i);
+    await expect(page.getByText('Zondag 3 januari')).toBeVisible();
+    await axeSchoon(page);
+  });
 
   test('zonder dag in het adres opent de laatste maand op een dag met planning', async ({ page }) => {
     await open(page, CHAUFFEUR, KLOKKEN[1], '/maandplanning/2027-01', true);

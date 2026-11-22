@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Request, type TestInfo } from '@playwright/test';
-import { ADMIN, CHAUFFEUR, USERS, kanScrollen, seed } from './helpers';
+import AxeBuilder from '@axe-core/playwright';
+import { ADMIN, AXE_TAGS, CHAUFFEUR, USERS, kanScrollen, seed } from './helpers';
 import { MD_QUERY } from '../src/lib/useMinWidth';
 
 /**
@@ -377,7 +378,7 @@ test.describe('planning-grens: het raster toont niets na de laatste geïmporteer
       ...(metGrens ? { geimporteerd: { eerste: '2026-01-01', laatste: LAATSTE } } : {}),
     };
   };
-  async function openGrens(page: Page, nu: string, metGrens: boolean) {
+  async function openGrens(page: Page, nu: string, metGrens: boolean, pad = '/maandplanning/2027-01') {
     await page.clock.setFixedTime(new Date(nu));
     await seed(page, {
       user: ADMIN, view: 'bezetting', thema: 'light',
@@ -388,7 +389,7 @@ test.describe('planning-grens: het raster toont niets na de laatste geïmporteer
       ),
     });
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/maandplanning/2027-01');
+    await page.goto(pad);
     await expect(page.locator(RASTER)).toBeVisible({ timeout: 15_000 });
   }
   const koppen = (page: Page) => page.locator(RASTER).getByRole('columnheader').filter({ hasNotText: 'Chauffeur' });
@@ -427,6 +428,33 @@ test.describe('planning-grens: het raster toont niets na de laatste geïmporteer
       await expect(celdetail(page, DRIE[0].name)).toBeVisible();
     });
   }
+
+  test('axe op het raster met gedempte kolommen: niets behalve het contrast van de microlabels in de dagkop', async ({ page }, info) => {
+    alleenIn(info, DESKTOP);
+    await openGrens(page, '2026-12-15T09:00:00Z', true);
+    await expect(koppen(page).nth(7)).toContainText('nog geen planning');
+    // color-contrast staat hier uit: axe meldt het microlabel in ELKE dagkop van
+    // het raster (ook "Chauffeur" en de kolommen vóór de grens, ongewijzigde
+    // code), en de gedempte koppen na de grens komen daar bewust bij (de
+    // voorgelezen naam staat ongedempt in de sr-only tekst). Gemeld in het
+    // rapport van planning-grens; al de rest moet schoon zijn.
+    const { violations } = await new AxeBuilder({ page }).withTags(AXE_TAGS).disableRules(['color-contrast']).analyze();
+    expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([]);
+  });
+
+  test('vandaag ligt na de grens: het venster van deze week staat er, zonder inhoud, en terug kan', async ({ page }, info) => {
+    alleenIn(info, DESKTOP);
+    // Zondag 10/01/2027: het venster begint zoals altijd op de maandag van deze week (04/01), volledig na de grens.
+    await openGrens(page, '2027-01-10T09:00:00Z', true, '/maandplanning');
+    await expect(koppen(page)).toHaveCount(14);
+    await expect(koppen(page).first()).toContainText('maandag 4 januari');
+    for (let k = 0; k < 14; k++) await expect(koppen(page).nth(k)).toContainText('nog geen planning');
+    await expect(page.locator(RASTER).locator('tbody button')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Volgende 2 weken' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Vorige 2 weken' }).click();
+    await expect(koppen(page).first()).toContainText('maandag 21 december');
+    await expect(rij(page, DRIE[0].name).getByRole('button')).toHaveCount(14);
+  });
 
   test('zonder grens van de server verandert er niets: elke kolom toont zijn cel, ook het verlof', async ({ page }, info) => {
     alleenIn(info, DESKTOP);
