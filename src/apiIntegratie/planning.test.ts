@@ -749,11 +749,32 @@ describe('planning-horizon (x-planning-tot)', () => {
     expect(await horizon()).toBe('2027-01-05');
   });
 
-  it('een matrix zonder één dienst en zonder opgebouwde planning geeft geen horizon', async () => {
+  // Gewijzigd na de tegenlezing (was: geen horizon, `laatste: null`). Zonder
+  // één planningrij kent de regel de gewone diensten niet; dan geldt de grens
+  // van vóór 22-11, de laatste matrixrij.
+  it('een matrix zonder opgebouwde planning houdt de grens van vroeger: de laatste matrixrij', async () => {
     mem.planningMatrix = [rij('2027-01-04', { 'Chauffeur A': 'bv' }), rij('2027-01-05', {})];
     mem.planning = [];
-    expect(await horizon()).toBeNull();
-    expect((await api('GET', '/api/month-planning?month=2027-01', { token: 'tok-planner' })).json.geimporteerd).toEqual({ eerste: '2027-01-04', laatste: null });
+    expect(await horizon()).toBe('2027-01-05');
+    expect((await api('GET', '/api/month-planning?month=2027-01', { token: 'tok-planner' })).json.geimporteerd).toEqual({ eerste: '2027-01-04', laatste: '2027-01-05' });
+  });
+
+  it('planning gewist terwijl de matrix er staat: de grens valt niet op de laatste schoolrit en Openstaande diensten houdt zijn bereik', async () => {
+    // Gewone diensten t/m 03/01, de laatste schoolrit op 18/12.
+    mem.planningMatrix = [
+      rij('2026-12-18', { 'Chauffeur A': '12', 'Chauffeur B': 'EEK1' }),
+      rij('2026-12-19', { 'Chauffeur A': '12' }),
+      rij('2027-01-03', { 'Chauffeur A': '12' }),
+    ];
+    mem.planning = [];
+    expect(await horizon()).toBe('2027-01-03');
+    expect(await laatsteVanBord()).toBe('2027-01-03');
+    // Openstaande diensten gaf zonder grens geen rijen en geen bereik meer. Overzicht per
+    // chauffeur leest dezelfde `geimporteerd`-grenzen (eerste en laatste, hierboven getoetst);
+    // zijn lader leest de medewerkers buiten de opslagmock en draait hier niet.
+    const res = await api('GET', '/api/rapporten/openstaande-diensten?van=2026-12-01&tot=2027-01-31', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.bereik?.tot).toBe('2027-01-03');
   });
 
   it('een staart langer dan het maximum valt terug op de laatste matrixrij', async () => {

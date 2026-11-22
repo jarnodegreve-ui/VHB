@@ -53,6 +53,10 @@ const leesDienstCodes = async (): Promise<ReadonlySet<string>> => {
   return tokens;
 };
 
+/** De laatste planningrij met een datum: een achterwaartse lezing van `planning_date_idx`. */
+const laatstePlanningDag = (client: ReturnType<typeof requireDb>) =>
+  client.from('planning').select('date').not('date', 'is', null).order('date', { ascending: false }).limit(1);
+
 /**
  * De grens van de planning: de laatste matrixdag met minstens één dienst
  * (Jarno 22-11; regel en uitleg in api/_lib/planningGrens.ts). Eén bron voor
@@ -61,30 +65,36 @@ const leesDienstCodes = async (): Promise<ReadonlySet<string>> => {
  *
  * Kosten: twee lezingen van één rij (laatste matrixdag op
  * `planning_matrix_rows_source_date_idx`, laatste planningdag op
- * `planning_date_idx`), samen vertrokken. Alleen als de matrix verder loopt
+ * `planning_date_idx`), samen vertrokken. Allebei een gewone aflopende
+ * sortering, zodat Postgres de index achterwaarts kan lezen; `NULLS LAST` bij
+ * aflopend past op geen van beide indexen en vraagt een sortering van de
+ * hele tabel. Alleen als de matrix verder loopt
  * dan de planning komt daar de staart bij: de matrixrijen ná de laatste
  * planningdag, met alleen `source_date` en `assignments`, in stukken van
  * STAART_STUK tot hoogstens STAART_MAX_STUKKEN.
  */
 export const getPlanningGrens = async (): Promise<PlanningGrens> => {
   const client = requireDb();
-  const laatste = async (tabel: 'planning_matrix_rows' | 'planning', kolom: 'source_date' | 'date') => {
-    // `planning.date` is een tekstkolom in ISO-vorm: lexicografisch sorteren
-    // geeft daar dezelfde volgorde als chronologisch.
-    // `planning.date` mag leeg zijn (kolom zonder not null) en Postgres zet
-    // null bij aflopend sorteren vooraan: één zo'n rij las anders als "geen planning".
-    const { data, error } = await client.from(tabel).select(kolom).order(kolom, { ascending: false, nullsFirst: false }).limit(1);
-    if (error) throw error;
-    return ((data ?? [])[0] as Record<string, unknown> | undefined)?.[kolom] ?? null;
-  };
   return bepaalPlanningGrens({
-    matrixLaatste: () => laatste('planning_matrix_rows', 'source_date'),
-    planningLaatste: () => laatste('planning', 'date'),
+    // `source_date` is not null: de laatste rij van de index.
+    matrixLaatste: async () => {
+      const { data, error } = await client.from('planning_matrix_rows').select('source_date').order('source_date', { ascending: false }).limit(1);
+      if (error) throw error;
+      return data?.[0]?.source_date ?? null;
+    },
+    // `planning.date` is een tekstkolom in ISO-vorm: lexicografisch sorteren
+    // geeft daar dezelfde volgorde als chronologisch. De kolom mag leeg zijn
+    // en Postgres zet null bij aflopend sorteren vooraan: één zo'n rij las
+    // anders als "geen planning". Uitgesloten met een filter, niet met de
+    // sorteerrichting (zie de kosten hierboven).
+    planningLaatste: async () => {
+      const { data, error } = await laatstePlanningDag(client);
+      if (error) throw error;
+      return data?.[0]?.date ?? null;
+    },
     staart: async (na, vanaf, aantal) => {
-      let q = client.from('planning_matrix_rows').select('source_date,assignments');
-      if (na) q = q.gt('source_date', na);
       // `id` erbij: een vaste volgorde, ook als twee rijen dezelfde dag dragen.
-      const { data, error } = await q
+      const { data, error } = await client.from('planning_matrix_rows').select('source_date,assignments').gt('source_date', na)
         .order('source_date', { ascending: false })
         .order('id', { ascending: false })
         .range(vanaf, vanaf + aantal - 1);
@@ -102,8 +112,9 @@ export const getPlanningGrens = async (): Promise<PlanningGrens> => {
  * Staat de matrix er (nog) niet of is ze niet te lezen, dan valt hij terug op
  * de laatste dag waarvoor een dienst is opgebouwd.
  *
- * null = geen planning (leeg portaal, de tabel bestaat nog niet, of een
- * matrix zonder één dienst).
+ * null = geen planning (leeg portaal of de tabel bestaat nog niet). Staat de
+ * matrix er zonder één opgebouwde dienst, dan is het de laatste matrixrij,
+ * zoals vóór 22-11.
  */
 export const getPlanningHorizon = async (): Promise<string | null> => {
   const client = requireDb();
@@ -112,11 +123,7 @@ export const getPlanningHorizon = async (): Promise<string | null> => {
   } catch {
     // Matrix niet leesbaar: de terugval hieronder, zoals vroeger.
   }
-  const uitPlanning = await client
-    .from('planning')
-    .select('date')
-    .order('date', { ascending: false })
-    .limit(1);
+  const uitPlanning = await laatstePlanningDag(client);
   if (uitPlanning.error) throw uitPlanning.error;
   const planningDag = String(uitPlanning.data?.[0]?.date ?? '').slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(planningDag) ? planningDag : null;

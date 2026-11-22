@@ -16,6 +16,27 @@
  *    Alleen daarvoor wordt de staart van de matrix gelezen: de dagen ná de
  *    laatste planningdag.
  *
+ * Bekende grenzen van deze goedkope regel (bewust, gemeld aan de eigenaar):
+ *
+ *  - staat er in `planning` geen enkele leesbare dag terwijl de matrix er
+ *    staat (na "Planning wissen", een herstel met een lege planning), dan is
+ *    de regel niet te vertrouwen: elke gewone dienst op het bord zou buiten
+ *    de grens vallen. Dan geldt de grens van vroeger, de laatste matrixrij,
+ *    met een waarschuwing;
+ *  - is `planning` korter dan de matrix maar niet leeg (een heropbouw die de
+ *    laatste dagen miste), dan is dat hier niet goedkoop te herkennen: de
+ *    grens valt dan op de laatste planningdag of de laatste code-dienst erna;
+ *  - een dienst uit het dienstoverzicht zonder geldige uren krijgt van de
+ *    opbouw geen rijen (alleen een waarschuwing in het import-voorbeeld) en
+ *    telt hier dus niet, terwijl het bord hem als dienst toont. Geen eigen
+ *    herkenning van dienstnummers: dat zou een tweede indeling zijn;
+ *  - de code-diensttoets in de staart kijkt niet wie de kolom is. Een
+ *    code-dienst onder een naam die niet op het bord staat (geen actieve
+ *    chauffeur, of geen account) verlegt de grens wel. Dat valt naar de
+ *    veilige kant: de grens ligt later, zoals vóór 22-11.
+ *
+ * De gelijkheidsproef in src/planningGrens.test.ts legt de laatste twee vast.
+ *
  * Puur op een lezer, zodat de opslaglaag (api/_lib/opslag/planning.ts) en het
  * integratieharnas dezelfde beslissing draaien.
  */
@@ -33,7 +54,7 @@ export type PlanningGrens = {
   matrix: string | null;
   /** Laatste dag met een rij in `planning`; null = geen (of niet leesbaar terwijl de matrix er staat). */
   planning: string | null;
-  /** Laatste dag van de matrix met minstens één dienst; null = geen matrix, of geen enkele dag met een dienst. */
+  /** Laatste dag van de matrix met minstens één dienst; null = geen matrix. Bij twijfel de laatste matrixrij. */
   laatste: string | null;
 };
 
@@ -42,8 +63,8 @@ export type GrensLezer = {
   matrixLaatste: () => Promise<unknown>;
   /** `date` van de laatste planningrij, of null. Gooit bij een databasefout. */
   planningLaatste: () => Promise<unknown>;
-  /** Matrixrijen ná `na` (null = geen ondergrens), de laatste dag eerst, `aantal` rijen vanaf plaats `vanaf`. */
-  staart: (na: string | null, vanaf: number, aantal: number) => Promise<StaartRij[]>;
+  /** Matrixrijen ná `na`, de laatste dag eerst, `aantal` rijen vanaf plaats `vanaf`. */
+  staart: (na: string, vanaf: number, aantal: number) => Promise<StaartRij[]>;
   /** De tokens van de planningscodes met categorie dienst (`dienstCodeTokens`). */
   dienstCodes: () => Promise<ReadonlySet<string>>;
   waarschuw?: (tekst: string) => void;
@@ -75,8 +96,9 @@ const reden = (err: unknown) => String((err as { message?: unknown })?.message ?
 /**
  * Gooit alleen als de matrix zelf niet te lezen is, of als er geen matrix is
  * en de planning niet te lezen is (de aanroeper beslist dan, zoals vroeger).
- * Elke andere twijfel (planning of staart niet leesbaar, een datum die geen
- * dag is, een staart langer dan het maximum) geeft de grens van vroeger: de
+ * Elke andere twijfel (planning of staart niet leesbaar, geen enkele
+ * planningdag terwijl de matrix er staat, een datum die geen dag is, een
+ * staart langer dan het maximum) geeft de grens van vroeger: de
  * laatste matrixrij, met een waarschuwing in het log.
  */
 export async function bepaalPlanningGrens(lezer: GrensLezer): Promise<PlanningGrens> {
@@ -97,8 +119,13 @@ export async function bepaalPlanningGrens(lezer: GrensLezer): Promise<PlanningGr
   planning = alsDag(p.value);
   // Een waarde die geen dag is: niet op filteren (source_date is een datumkolom).
   if (!planning && String(p.value ?? "").trim()) return oud("de laatste planningdag is geen geldige datum");
+  // Geen enkele planningdag terwijl de matrix er staat (planning gewist of
+  // nooit opgebouwd): de staart kent alleen code-diensten en zou de grens te
+  // vroeg leggen (of weglaten) terwijl het bord gewone diensten toont. Te
+  // vroeg verbergt wat mensen vandaag zien, dus de grens van vroeger.
+  if (!planning) return oud("geen enkele dag in de opgebouwde planning terwijl de matrix er staat");
   // Gewone toestand: op de laatste matrixdag (of erna) staat een dienst met rijen.
-  if (planning && planning >= matrix) return { matrix, planning, laatste: matrix };
+  if (planning >= matrix) return { matrix, planning, laatste: matrix };
 
   try {
     const tokens = lezer.dienstCodes();
@@ -113,14 +140,13 @@ export async function bepaalPlanningGrens(lezer: GrensLezer): Promise<PlanningGr
       }
       // De staart komt met de laatste dag eerst: wat hierna komt ligt vroeger.
       if (gevonden) return { matrix, planning, laatste: gevonden };
-      // Alles gelezen en geen code-dienst: de laatste planningdag is de grens
-      // (null = nergens een dienst, de aanroeper toont dan geen grens).
+      // Alles gelezen en geen code-dienst: de laatste planningdag is de grens.
       if (rijen.length < STAART_STUK) return { matrix, planning, laatste: planning };
     }
   } catch (err) {
     return oud(`staart van de matrix niet gelezen (${reden(err)})`);
   }
-  return oud(`meer dan ${STAART_STUK * STAART_MAX_STUKKEN} matrixdagen na de laatste planningdag (${planning ?? "geen"}) zonder dienst`);
+  return oud(`meer dan ${STAART_STUK * STAART_MAX_STUKKEN} matrixdagen na de laatste planningdag (${planning}) zonder dienst`);
 }
 
 /** De horizon voor `x-planning-tot`: de grens van de matrix, en zonder matrix

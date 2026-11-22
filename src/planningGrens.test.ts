@@ -127,13 +127,30 @@ describe('bepaalPlanningGrens', () => {
     expect(horizonUitGrens(zonder)).toBeNull();
   });
 
-  it('matrix zonder opgebouwde planning: alleen een code-dienst kan de grens zijn, anders geen grens', async () => {
-    const met = lezerOp([rij('2027-01-04', { A: 'bv' }), rij('2027-01-05', { A: 'eek1' }), rij('2027-01-06', {})], null);
-    expect(await bepaalPlanningGrens(met.lezer)).toEqual({ matrix: '2027-01-06', planning: null, laatste: '2027-01-05' });
-    expect(met.gelezen.staart).toEqual([[null, 0, STAART_STUK]]);
-    const zonder = await bepaalPlanningGrens(lezerOp([rij('2027-01-04', { A: 'bv' }), rij('2027-01-05', {})], null).lezer);
-    expect(zonder.laatste).toBeNull();
-    expect(horizonUitGrens(zonder)).toBeNull();
+  // Gewijzigd na de tegenlezing: vroeger gaf dit de laatste code-dienst of
+  // geen grens. Zonder één planningdag (Planning wissen, herstel met een lege
+  // planning) kent de regel de gewone diensten niet en zou de grens te vroeg
+  // vallen op een schoolrit, of wegvallen, terwijl het bord diensten toont.
+  it('matrix zonder één opgebouwde planningdag: de grens van vroeger met een waarschuwing, geen staart gelezen', async () => {
+    const gevallen: Rij[][] = [
+      // Gewone diensten t/m 03/01, de laatste schoolrit op 18/12: niet 18/12.
+      [rij('2026-12-18', { A: 'eek1', B: '2101' }), rij('2026-12-19', { A: '2101' }), rij('2027-01-03', { A: '2101' })],
+      [rij('2027-01-04', { A: 'bv' }), rij('2027-01-05', { A: 'eek1' }), rij('2027-01-06', {})],
+      [rij('2027-01-04', { A: 'bv' }), rij('2027-01-05', {})],
+    ];
+    for (const matrix of gevallen) {
+      for (const leeg of [null, undefined, '', '  ']) {
+        const { lezer, gelezen } = lezerOp(matrix, leeg);
+        const laatsteRij = matrix[matrix.length - 1].source_date;
+        const grens = await bepaalPlanningGrens(lezer);
+        expect(grens).toEqual({ matrix: laatsteRij, planning: null, laatste: laatsteRij });
+        expect(horizonUitGrens(grens)).toBe(laatsteRij);
+        expect(gelezen.staart).toEqual([]);
+        expect(gelezen.codes).toBe(0);
+        expect(gelezen.waarschuwingen).toHaveLength(1);
+        expect(gelezen.waarschuwingen[0]).toContain('geen enkele dag in de opgebouwde planning');
+      }
+    }
   });
 
   it('planning die voorbij de matrix loopt: de grens blijft de laatste matrixrij', async () => {
@@ -231,6 +248,50 @@ describe('geen tweede indeling', () => {
   });
 });
 
+describe('bekende afwijkingen tegenover het bord (vastgelegd, niet opgelost)', () => {
+  const users = [
+    { id: '1', name: 'Jan Janssen', role: 'chauffeur', isActive: true },
+    { id: '2', name: 'Piet Pieters', role: 'chauffeur', isActive: true },
+    { id: '3', name: 'Tom Technieker', role: 'technieker', isActive: true },
+  ];
+  const services = [
+    { id: 'd1', serviceNumber: '2101', startTime: '05:00', endTime: '13:00' },
+    // Nieuw nummer waarvan de uren nog niet ingevuld zijn.
+    { id: 'd9', serviceNumber: '2901', startTime: '', endTime: '' },
+  ];
+  const codes = [{ code: 'bv', category: 'leave', description: 'Betaald verlof' }, { code: 'gar', category: 'service', description: 'Garage' }];
+  const meet = async (staart: Record<string, Record<string, string>>) => {
+    const dagen = ['2027-01-03', ...Object.keys(staart)].sort();
+    const rows = dagen.map((dag) => ({ id: `m-${dag}`, source_date: dag, day_type: 'week', raw_row: '', assignments: staart[dag] ?? { 'Jan Janssen': '2101' } }));
+    const { shifts } = bouwPlanningUitMatrix({ rows: rows as any[], users: users as any[], services: services as any[], planningCodes: codes as any[] });
+    const { cells } = berekenCelWaarheid('2027-01', { rows, users, services, codes, leave: [], swaps: [] });
+    const bord = Object.values(cells).flatMap((perDag) => Object.entries(perDag).filter(([, cel]) => cel.kind === 'service').map(([dag]) => dag)).sort().pop();
+    const grens = await bepaalPlanningGrens({
+      matrixLaatste: async () => dagen[dagen.length - 1],
+      planningLaatste: async () => shifts.map((s: any) => String(s.date)).sort().pop() ?? null,
+      staart: async (na, vanaf, aantal) => rows.filter((r) => r.source_date > na).sort((a, b) => b.source_date.localeCompare(a.source_date)).slice(vanaf, vanaf + aantal),
+      dienstCodes: async () => dienstCodeTokens(codes),
+      waarschuw: () => { throw new Error('geen waarschuwing verwacht'); },
+    });
+    return { grens: grens.laatste, bord };
+  };
+
+  it('een dienst zonder geldige uren heeft geen planningrijen: de grens ligt vroeger dan het bord', async () => {
+    // Het bord toont 2901 als dienst zodra het nummer in het dienstoverzicht staat;
+    // de opbouw maakt er zonder uren geen rijen voor. Smal: het vraagt dat er die dag
+    // geen enkele dienst met uren en geen code-dienst staat.
+    expect(await meet({ '2027-01-04': { 'Jan Janssen': '2901' } })).toEqual({ grens: '2027-01-03', bord: '2027-01-04' });
+    // Staat er die dag ook één dienst met uren, dan klopt de grens weer.
+    expect(await meet({ '2027-01-04': { 'Jan Janssen': '2901', 'Piet Pieters': '2101' } })).toEqual({ grens: '2027-01-04', bord: '2027-01-04' });
+  });
+
+  it('een code-dienst onder een naam die niet op het bord staat verlegt de grens toch (later, de veilige kant)', async () => {
+    // Het bord toont alleen actieve chauffeurs; de staarttoets kijkt niet wie de kolom is.
+    expect(await meet({ '2027-01-04': { 'Tom Technieker': 'GAR' } })).toEqual({ grens: '2027-01-04', bord: '2027-01-03' });
+    expect(await meet({ '2027-01-04': { 'Naam Zonder Account': 'gar' } })).toEqual({ grens: '2027-01-04', bord: '2027-01-03' });
+  });
+});
+
 describe('de opslagfuncties: welke lezingen vertrekken er', () => {
   const tabel = (q: Stap[]) => String(q[0][1]);
   const stap = (q: Stap[], naam: string) => q.find(([n]) => n === naam);
@@ -266,8 +327,11 @@ describe('de opslagfuncties: welke lezingen vertrekken er', () => {
       ['planning_matrix_rows', 'source_date', 1],
       ['planning', 'date', 1],
     ]);
-    // Een planningrij zonder datum (de kolom laat null toe) mag niet vooraan komen.
-    expect(nep.lezingen.map((q) => stap(q, 'order')?.[2])).toEqual([{ ascending: false, nullsFirst: false }, { ascending: false, nullsFirst: false }]);
+    // Een gewone aflopende sortering op beide: die leest de index achterwaarts.
+    // `nullsFirst: false` (NULLS LAST bij aflopend) past op geen van beide indexen.
+    expect(nep.lezingen.map((q) => stap(q, 'order')?.[2])).toEqual([{ ascending: false }, { ascending: false }]);
+    // Een planningrij zonder datum (de kolom laat null toe) wordt met een filter uitgesloten.
+    expect(nep.lezingen.map((q) => stap(q, 'not'))).toEqual([undefined, ['not', 'date', 'is', null]]);
   });
 
   it('matrix loopt verder dan de planning: één staartlezing met alleen datum en cellen, na de laatste planningdag', async () => {
@@ -305,6 +369,16 @@ describe('de opslagfuncties: welke lezingen vertrekken er', () => {
     expect(await getPlanningMatrixGrenzen()).toEqual({ eerste: '2026-09-01', laatste: '2027-01-03' });
   });
 
+  it('matrix zonder één planningrij: rooster en maandplanning krijgen de laatste matrixrij, zonder staart', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    zetStand({ matrix: '2027-01-03', eerste: '2026-12-01', planning: null, staart: [rij('2026-12-18', { A: 'eek1' })], codes: [{ code: 'eek1', category: 'service' }] });
+    expect(await getPlanningHorizon()).toBe('2027-01-03');
+    expect(await getPlanningMatrixGrenzen()).toEqual({ eerste: '2026-12-01', laatste: '2027-01-03' });
+    expect(staartLezingen()).toEqual([]);
+    expect(nep.lezingen.filter((q) => tabel(q) === 'planning_codes')).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
   it('geen matrix: de horizon is de laatste opgebouwde dienst, de grenzen zijn leeg', async () => {
     zetStand({ matrix: null, planning: '2026-12-20' });
     expect(await getPlanningHorizon()).toBe('2026-12-20');
@@ -316,6 +390,9 @@ describe('de opslagfuncties: welke lezingen vertrekken er', () => {
   it('matrix niet leesbaar: de horizon valt terug op de planning, de grenzen gooien (zoals vroeger)', async () => {
     zetStand({ matrix: '2027-01-31', planning: '2027-01-03', fout: (q) => tabel(q) === 'planning_matrix_rows' });
     expect(await getPlanningHorizon()).toBe('2027-01-03');
+    // Ook de terugval sluit een rij zonder datum uit en sorteert gewoon aflopend.
+    const terugval = nep.lezingen.filter((q) => tabel(q) === 'planning').pop()!;
+    expect([stap(terugval, 'not'), stap(terugval, 'order')?.[2]]).toEqual([['not', 'date', 'is', null], { ascending: false }]);
     await expect(getPlanningMatrixGrenzen()).rejects.toMatchObject({ message: 'verbinding weg' });
   });
 

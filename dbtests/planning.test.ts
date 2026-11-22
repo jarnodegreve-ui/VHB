@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../api/_lib/db';
-import { getPlanningData, getPlanningHorizon, getPlanningMatrixGrenzen, getPlanningMatrixRows, replacePlanningAndMatrix, replacePlanningData, savePlanningCodesData } from '../api/_lib/storage';
+import { clearPlanningData, getPlanningData, getPlanningHorizon, getPlanningMatrixGrenzen, getPlanningMatrixRows, replacePlanningAndMatrix, replacePlanningData, savePlanningCodesData } from '../api/_lib/storage';
 import { dienst, leegDatabase, matrixRij, planningKort, planningVersie } from './hulp';
 
 beforeEach(leegDatabase);
@@ -168,6 +168,16 @@ describe('getPlanningHorizon en getPlanningMatrixGrenzen', () => {
     const { error } = await db!.from('planning').insert({ id: 'zonder-datum', driverId: 'c1', line: '2501', startTime: '06:00', endTime: '14:00' });
     expect(error).toBeNull();
     expect(await beide()).toEqual({ horizon: '2027-01-03', grenzen: { eerste: '2027-01-03', laatste: '2027-01-03' } });
+  });
+
+  it('planning gewist terwijl de matrix er staat: de grens van vroeger, niet de laatste schoolrit', async () => {
+    await codes();
+    await replacePlanningAndMatrix(
+      [matrixRij('2026-12-18', { c1: '2501', c2: 'EEK1' }), matrixRij('2026-12-19', { c1: '2501' }), matrixRij('2027-01-03', { c1: '2501' })],
+      [dienst({ id: 'd-18', date: '2026-12-18', line: '2501', driverId: 'c1' })],
+    );
+    await clearPlanningData();
+    expect(await beide()).toEqual({ horizon: '2027-01-03', grenzen: { eerste: '2026-12-18', laatste: '2027-01-03' } });
   });
 
   it('zonder matrix: de laatste opgebouwde dienst als horizon, geen grenzen; helemaal leeg: niets', async () => {
