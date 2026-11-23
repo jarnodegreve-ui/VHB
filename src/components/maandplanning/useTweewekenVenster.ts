@@ -163,9 +163,11 @@ export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTi
   // want useZelfLadend zet na elke laad de tijd van nu.
   const bordVanServer = useRef<string | null>(onthoudenOm === null ? null : monthParam);
   const [uitCache, setUitCache] = useState<{ datum: number | null } | null>(null);
-  // Een lezing van dit bezoek staat in beeld (geslaagd, uit welke bron ook);
-  // na een terugkeer pas na de verversing (de view opent dan pas een cel
-  // voor de staf).
+  // In dit bezoek kwam er een antwoord voor de hoofdmaand (van de server, of
+  // uit de cache van de service worker, ook als dat het bord niet verving);
+  // na een terugkeer pas met de verversing. De view opent pas dan een cel
+  // voor de staf: op hetzelfde moment als vroeger, toen het bord pas met dat
+  // antwoord verscheen. Een mislukte lezing (500) telt niet.
   const [versDitBezoek, setVersDitBezoek] = useState(onthoudenOm === null);
   // De nieuwste lezing van de hoofdmaand loopt nog. Haalt een zichtbare laad
   // een stille in (een maandwissel vlak na een terugkeer), dan zet
@@ -183,7 +185,12 @@ export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTi
       // Een nieuwere lezing vertrok intussen (een maandwissel, een verversing):
       // die beslist, een laat antwoord raakt het bord niet meer.
       if (laatsteHoofd.current !== lezing) return;
-      if (herkomst.uitCache && bordVanServer.current === monthParam) throw new Error(GEEN_VERBINDING);
+      if (herkomst.uitCache && bordVanServer.current === monthParam) {
+        // Het bord blijft; wel kwam er in dit bezoek een antwoord, op hetzelfde
+        // moment als vroeger het bord uit de cache verscheen.
+        setVersDitBezoek(true);
+        throw new Error(GEEN_VERBINDING);
+      }
       setData(res);
       bordVanServer.current = herkomst.uitCache ? null : (res?.month ?? null);
       setUitCache(herkomst.uitCache ? { datum: herkomst.datum ?? null } : null);

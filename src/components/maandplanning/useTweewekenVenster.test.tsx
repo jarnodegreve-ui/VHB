@@ -396,6 +396,7 @@ describe('useMaandLaden: het geheugen van de Maandplanning', () => {
     expect(b.nu().fout).toBe('Er ging iets mis (code 500). Probeer het opnieuw.');
     expect(b.nu().laden).toBe(false);
     expect(b.nu().versheid.laatstGeladen).toBe(onthouden.om);
+    expect(b.nu().versDitBezoek).toBe(false);
     expect(b.setData).not.toHaveBeenCalled();
     expect(b.setExtraData.mock.calls).toEqual([[versie('2026-11', 1)]]);
     // Een volgende verversing die slaagt vervangt ze en wist de fout.
@@ -517,7 +518,9 @@ describe('useMaandLaden: het geheugen van de Maandplanning', () => {
     expect(b.nu().versheid.laatstGeladen).toBe(onthouden.om);
     expect(b.nu().versheid.laatstGeladen).not.toBe(Date.now());
     expect(b.nu().uitCache).toBeNull();
-    expect(b.nu().versDitBezoek).toBe(false);
+    // Er kwam wel een antwoord in dit bezoek (de staf kan een cel openen, zoals
+    // vroeger op het bord uit de cache); een 500 telt daarvoor niet.
+    expect(b.nu().versDitBezoek).toBe(true);
     // Opnieuw proberen (de herlaadtik), nu met bereik: het verse bord, geen fout.
     server.uitCache = new Set();
     b.rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-26'), reloadTick: 1, setReloadTick: b.setReloadTick, setData: b.setData, setExtraData: b.setExtraData, onthoudenOm: onthouden.om });
