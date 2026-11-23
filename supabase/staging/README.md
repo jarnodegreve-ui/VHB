@@ -198,7 +198,6 @@ op het productieproject):
 **Bewust leeg op staging** (de code valt netjes terug):
 
 - `SMTP_*`, `ALERT_EMAIL`, `BACKUP_PASSPHRASE` — geen mail; verlofbeslissingen en digests worden alleen gelogd, de back-upmail slaat over (fail-closed).
-- `TELEGRAM_*` — geen bot; meldingen staan standaard al uit.
 - `OCPI_*` — geen laadpalen-koppeling; het OCPI-dashboard blijft leeg.
 - `VAPID_*` — geen web-push; de meldingen-knop verdwijnt.
 - `UPSTASH_*`, `RATE_LIMIT_*`, `RETENTION_*` — defaults.

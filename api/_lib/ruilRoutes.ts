@@ -16,11 +16,10 @@ import { bouwRuilaanvraagMail } from "./mailTeksten.js";
 import type { AuthenticatedRequest } from "./types.js";
 import { isStafRol, authenticate, requireRole } from "./middleware.js";
 import { laatsteUitvoeringPerRuil, uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from "./ruilUitvoeringen.js";
-import { DAG_KORT, meldRuilTerValidatieTelegram } from "./telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { RUIL_BEKEKEN_ACTIE, regelsVanRuil, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
 import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoorRust, type RustPlanningRij } from "../../shared/ruilRust.js";
-import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, isHandmatigeWissel, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "./helpers.js";
+import { addDagenIso, DAG_DMJ, DAG_KORT, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, isHandmatigeWissel, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "./helpers.js";
 import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapDoorvoerRegels, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getSwapsOpDienstdag, getSwapsVenster, getSwapsArchief, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "./storage.js";
@@ -309,8 +308,8 @@ const draaiHalveDoorvoerTerug = async (swap: any, vooraf: { swaps: any[]; vast?:
 // beslissing zo niet meer stilletjes overschrijven (de whole-array-POST kon
 // dat wel): de tweede krijgt een 409 en een verse lijst.
 /** De ruil-beslissing zelf (rolregels, state-machine, planning-doorvoer,
- *  opslag, log en pushes) — gedeeld door PATCH /api/swaps/:id en de
- *  Telegram-goedkeurknoppen. Gedrag identiek aan de oude route-body. */
+ *  opslag, log en pushes) achter PATCH /api/swaps/:id. Gedrag identiek aan
+ *  de oude route-body. */
 export async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: string | null; actor: BeslisActor }): Promise<
   { fout: { status: number; error: string; currentStatus?: string } } | { swap: any; melding: string }
 > {
@@ -487,7 +486,7 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
     };
     // De tekst van de meldingen (api/_lib/meldingTeksten.ts): per ontvanger wat
     // er voor hem verandert. Wie een melding krijgt, de soort en de url zijn
-    // die van altijd; `action` blijft de logactie en de melding voor Telegram.
+    // die van altijd; `action` blijft de logactie.
     const meldingNamen = { aanvrager: naamVoorMelding(usersForLog, current.requesterId), collega: naamVoorMelding(usersForLog, current.targetDriverId) };
     const meldingPlanning = planningVoorMelding(voertDoor && alDoorgevoerd, beweging);
     // Eén stap per overgang; rechtstreeks afhandelen zet er twee (goedkeuring,
@@ -518,8 +517,7 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
         url: recordUrl("ruil-verzoeken", current.id),
       })));
     }
-    // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
-    // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
+    // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route).
     if (status === "accepted") {
       const beslissers = usersForLog
         .filter((u) => isActieveStaf(u) && String(u.id) !== selfId)
@@ -530,10 +528,6 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
         soort: "ruil",
         body: validatie.body,
         url: recordUrl("ruil-verzoeken", current.id),
-      });
-      await meldRuilTerValidatieTelegram({
-        id: String(current.id),
-        omschrijving: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))}${current.shiftLine ? `, dienst ${current.shiftLine} op ${current.shiftDate ? DAG_KORT(String(current.shiftDate)) : "?"}` : ""}${current.returnCode && String(current.returnCode).toLowerCase() !== "vrij" ? `, tegenprestatie ${current.returnCode} op ${current.returnDate ? DAG_KORT(String(current.returnDate)) : "?"}` : ""}.`,
       });
     }
 
@@ -1389,10 +1383,6 @@ export function mountRuilRoutes(app: express.Express) {
               soort: "ruil",
               body: validatie.body,
               url: recordUrl("ruil-verzoeken", next.id),
-            });
-            await meldRuilTerValidatieTelegram({
-              id: String(next.id),
-              omschrijving: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}${next.shiftLine ? `, dienst ${next.shiftLine} op ${next.shiftDate ? DAG_KORT(String(next.shiftDate)) : "?"}` : ""}.`,
             });
           }
         }

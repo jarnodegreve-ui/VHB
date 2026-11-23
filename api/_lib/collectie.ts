@@ -121,17 +121,15 @@ export const isPlainRecord = (body: unknown): body is Record<string, unknown> =>
 export const newRecordId = () => crypto.randomUUID();
 
 /** Toegestane vorm van een client-gegenereerd record-id (UUID of de
- *  Date.now()-terugval uit de views). Sluit scheidingstekens uit: het id
- *  reist mee in Telegram-callback_data als `lv|<id>|<besluit>`, en een id
- *  met een pipe kon daar het doelrecord verleggen (security-audit 07-09,
- *  bevinding 9). */
+ *  Date.now()-terugval uit de views). Sluit scheidingstekens uit
+ *  (security-audit 07-09, bevinding 9). */
 export const RECORD_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 // Delta-endpoint voor verlofbeslissingen (zie PATCH /api/swaps/:id voor het
 // waarom). Beslissen is planner/admin-werk; chauffeurs trekken in via de
 // array-route (volledige verwijdering van eigen pending).
-/** Actor van een beslissing die niet via een HTTP-request binnenkomt (de
- *  Telegram-bot). logActivity leest alleen req.appUser — een synthetisch
+/** Actor van een beslissing die een schrijfkern uitvoert. logActivity
+ *  leest alleen req.appUser — een synthetisch
  *  request met dezelfde velden volstaat en houdt de auditlog eerlijk. */
 export type BeslisActor = { id: string; name: string; role: "chauffeur" | "planner" | "admin" };
 
