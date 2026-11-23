@@ -22,7 +22,7 @@ import { RichtingWissel } from '../components/RichtingWissel';
 import { overgangActief } from '../lib/overgang';
 import { navigeer } from '../app/router';
 import { ServiceChip } from '../components/ServiceChip';
-import { Skeleton, SkeletonRow } from '../components/Skeleton';
+import { MijnDagSkelet } from '../app/skeletten';
 import { DienstBalk } from '../components/DienstBalk';
 import { RitbladViewer } from '../components/RitbladViewer';
 import { MededelingStrook } from '../components/MededelingStrook';
@@ -217,25 +217,12 @@ export function MijnDagView({
     void warmRitbladCache();
   }, [isInitialLoad, online, heeftDienstBinnenkort]);
 
-  // Skelet met dezelfde kop-/kaartopbouw als de inhoud; Verwissel cross-fadet
-  // ernaar zodra de data binnen is (minstens 180 ms skelet, geen flikker).
-  const skelet = (
-    <div className="mx-auto max-w-2xl space-y-5" role="status" aria-busy="true" aria-label="Mijn dag wordt geladen">
-      <div className="space-y-2 px-1 pt-1">
-        <Skeleton className="h-3 w-16" />
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-      <Card padding="none" className="overflow-hidden">
-        <SkeletonRow className="border-b border-hairline-subtle" />
-        <SkeletonRow className="border-b border-hairline-subtle" />
-        <SkeletonRow />
-      </Card>
-    </div>
-  );
-
+  // Het skelet (MijnDagSkelet, src/app/skeletten.tsx) is hetzelfde als in de
+  // schil van de app en in de Suspense-terugval: één vorm van de eerste
+  // render tot de inhoud. Verwissel cross-fadet ernaar zodra de data binnen
+  // is (minstens 180 ms skelet, geen flikker).
   return (
-    <Verwissel laden={isInitialLoad} skelet={skelet}>
+    <Verwissel laden={isInitialLoad} skelet={<MijnDagSkelet />}>
     <div className="mx-auto max-w-2xl space-y-5">
       {/* === Kop: dag-taal + schakelaar + statuszin === */}
       <header className="px-1 pt-1">

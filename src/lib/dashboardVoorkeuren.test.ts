@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LEGE_DASHBOARD_VOORKEUREN, parseDashboardVoorkeuren } from '../../shared/schemas/dashboardVoorkeuren';
 import {
   CHAUFFEUR_TEGELS, PLANNER_TEGELS, isStandaard, isVerborgen, kleineTegelSpan, pasVoorkeurenToe,
-  stripSpans, verplaats, volledigeVolgorde, zetZichtbaar,
+  stripKlassen, stripSpans, verplaats, volledigeVolgorde, zetZichtbaar,
 } from './dashboardVoorkeuren';
 
 const ids = (defs: { id: string }[]) => defs.map((d) => d.id);
@@ -63,6 +63,41 @@ describe('dashboardvoorkeuren, helpers', () => {
     expect(kleineTegelSpan(3)).toBe('xl:col-span-2');
     expect(kleineTegelSpan(2)).toBe('xl:col-span-3');
     expect(kleineTegelSpan(1)).toBe('xl:col-span-6');
+  });
+
+  // De strip van de cockpit en haar laadskelet lezen allebei deze klassen
+  // (PlannerDashboardWidgets): wijkt de berekening af, dan faalt dit, en
+  // e2e/skeletvorm.spec.ts meet daarnaast de vakken zelf.
+  it('stripKlassen: raster en tegelklassen voor 1 tot 6 tegels, gebouwd op stripSpans', () => {
+    expect(stripKlassen(5)).toEqual({
+      raster: 'kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-5',
+      tegels: [
+        'md:col-span-2 xl:col-span-1',
+        'md:col-span-2 xl:col-span-1',
+        'md:col-span-2 xl:col-span-1',
+        'md:col-span-3 xl:col-span-1',
+        'md:col-span-3 xl:col-span-1 col-span-2',
+      ],
+    });
+    expect(stripKlassen(3)).toEqual({
+      raster: 'kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-3',
+      tegels: ['md:col-span-2 xl:col-span-1', 'md:col-span-2 xl:col-span-1', 'md:col-span-2 xl:col-span-1 col-span-2'],
+    });
+    expect(stripKlassen(1)).toEqual({ raster: 'kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-1', tegels: ['md:col-span-6 xl:col-span-1 col-span-2'] });
+    expect(stripKlassen(0)).toEqual({ raster: 'kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-1', tegels: [] });
+    for (let n = 1; n <= 6; n++) {
+      const { raster, tegels } = stripKlassen(n);
+      const spans = stripSpans(n);
+      // Evenveel tegels als gevraagd, elk met zijn md-span en één kolom op xl.
+      expect(tegels).toHaveLength(n);
+      expect(raster.endsWith(` ${spans.xl}`)).toBe(true);
+      tegels.forEach((klassen, i) => {
+        const delen = klassen.split(' ');
+        expect(delen.slice(0, 2)).toEqual([spans.md[i], 'xl:col-span-1']);
+        // Alleen de laatste van een oneven aantal spant op de telefoon beide kolommen.
+        expect(delen.includes('col-span-2')).toBe(i === n - 1 && n % 2 === 1);
+      });
+    }
   });
 
   it('parseDashboardVoorkeuren: normaliseert of weigert', () => {
