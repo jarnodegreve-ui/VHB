@@ -255,7 +255,15 @@ import { ZOD_VRIJE_VIEWS, kaartSleutels, leesViewLoaders } from './chunk-kaart-k
 //  - de score van het inlogscherm in Lighthouse (hard, ≥ 0,87) blijft de
 //    echte grens van de startbundel: zakt ze op een PR, dan eerst meten
 //    (CLAUDE.md › Prestaties), geen drempelwerk.
-const BUDGET_KB = 763;
+// 23-11 (keuze Jarno, "alleen het totaal dan"): 763 → 775. Na #844 (tooltip,
+// een luie chunk van 1,9 kB) mat de runner totaal 761, index 80,76, chauffeur
+// 86,54 en staf 158,94: het totaal liet nog ±2 kB voor ±16 stukken. Het totaal
+// telt elk lui scherm samen, ook wat een chauffeur nooit opent, en zegt dus
+// weinig over de start. Index en warmups (wat bij het openen en vooraf laadt)
+// blijven op 82, 88 en 161, en de Lighthouse-score van het inlogscherm blijft
+// de harde grens. Dezelfde regel als hierboven: haalt een bewaker het nieuwe
+// plafond, dan kiest Jarno opnieuw.
+const BUDGET_KB = 775;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
