@@ -27,6 +27,8 @@ import { abonneerOnline, isOnlineNu, useOnline } from './lib/useOnline';
 import { useOnderhoud } from './app/useOnderhoud';
 import { AppSchil, laadWerkvoorraadMenu, laadAccountOverlays } from './app/AppSchil';
 
+/** Eén start van de tip-laag per pagina, ook als het laad-effect opnieuw loopt. */
+let tipLaagGestart = false;
 
 export default function App() {
   // Sessie en aanmeldketen (src/app/useSessie.ts, stap 6 van de splitsing). De
@@ -258,6 +260,22 @@ export default function App() {
     return warmViews(WARMUP_VIEWS[currentUser.role === 'chauffeur' ? 'chauffeur' : 'staf']);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role, isInitialLoad]);
+
+  // Tip-laag (ronde 6, punt 10, src/lib/tipLaag.ts): de uitleg bij een
+  // icoonknop in de huisstijl, alleen met een muis. Lui, pas bij de eerste
+  // muisbeweging na de eerste lading; een touch-toestel haalt hem nooit op.
+  // Mislukt het laden, dan houdt elke knop zijn systeemtooltip.
+  useEffect(() => {
+    if (!currentUser || isInitialLoad || tipLaagGestart || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    const opMuis = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return;
+      tipLaagGestart = true;
+      document.removeEventListener('pointermove', opMuis);
+      import('./lib/tipLaag').then((m) => m.startTipLaag()).catch(() => {});
+    };
+    document.addEventListener('pointermove', opMuis, { passive: true });
+    return () => document.removeEventListener('pointermove', opMuis);
+  }, [!currentUser, isInitialLoad]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Overlays voorladen op het moment dat ze waarschijnlijk worden: de
   // werkvoorraad-knop staat voor staf altijd in de topbar (meteen ophalen,
