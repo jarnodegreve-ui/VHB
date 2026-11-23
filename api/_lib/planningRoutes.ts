@@ -153,8 +153,8 @@ const verlofConflictsIn = (
 // dienstblokken direct in de planning. Een nieuwe Excel-import vervangt de
 // matrix en dus ook deze toewijzing: bewust, de Excel is dan de waarheid en
 // het gat verschijnt gewoon weer in de dekking.
-/** Onbemande dienst toewijzen (matrix + planning + log + push) — gedeeld
- *  door POST /api/planning/assign-service en de Telegram-toewijzen-knop.
+/** Onbemande dienst toewijzen (matrix + planning + log + push) achter
+ *  POST /api/planning/assign-service.
  *  Gedrag identiek aan de oude route-body. */
 export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber: unknown; driverId: unknown }, actor: BeslisActor): Promise<
   { fout: { status: number; error: string } } | { rows: number; serviceNumber: string; driverName: string; date: string }

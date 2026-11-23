@@ -23,16 +23,15 @@ import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
 import { mountDienstregelingRoutes } from "./_lib/dienstregelingRoutes.js";
 import { mountMededelingRoutes } from "./_lib/mededelingRoutes.js";
 import { mountRapportRoutes } from "./_lib/rapportRoutes.js";
-import { mountTelegramRoutes } from "./_lib/telegram.js";
-import { mountCoverageRoutes, berekenDekkingsGaten, berekenCoverageAdvies } from "./_lib/coverageRoutes.js";
+import { mountCoverageRoutes } from "./_lib/coverageRoutes.js";
 import { mountSysteemRoutes } from "./_lib/systeemRoutes.js";
 import { mountAccountRoutes } from "./_lib/accountRoutes.js";
 import { mountGebruikersRoutes } from "./_lib/gebruikersRoutes.js";
-import { mountPlanningRoutes, wijsDienstToeIntern } from "./_lib/planningRoutes.js";
+import { mountPlanningRoutes } from "./_lib/planningRoutes.js";
 import { mountCronRoutes } from "./_lib/cronRoutes.js";
 import { mountCommunicatieRoutes } from "./_lib/communicatieRoutes.js";
-import { mountRuilRoutes, beslisRuilIntern } from "./_lib/ruilRoutes.js";
-import { mountVerlofRoutes, beslisVerlofIntern, registreerZiekmeldingIntern } from "./_lib/verlofRoutes.js";
+import { mountRuilRoutes } from "./_lib/ruilRoutes.js";
+import { mountVerlofRoutes } from "./_lib/verlofRoutes.js";
 import { mountDocumentRoutes } from "./_lib/documentRoutes.js";
 import { mountFilmnummerRoutes } from "./_lib/filmnummerRoutes.js";
 import { mountDagtypeKalenderRoutes } from "./_lib/dagtypeKalenderRoutes.js";
@@ -161,21 +160,6 @@ mountMailRoutes(app);
 // Techniek: voertuigen, gele boek, werkprestaties, vervaldata per voertuig.
 // Zie api/_lib/techniekRoutes.ts (fase A Access-migratie, 13-09).
 mountTechniekRoutes(app);
-
-// Telegram-bot voor de planner (webhook, commando's, goedkeurknoppen). Zie
-// api/_lib/telegram.ts. De bereken-functies komen uit coverageRoutes/advisor; de
-// *Intern-schrijfkernen uit de domeinmodules (ruil, verlof, planning). Ze
-// worden hier doorgegeven i.p.v. in telegram.ts geïmporteerd: die modules
-// importeren zelf de meld-helpers van telegram.ts, dus omgekeerd importeren
-// zou een cyclus geven.
-mountTelegramRoutes(app, {
-  berekenDekkingsGaten,
-  berekenCoverageAdvies,
-  beslisVerlof: beslisVerlofIntern,
-  beslisRuil: beslisRuilIntern,
-  registreerZiekmelding: registreerZiekmeldingIntern,
-  wijsDienstToe: wijsDienstToeIntern,
-});
 
 // Dekking & advies (expectations, gaten, advisor). Zie api/_lib/coverageRoutes.ts.
 mountCoverageRoutes(app);

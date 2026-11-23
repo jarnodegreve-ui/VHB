@@ -80,8 +80,8 @@ export const MAX_ADVIES_MAANDEN = 13;
 /**
  * Een advies-aanvraag die niet kan: een dag die niet bestaat, of diensten die
  * te ver uit elkaar liggen. De routes maken er een 400 met deze tekst van; de
- * digest en de Telegram-bot vangen hem per gat op en melden dat het advies
- * niet berekend kon worden.
+ * digest vangt hem per gat op en meldt dat het advies niet berekend kon
+ * worden.
  */
 export class AdviesBereikFout extends Error {
   readonly status = 400;

@@ -10,13 +10,12 @@
 
 import express from "express";
 import crypto from "node:crypto";
-import { sendLeaveDecisionEmail, sendEmail, escapeHtml, type LeaveDecisionAction } from "./email.js";
+import { sendLeaveDecisionEmail, sendEmail, type LeaveDecisionAction } from "./email.js";
 import { bouwZiekmeldingMail } from "./mailTeksten.js";
 import { sendPushToUsers } from "./push.js";
 import type { AuthenticatedRequest } from "./types.js";
 import { isStafRol, authenticate, requireRole } from "./middleware.js";
 import { isMissingColumnError, isMissingTableError } from "./deviceGate.js";
-import { stuurTelegram, telegramGeconfigureerd, meldVerlofAanvraagTelegram } from "./telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { VERLOF_LIMIETEN_KEY, limietVoorDag, sorteerPeriodes, verlofLimietenSchema } from "../../shared/schemas/verlofLimieten.js";
 import { laadVerlofLimieten, metKalenderMaxima } from "./verlofInstellingen.js";
@@ -40,7 +39,7 @@ const MAX_TOELICHTING = 1000;
  * eigen lijst plus de nieuwe aanvraag; er is geen bulkinvoer en geen
  * wachtrij die aanvragen opspaart). Vijf laat wat marge en houdt een
  * nagemaakt verzoek klein: elke nieuwe aanvraag is een logregel, een push
- * naar alle planners en een Telegram-bericht.
+ * naar alle planners.
  */
 const MAX_NIEUWE_AANVRAGEN_PER_VERZOEK = 5;
 
@@ -51,13 +50,10 @@ const MAX_NIEUWE_AANVRAGEN_PER_VERZOEK = 5;
 // telefonisch bij de planning binnen, die registreert het — een chauffeur
 // mag zichzelf niet ziek (in)plannen.
 /** De ziekmelding-kern (validatie, dedupe, record, log, openvallende
- *  diensten, pushes en mails) — gedeeld door POST /api/leave/sick-report en
- *  het /ziekmeld-commando van de Telegram-bot. `stuurTelegramAlert` staat uit
- *  wanneer de bot zelf de afzender is (die bouwt zijn eigen antwoord). */
+ *  diensten, pushes en mails) achter POST /api/leave/sick-report. */
 export async function registreerZiekmeldingIntern(
   invoer: { userId: unknown; startDate?: unknown; endDate?: unknown; comment?: unknown },
   actor: BeslisActor,
-  stuurTelegramAlert = true,
 ): Promise<{ fout: { status: number; error: string } } | { leave: any; period: string; targetName: string; openDienstenIso: Array<{ date: string; nummers: string[] }> }> {
     const selfId = String(actor.id);
     const forUserId = String(invoer.userId ?? "");
@@ -184,16 +180,6 @@ export async function registreerZiekmeldingIntern(
       body: `${target.name} is ziek gemeld voor ${period}.`,
       url: viewUrl("ziekte"),
     });
-    // Ziekmelding ook naar de gekoppelde Telegram-chat, mét de diensten die
-    // erdoor openvallen — dát is wat de planner meteen wil weten. Best-effort.
-    if (telegramGeconfigureerd() && stuurTelegramAlert) {
-      const dienstRegels = openDiensten.slice(0, 5).map((d) => `• ${d.label}: ${d.nummers}`);
-      if (openDiensten.length > 5) dienstRegels.push(`• …en nog ${openDiensten.length - 5} dagen`);
-      await stuurTelegram([
-        `🤒 <b>Ziekmelding</b>, ${escapeHtml(target.name)} (${period})`,
-        openDiensten.length > 0 ? `Diensten op naam in deze periode:\n${dienstRegels.join("\n")}` : "Geen diensten op naam in deze periode.",
-      ].join("\n"));
-    }
     // Per planner een eigen mail, rechtstreeks geadresseerd — géén BCC-batch.
     // sendEmail zet meerdere ontvangers in BCC (met noreply als To), en
     // Microsoft 365 filterde precies die vorm stilletjes weg: de testmail
@@ -202,8 +188,8 @@ export async function registreerZiekmeldingIntern(
     // planners die elkaars adres kennen is los versturen veiliger én leest de
     // mail normaal. Volgorde: één voor één, fouten loggen maar niet blokkeren.
     // Alleen admins krijgen de mail (Jarno 06-10: "ziektemelding mag
-    // algemeen uitstaan, behalve voor admin"); planners houden de push en
-    // het Telegram-bericht. De mailsoort moet in Beheer › Mails aanstaan.
+    // algemeen uitstaan, behalve voor admin"); planners houden de push.
+    // De mailsoort moet in Beheer › Mails aanstaan.
     const recipients = planningRollen.filter((u) => u.role === "admin" && u.email).map((u) => u.email as string);
     // Openstaande diensten in de mail (zelfde term als het scherm): "do 6 aug, 4407". Geen diensten in
     // de periode (ziek op vrije dagen) → dat óók gewoon zeggen, dan hoeft de
@@ -233,8 +219,8 @@ export async function registreerZiekmeldingIntern(
       leave: record,
       period,
       targetName: target.name,
-      // ISO-variant voor de bot: kandidaten-knoppen hebben de rauwe datum
-      // nodig; de label-variant leeft alleen intern (mail/alert).
+      // ISO-variant van de openvallende diensten (rauwe datum); de
+      // label-variant leeft alleen intern (mail). Sinds 22-11 zonder lezer.
       openDienstenIso: [...dagDiensten.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([d, nummers]) => ({ date: d, nummers })),
     };
 }
@@ -254,7 +240,7 @@ export const parseBeslisReden = (raw: unknown): { reden?: string } | { error: st
 };
 
 /** De verlof-beslissing zelf (concurrency-guard, state-machine, opslag, log,
- *  mail + push) — gedeeld door PATCH /api/leave/:id en de Telegram-knoppen.
+ *  mail + push) achter PATCH /api/leave/:id.
  *  `reden` (wens Jarno 22-09) is vrije tekst bij een afwijzing en wordt bij
  *  een andere status genegeerd. */
 export async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: string; actor: BeslisActor; reden?: unknown }): Promise<
@@ -760,8 +746,7 @@ export function mountVerlofRoutes(app: express.Express) {
               : `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
             { type: "leave", id: next.id },
           );
-          // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins,
-          // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
+          // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins.
           if (!isStafRol(req.appUser!.role)) {
             const beslissers = users.filter(isActieveStaf).map((u) => String(u.id));
             await sendPushToUsers(beslissers, {
@@ -770,7 +755,6 @@ export function mountVerlofRoutes(app: express.Express) {
               body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
               url: recordUrl("verlof", next.id),
             });
-            await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, start: String(next.startDate), eind: String(next.endDate) });
           }
           continue;
         }

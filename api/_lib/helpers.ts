@@ -492,8 +492,8 @@ export const matrixCodesForDate = (
  * ISO-dag → "17/09/2026", en een periode → "17/09/2026 t/m 20/09/2026".
  * Dag/maand/jaar in élke tekst die een mens leest: foutmeldingen, meldingen,
  * mails en het activiteitenlog toonden de rauwe ISO-datum, en die las Jarno
- * als jaar/maand/dag (17-09). Voor Telegram-lijstjes blijft DAG_KORT
- * ("wo 17 sep") de vorm, die staat in api/_lib/telegram.ts.
+ * als jaar/maand/dag (17-09). Voor korte lijstjes blijft DAG_KORT
+ * ("wo 17 sep") de vorm, die staat hieronder.
  */
 export const DAG_DMJ = (iso: string | null | undefined): string => {
   const s = String(iso ?? "").slice(0, 10);
@@ -528,8 +528,13 @@ export const maandGrenzen = (maand: string): { van: string; tot: string } | null
   return { van: `${maand}-01`, tot: `${maand}-${String(laatste).padStart(2, "0")}` };
 };
 
+/** ISO-dag → "wo 17 sep" (Brusselse kalenderdag): de korte vorm voor
+ *  lijstjes, o.a. het dagoverzicht en de bevestiging van een ruilbeslissing. */
+export const DAG_KORT = (iso: string) =>
+  new Date(`${iso}T12:00:00Z`).toLocaleDateString("nl-BE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Brussels" });
+
 /** ISO-dag + n dagen (puur datumrekenen in UTC-frame). Eén bron voor de
- *  hele API — advisor, telegram, index en ocpi (daar als alias `dagPlus`)
+ *  hele API — advisor, index en ocpi (daar als alias `dagPlus`)
  *  hadden elk een eigen kopie (controle-ronde 27-08, bevinding 41). */
 export const addDagenIso = (iso: string, n: number): string => {
   const d = new Date(`${iso}T00:00:00Z`);
