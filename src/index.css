@@ -1463,6 +1463,7 @@ html.dark {
 @utility z-actiemenu { z-index: 125; }    /* ActieMenu: ook vanuit een modal */
 @utility z-toast { z-index: 130; }        /* toasts en de installatiehint: boven elke modal */
 @utility z-kiezer { z-index: 140; }       /* DatePicker: ook vanuit een modal-boven */
+@utility z-tip { z-index: 145; }          /* de tip bij een icoonknop (src/lib/tipLaag.ts): boven elke laag, nooit klikbaar */
 @utility z-skiplink { z-index: 150; }
 
 /* Schil-maten (tokens in :root hierboven). */

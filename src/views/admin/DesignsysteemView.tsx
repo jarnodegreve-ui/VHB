@@ -12,7 +12,6 @@ import { z } from 'zod';
 import { ACCOUNT_STATUS } from '../../../shared/status';
 import { MenuItem, Popover, PopoverKop, PopoverVoet } from '../../components/Popover';
 import { useDropdown } from '../../components/useDropdown';
-import { Tooltip } from '../../components/Tooltip';
 import { Tabs, TabPaneel } from '../../components/Tabs';
 import { Sheet } from '../../components/Sheet';
 import { Modal } from '../../components/Modal';
@@ -559,7 +558,7 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
-      <Sectie id="overlays" titel="Overlays" uitleg="Eén vlak per situatie. Popover: klein vlak onder een knop (menu of uitleg). Tooltip: hover-uitleg bij een aanwijzer. Sheet: keuze of kort formulier onder de duim, veeg omlaag sluit. Modal: beslissing of formulier midden in beeld. ConfirmationModal: één vraag bovenop een modal. Allemaal veer in, ease uit, focus terug naar de knop.">
+      <Sectie id="overlays" titel="Overlays" uitleg="Eén vlak per situatie. Popover: klein vlak onder een knop (menu of uitleg). Tooltip: de tip-laag geeft elke icoonknop zonder eigen title zijn naam als uitleg, alleen met een muis of bij Tab. Sheet: keuze of kort formulier onder de duim, veeg omlaag sluit. Modal: beslissing of formulier midden in beeld. ConfirmationModal: één vraag bovenop een modal. Allemaal veer in, ease uit, focus terug naar de knop.">
         <Rij label="Popover · menu">
           <div ref={menu.wortel} className="relative inline-flex">
             <Button variant="secondary" size="sm" aria-haspopup="menu" aria-expanded={menu.open} onClick={() => menu.setOpen((v) => !v)}>Account</Button>
@@ -579,9 +578,9 @@ export function DesignsysteemView() {
           </div>
         </Rij>
         <Rij label="Tooltip">
-          <Tooltip label="Bewerken"><IconButton label="Bewerken" variant="secondary" size="sm"><Pencil size={16} /></IconButton></Tooltip>
-          <Tooltip label="Verwijderen" kant="onder"><IconButton label="Verwijderen" variant="danger" size="sm"><Trash2 size={16} /></IconButton></Tooltip>
-          <span className="text-body-sm text-slate-500">alleen bij een aanwijzer of toetsenbordfocus; op touch draagt het aria-label</span>
+          <IconButton label="Bewerken" variant="secondary" size="sm"><Pencil size={16} /></IconButton>
+          <IconButton label="Verwijderen" variant="danger" size="sm"><Trash2 size={16} /></IconButton>
+          <span className="text-body-sm text-slate-500">wijs aan met de muis of ga er met Tab naartoe; op touch draagt de knop alleen zijn naam</span>
         </Rij>
         <Rij label="Sheet · Modal">
           <Button variant="secondary" size="sm" onClick={() => setSheetOpen(true)}>Sheet openen</Button>
