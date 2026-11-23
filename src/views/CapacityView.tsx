@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Table2 } from 'lucide-react';
-import { downloadBlob, notify } from '../lib/ui';
+import { cn, downloadBlob, notify } from '../lib/ui';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../components/ui';
 import { ActieMenu } from '../components/ActieMenu';
 import { AanwezigOpScherm } from '../components/AanwezigOpScherm';
@@ -30,7 +30,7 @@ import { MaandoverzichtModal } from '../components/maandplanning/MaandoverzichtM
 import { DagWeergave } from '../components/maandplanning/DagWeergave';
 import { useCelDetail } from '../components/maandplanning/useCelDetail';
 import { useDienstwissel } from '../components/maandplanning/useDienstwissel';
-import { leesOnthoudenMaand, useImportGrenzen, useMaandLaden, useTweewekenVenster } from '../components/maandplanning/useTweewekenVenster';
+import { cacheRegel, leesOnthoudenMaand, useImportGrenzen, useMaandLaden, useTweewekenVenster } from '../components/maandplanning/useTweewekenVenster';
 import { MD_QUERY, useMedia } from '../lib/useMinWidth';
 
 /**
@@ -51,6 +51,9 @@ import { MD_QUERY, useMedia } from '../lib/useMinWidth';
  * herlaadtik) blijft hier, net als de export, het maandoverzicht en de
  * mobiele dag-weergave.
  */
+/** De plaats van de versheidsregel in de kop (zie de uitleg bij de regel). */
+const REGEL_PLAATS = '-mr-2 contain-inline-size md:order-last md:basis-full md:text-right xl:order-none xl:mr-0 xl:basis-auto xl:contain-none';
+
 export function CapacityView({ currentUser }: { currentUser: User }) {
   const ownId = String(currentUser?.id ?? '');
   const [maandParam, zetMaandParam] = useRouteParam(0);
@@ -239,9 +242,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     if (dagParam && uitUrl !== dagParam) zetDagParam(uitUrl);
     setMobielDag((cur) => uitUrl ?? kiesDagBinnenImport(dates, [cur, todayIso], laatsteDag));
   }, [dates, todayIso, dagParam, zetDagParam, laatsteDag]);
-  // Rust-groep dichtklappen bij een maandwissel (nieuwe dagenlijst), niet bij
-  // elke dagwissel.
-  useEffect(() => { setToonRust(false); }, [dates]);
+  // Rust-groep dichtklappen bij een maandwissel, niet bij elke dagwissel en
+  // niet bij een stille verversing van dezelfde maand (die geeft een nieuwe
+  // dagenlijst; na een terugkeer uit het geheugen klapte de groep zo vlak
+  // na het opentikken weer dicht).
+  useEffect(() => { setToonRust(false); }, [data?.month]);
   // Tik in de strip of op het aandachtspijltje: dag kiezen én in de URL
   // zetten (replace). De maand moet er dan vóór staan, ook voor de huidige
   // maand die anders een schone URL houdt.
@@ -310,7 +315,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   // Tik op een cel (desktopraster of daglijst): het detailvenster open, met
   // de bestaande notitie van die chauffeur en dag als concept (useCelDetail).
-  const onCel = cel.open;
+  // Voor de staf (notitie, dienstwissel, terugdraaien) pas na een lezing van
+  // dit bezoek: na een terugkeer staat het bord uit het geheugen er meteen,
+  // maar de notities komen pas met het bezoek binnen, en een leeg concept
+  // zou een bestaande notitie overschrijven of wissen (de knop heet dan
+  // "Notitie verwijderen"). Tot de verversing binnen is doet een tik niets,
+  // zoals vroeger onder het skelet. Een chauffeur schrijft hier niets.
+  const onCel: typeof cel.open = (...args) => {
+    if (canEditNotes && !zl.versDitBezoek) return;
+    cel.open(...args);
+  };
 
   // Eén weergave per breedte (ronde 6, punt 22): het raster vanaf md, de
   // dagweergave daaronder. Tot dan stonden ze er allebei en verborg CSS er
@@ -350,7 +364,18 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 anders werd de houder breder dan de knoppen en duwde de
                 `ml-auto` van het menu de rest naar links (gemeten: 61 px op
                 768, 37 px op 1024, en 8 px met alleen de tussenruimte). */}
-            <VersheidRegel {...zl.versheid} className="-mr-2 contain-inline-size md:order-last md:basis-full md:text-right xl:order-none xl:mr-0 xl:basis-auto xl:contain-none" />
+            {/* Een bord uit de cache van de service worker zonder bord van
+                de server: nooit "Bijgewerkt om", want useZelfLadend zet na
+                elke laad het uur van nu en de server bevestigde niets; de
+                vorm van Mijn dag (cacheRegel), in dezelfde opmaak en op
+                dezelfde plaats als VersheidRegel (components/ui.tsx). */}
+            {zl.uitCache ? (
+              <p className={cn('text-xs text-slate-500 order-last basis-full self-center whitespace-nowrap text-right max-sm:text-left md:order-none md:basis-auto md:text-left', REGEL_PLAATS)} aria-live="polite">
+                {cacheRegel(zl.uitCache.datum, zl.online)}
+              </p>
+            ) : (
+              <VersheidRegel {...zl.versheid} className={REGEL_PLAATS} />
+            )}
             {/* Gedeeld zoekveld (loep + wisknop); op de telefoon vult het de
                 regel naast Vandaag en het actiemenu. */}
             <SearchField

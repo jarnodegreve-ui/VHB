@@ -1,5 +1,5 @@
 import { apiLijst } from './api';
-import { antwoordUitCache } from '../app/data/kern';
+import { antwoordDatum, antwoordUitCache } from '../app/data/kern';
 
 /**
  * Read-only maandplanning — de geïmporteerde planning-matrix (chauffeur ×
@@ -61,21 +61,27 @@ export type MonthPlanning = {
   zichtbaarVanaf?: string;
 };
 
-/** Waar het antwoord vandaan kwam: de server, of de cache van de service worker. */
-export type Herkomst = { uitCache?: boolean };
+/** Waar het antwoord vandaan kwam: de server, of de cache van de service
+ *  worker; bij een antwoord uit de cache ook het tijdstip van het
+ *  oorspronkelijke antwoord (de Date-kop, null als onbekend). */
+export type Herkomst = { uitCache?: boolean; datum?: number | null };
 
 /**
  * Zonder bereik komt het antwoord uit de cache van de service worker (sinds
  * 09-10 in OFFLINE_API, public/sw-ritbladen.js), gesleuteld op deze URL mét
  * `?month=`: elke maand die met bereik bekeken is, opent daarna ook zonder.
  * Zo'n antwoord draagt `X-VHB-Bron: cache` (`antwoordUitCache` van de datalaag);
- * wie een `herkomst` meegeeft, hoort het daarin (`uitCache`). De Maandplanning
- * toont het zoals elk antwoord, maar onthoudt het niet (src/lib/schermGeheugen.ts):
- * het is het bord van een vorige keer, mogelijk uren oud. Een niet-ok antwoord
+ * wie een `herkomst` meegeeft, hoort het daarin (`uitCache`, met `datum`). De
+ * Maandplanning onthoudt het niet (src/lib/schermGeheugen.ts), laat het geen
+ * bord van de server vervangen en noemt er nooit het uur van nu bij: het is
+ * het bord van een vorige keer, mogelijk uren oud. Een niet-ok antwoord
  * gooit zoals altijd een Error met de servermelding (`foutUitAntwoord`).
  */
 export async function fetchMonthPlanning(month: string, herkomst?: Herkomst): Promise<MonthPlanning> {
   const { response, data } = await apiLijst<MonthPlanning>(`/api/month-planning?month=${month}`);
-  if (herkomst) herkomst.uitCache = antwoordUitCache(response);
+  if (herkomst) {
+    herkomst.uitCache = antwoordUitCache(response);
+    herkomst.datum = herkomst.uitCache ? antwoordDatum(response) : null;
+  }
   return data;
 }

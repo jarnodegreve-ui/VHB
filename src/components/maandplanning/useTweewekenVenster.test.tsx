@@ -11,7 +11,7 @@ import { PLANNING_SALVO_MS } from '../../lib/maandplanning';
 import { LAATSTE_AUTH_KEY, WIS_PRIVE_GEBEURTENIS } from '../../lib/afmelden';
 import { markeerEigenSchrijfactie, resetLiveSignaal } from '../../lib/liveSignaal';
 import { MAX_LEEFTIJD_MS } from '../../lib/schermGeheugen';
-import { leesOnthoudenMaand, maandSleutel, useImportGrenzen, useMaandLaden, useTweewekenVenster } from './useTweewekenVenster';
+import { cacheRegel, GEEN_VERBINDING, leesOnthoudenMaand, maandSleutel, useImportGrenzen, useMaandLaden, useTweewekenVenster } from './useTweewekenVenster';
 
 /**
  * Het tweewekenvenster, het laden van de twee maanden en de grenzen van de
@@ -304,7 +304,7 @@ describe('useMaandLaden: het geheugen van de Maandplanning', () => {
     if (window !== (globalThis as unknown as Window)) Object.defineProperty(window, 'localStorage', { value: ls, configurable: true });
   };
   /** Het verzoek: per maand de versie die de server nu geeft, vasthouden kan, en de herkomst. */
-  const server = { v: 1, houd: false, faalt: false, faaltMaand: new Set<string>(), uitCache: new Set<string>(), wachtend: [] as Array<() => void>, perMaand: new Map<string, () => void>() };
+  const server = { v: 1, houd: false, faalt: false, faaltMaand: new Set<string>(), uitCache: new Set<string>(), datum: null as number | null, wachtend: [] as Array<() => void>, perMaand: new Map<string, () => void>() };
   const laatLos = async () => { server.houd = false; await act(async () => { for (const los of server.wachtend.splice(0)) los(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }); };
   beforeEach(() => {
     opslag.clear();
@@ -312,12 +312,15 @@ describe('useMaandLaden: het geheugen van de Maandplanning', () => {
     opslag.set(LAATSTE_AUTH_KEY, 'auth-a');
     resetLiveSignaal();
     window.dispatchEvent(new Event(WIS_PRIVE_GEBEURTENIS));
-    Object.assign(server, { v: 1, houd: false, faalt: false, faaltMaand: new Set<string>(), uitCache: new Set<string>(), wachtend: [], perMaand: new Map() });
+    Object.assign(server, { v: 1, houd: false, faalt: false, faaltMaand: new Set<string>(), uitCache: new Set<string>(), datum: null, wachtend: [], perMaand: new Map() });
     fetchMonthPlanning.mockImplementation(async (m: string, herkomst?: Herkomst) => {
       const v = server.v;
       if (server.houd) await new Promise<void>((los) => { server.wachtend.push(los); server.perMaand.set(m, los); });
       if (server.faalt || server.faaltMaand.has(m)) throw new Error('Er ging iets mis (code 500). Probeer het opnieuw.');
-      if (herkomst) herkomst.uitCache = server.uitCache.has(m);
+      if (herkomst) {
+        herkomst.uitCache = server.uitCache.has(m);
+        herkomst.datum = herkomst.uitCache ? server.datum : null;
+      }
       return versie(m, v);
     });
   });
@@ -493,6 +496,124 @@ describe('useMaandLaden: het geheugen van de Maandplanning', () => {
     await act(async () => { wacht.get('2026-10')!(); await Promise.resolve(); await Promise.resolve(); });
     expect(a.setData).toHaveBeenCalledTimes(1);
     expect(a.setData).not.toHaveBeenCalledWith(versie('2026-10', 1));
+  });
+
+  // --- Een antwoord uit de cache van de service worker (tegenlezing 23-11) ---
+  // Komt de verversing uit die cache (het netwerk viel weg), dan bevestigde de
+  // server niets: het bord van de server blijft staan en de regel noemt nooit
+  // het uur van nu.
+  it('terug, en de verversing komt uit de cache: het onthouden bord en zijn tijd blijven, met de kleine Foutkaart; de regel noemt nooit nu', async () => {
+    await eersteBezoek();
+    const onthouden = leesOnthoudenMaand('2026-10')!;
+    vi.advanceTimersByTime(3 * 60_000);
+    server.v = 2;
+    server.uitCache = new Set(['2026-10', '2026-11']);
+    server.datum = onthouden.om - 3 * 3600_000;
+    const b = opzet(dagen('2026-10-26'), onthouden.om);
+    await flush();
+    expect(b.setData).not.toHaveBeenCalled();
+    expect(b.setExtraData.mock.calls).toEqual([[versie('2026-11', 1)]]);
+    expect(b.nu().fout).toBe(GEEN_VERBINDING);
+    expect(b.nu().versheid.laatstGeladen).toBe(onthouden.om);
+    expect(b.nu().versheid.laatstGeladen).not.toBe(Date.now());
+    expect(b.nu().uitCache).toBeNull();
+    expect(b.nu().versDitBezoek).toBe(false);
+    // Opnieuw proberen (de herlaadtik), nu met bereik: het verse bord, geen fout.
+    server.uitCache = new Set();
+    b.rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-26'), reloadTick: 1, setReloadTick: b.setReloadTick, setData: b.setData, setExtraData: b.setExtraData, onthoudenOm: onthouden.om });
+    await flush();
+    expect(b.setData).toHaveBeenLastCalledWith(versie('2026-10', 2));
+    expect(b.setExtraData).toHaveBeenLastCalledWith(versie('2026-11', 2));
+    expect(b.nu().fout).toBeNull();
+    expect(b.nu().versDitBezoek).toBe(true);
+  });
+
+  it('een stille verversing uit de cache naast een vers bord van dit bezoek: niets vervangen, geen fout, de tijd van de verse lezing blijft', async () => {
+    const a = opzet(dagen('2026-10-26'));
+    await flush();
+    const vers = a.nu().versheid.laatstGeladen;
+    expect(a.setData).toHaveBeenCalledTimes(1);
+    expect(a.setExtraData).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60_000);
+    server.v = 2;
+    server.uitCache = new Set(['2026-10', '2026-11']);
+    a.rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-26'), reloadTick: 1, setReloadTick: a.setReloadTick, setData: a.setData, setExtraData: a.setExtraData, onthoudenOm: null });
+    await flush();
+    expect(a.setData).toHaveBeenCalledTimes(1);
+    expect(a.setExtraData).toHaveBeenCalledTimes(1);
+    expect(a.nu().fout).toBeNull();
+    expect(a.nu().versheid.laatstGeladen).toBe(vers);
+    expect(a.nu().uitCache).toBeNull();
+  });
+
+  it('zonder bord van de server (koude start zonder bereik): het bord uit de cache zoals vroeger, met de herkomst voor de regel', async () => {
+    server.uitCache = new Set(['2026-10', '2026-11']);
+    server.datum = Date.now() - 3 * 3600_000;
+    const a = opzet(dagen('2026-10-26'));
+    await flush();
+    expect(a.setData).toHaveBeenCalledWith(versie('2026-10', 1));
+    expect(a.setExtraData).toHaveBeenCalledWith(versie('2026-11', 1));
+    expect(a.nu().fout).toBeNull();
+    expect(a.nu().uitCache).toEqual({ datum: server.datum });
+    // Daarna met bereik: het verse bord en geen herkomst meer.
+    server.uitCache = new Set();
+    a.rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-26'), reloadTick: 1, setReloadTick: a.setReloadTick, setData: a.setData, setExtraData: a.setExtraData, onthoudenOm: null });
+    await flush();
+    expect(a.nu().uitCache).toBeNull();
+    // En een maandwissel zonder bereik toont het bord uit de cache van die maand.
+    server.uitCache = new Set(['2026-11', '2026-12']);
+    a.rerender({ monthParam: '2026-11', windowDates: dagen('2026-11-23'), reloadTick: 1, setReloadTick: a.setReloadTick, setData: a.setData, setExtraData: a.setExtraData, onthoudenOm: null });
+    await flush();
+    expect(a.setData).toHaveBeenLastCalledWith(versie('2026-11', 1));
+    expect(a.nu().uitCache).toEqual({ datum: server.datum });
+  });
+
+  it('cacheRegel: het uur van het oorspronkelijke antwoord alleen als dat vandaag was, nooit "Bijgewerkt"', () => {
+    const nu = new Date('2026-10-28T10:00:00');
+    const vanochtend = new Date('2026-10-28T07:12:00').getTime();
+    const gisteren = new Date('2026-10-27T07:12:00').getTime();
+    expect(cacheRegel(vanochtend, true, nu)).toBe('Opgeslagen gegevens van 07:12');
+    expect(cacheRegel(vanochtend, false, nu)).toBe('Offline · gegevens van 07:12');
+    expect(cacheRegel(gisteren, true, nu)).toBe('Opgeslagen gegevens');
+    expect(cacheRegel(gisteren, false, nu)).toBe('Offline · opgeslagen gegevens');
+    expect(cacheRegel(null, true, nu)).toBe('Opgeslagen gegevens');
+    expect(cacheRegel(null, false, nu)).toBe('Offline · opgeslagen gegevens');
+  });
+
+  // --- "Bijwerken…" bleef hangen (tegenlezing 23-11) ---
+  it('terug uit het geheugen en meteen een maand verder: na de zichtbare laad zegt de regel niet meer "Bijwerken…", ook niet later', async () => {
+    await eersteBezoek();
+    const onthouden = leesOnthoudenMaand('2026-10')!;
+    vi.advanceTimersByTime(60_000);
+    server.houd = true;
+    const b = opzet(dagen('2026-10-26'), onthouden.om);
+    expect(b.nu().laden).toBe(false);
+    // De stille verversing loopt; de regel noemt de onthouden tijd.
+    expect(b.nu().versheid).toEqual({ laatstGeladen: onthouden.om, verversen: false, online: true });
+    b.rerender({ monthParam: '2026-11', windowDates: dagen('2026-11-09'), reloadTick: 0, setReloadTick: b.setReloadTick, setData: b.setData, setExtraData: b.setExtraData, onthoudenOm: onthouden.om });
+    expect(b.nu().laden).toBe(true);
+    await laatLos();
+    expect(b.nu().laden).toBe(false);
+    expect(b.nu().verversen).toBe(false);
+    expect(b.nu().versheid.verversen).toBe(false);
+    expect(b.nu().versheid.laatstGeladen).toBe(Date.now());
+    act(() => { vi.advanceTimersByTime(10 * 60_000); });
+    expect(b.nu().verversen).toBe(false);
+    expect(b.nu().versheid.verversen).toBe(false);
+  });
+
+  it('een gewone stille verversing (de herlaadtik): de regel zegt "Bijwerken…" zolang ze loopt, daarna de nieuwe tijd', async () => {
+    const a = opzet(dagen('2026-10-05'));
+    await flush();
+    server.houd = true;
+    vi.advanceTimersByTime(60_000);
+    a.rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-05'), reloadTick: 1, setReloadTick: a.setReloadTick, setData: a.setData, setExtraData: a.setExtraData, onthoudenOm: null });
+    await flush();
+    expect(a.nu().verversen).toBe(true);
+    expect(a.nu().versheid.verversen).toBe(true);
+    await laatLos();
+    expect(a.nu().verversen).toBe(false);
+    expect(a.nu().versheid).toEqual({ laatstGeladen: Date.now(), verversen: false, online: true });
   });
 
   it('een antwoord dat niet de gevraagde maand draagt, wordt niet onthouden', async () => {

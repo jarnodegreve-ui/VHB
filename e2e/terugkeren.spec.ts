@@ -638,6 +638,8 @@ const mpBord = (maand: string, v: number, chauffeur: boolean, nu: Date) => {
 /** GET /api/month-planning (het bord, niet de export of het overzicht):
  *  versie, vasthouden, laten mislukken, de kop van de cache, en elk gevraagde
  *  maand in volgorde. Wint van de fixtures (later geregistreerd). */
+/** Zo veel ouder is een antwoord uit de cache van de service worker in deze proeven. */
+const CACHE_OUDER_MS = 3 * 3600_000;
 type MaandPoort = { versie: number; status: number; houd: boolean; uitCache: boolean; wachtend: Array<() => void>; gets: string[]; wissels: unknown[] };
 async function maandPoort(page: Page, chauffeur: boolean, nu: Date): Promise<MaandPoort> {
   const p: MaandPoort = { versie: 1, status: 200, houd: false, uitCache: false, wachtend: [], gets: [], wissels: [] };
@@ -650,7 +652,10 @@ async function maandPoort(page: Page, chauffeur: boolean, nu: Date): Promise<Maa
     if (p.houd) await new Promise<void>((los) => p.wachtend.push(los));
     if (p.status !== 200) return route.fulfill({ status: p.status, json: { error: 'Serverfout' } }).catch(() => undefined);
     const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (p.uitCache) headers['x-vhb-bron'] = 'cache';
+    // Een antwoord uit de cache draagt de Date-kop van het oorspronkelijke
+    // antwoord: hier drie uur vóór de start van de proef, zodat de regel het
+    // uur van die kop van het uur van nu kan onderscheiden.
+    if (p.uitCache) { headers['x-vhb-bron'] = 'cache'; headers.date = new Date(nu.getTime() - CACHE_OUDER_MS).toUTCString(); }
     return route.fulfill({ status: 200, headers, body: JSON.stringify(mpBord(maand, p.versie, chauffeur, nu)) }).catch(() => undefined);
   });
   // Een handmatige dienstwissel: de server heeft daarna een nieuw bord.
@@ -740,14 +745,25 @@ const toontNietVersie = async (page: Page, info: TestInfo, v: number) => {
 /** De dagen in de strip (telefoon), zoals de knoppen ze noemen. */
 const stripDagen = (page: Page) => page.locator(MP_STRIP).getByRole('tab').allInnerTexts();
 
-/** Eerste bezoek (geen geheugen), terug naar het andere scherm. Geeft de regel van die lezing. */
+/** De regel boven een bord uit de cache van de service worker (geen "Bijgewerkt"). */
+const cacheRegelEl = (page: Page) => page.locator('p[aria-live="polite"]').filter({ hasText: /^(Opgeslagen gegevens|Offline · (gegevens van|opgeslagen gegevens))/ });
+
+/** Eerste bezoek (geen geheugen), terug naar het andere scherm. Geeft de regel van die lezing.
+ *  Komt het bord uit de cache van de service worker (`poort.uitCache`), dan noemt de regel het uur
+ *  van dat oorspronkelijke antwoord en nooit "Bijgewerkt om" (tegenlezing 23-11). */
 async function eersteMpBezoek(page: Page, info: TestInfo, poort: MaandPoort, rol: MpRol, maanden = ['2026-10', '2026-11']) {
   const voor = poort.gets.length;
   await mpNaar(page, info, 'Maandplanning');
   await expect.poll(() => poort.gets.slice(voor).sort()).toEqual([...maanden].sort());
   await toontVersie(page, info, poort.versie);
-  await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
-  const tekst = (await regel(page).textContent())!.trim();
+  if (poort.uitCache) {
+    const uur = await page.evaluate((t) => new Date(t).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }), KRUIST.getTime() - CACHE_OUDER_MS);
+    await expect(cacheRegelEl(page)).toHaveText(`Opgeslagen gegevens van ${uur}`);
+    await expect(regel(page)).toHaveCount(0);
+  } else {
+    await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+  }
+  const tekst = (await (poort.uitCache ? cacheRegelEl(page) : regel(page)).textContent())!.trim();
   const strip = telefoon(info) ? await stripDagen(page) : [];
   await mpNaar(page, info, anderScherm(rol));
   return { tekst, strip };
@@ -1025,6 +1041,85 @@ test('Maandplanning: mislukt de verversing na een terugkeer (500), dan blijft he
   await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
   expect(await mpSkeletGezien(page)).toBe(false);
 });
+
+// Tegenlezing 23-11: een antwoord uit de cache van de service worker (het
+// netwerk viel weg, de SW antwoordt uit 'vhb-ritbladen') is geen verversing.
+// Na een terugkeer blijft het onthouden bord met zijn eigen tijd, met de kleine
+// Foutkaart erboven; nooit "Bijgewerkt om <nu>" boven een bord dat de server
+// niet bevestigde. Zonder service worker in deze proef: de kop zoals de SW
+// hem zet (markeerUitCache), met de Date-kop van drie uur eerder.
+test('Maandplanning: komt de verversing na een terugkeer uit de cache van de service worker, dan blijft het onthouden bord met zijn tijd en de kleine Foutkaart erboven, nooit het uur van nu', async ({ page }, info) => {
+  alleenIn(info, IPHONE, DESKTOP);
+  const rol: MpRol = telefoon(info) ? 'chauffeur' : 'admin';
+  const poort = await startMp(page, rol);
+  const eerste = await eersteMpBezoek(page, info, poort, rol);
+  await mpTerugVastgehouden(page, info, poort, 120_000);
+  poort.uitCache = true;
+  mpLaatLos(poort);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/^Geen verbinding met de server\./)).toBeVisible();
+  await expect(page.getByText('Dit kon niet laden')).toHaveCount(0);
+  // Het onthouden bord (versie 1), niet dat uit de cache (versie 2); op desktop ook de tweede maand.
+  await toontVersie(page, info, 1);
+  await expect(regel(page)).toHaveText(eerste.tekst);
+  await expect(cacheRegelEl(page)).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await toontVersie(page, info, 1);
+  await expect(regel(page)).toHaveText(eerste.tekst);
+  await expect(mpSkelet(page)).toHaveCount(0);
+
+  // Opnieuw proberen met bereik: het verse bord en de nieuwe tijd.
+  poort.uitCache = false;
+  await page.getByRole('button', { name: 'Opnieuw proberen' }).click();
+  await toontVersie(page, info, poort.versie);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+  await expect(regel(page)).toHaveText(await regelVoor(page, await nu(page)));
+  expect(await mpSkeletGezien(page)).toBe(false);
+});
+
+// Tegenlezing 23-11: na een terugkeer staat het bord uit het geheugen er
+// meteen, maar de staf schrijft vanuit het celdetail (notitie, dienstwissel,
+// terugdraaien). Een cel opent voor hen pas na de lezing van dit bezoek, zoals
+// vroeger onder het skelet: een tik of klik ervoor doet niets, ook een tweede
+// niet. Daarna opent ze met de bestaande notitie in het veld.
+const NOTITIE = 'Neem bus 412, eerst tanken.';
+for (const [project, rol] of [[IPHONE, 'planner'], [DESKTOP, 'admin']] as Array<[string, MpRol]>) {
+  test(`Maandplanning (${rol}, ${project}): na een terugkeer opent een cel pas na de verse lezing, met de bestaande notitie in het veld`, async ({ page }, info) => {
+    alleenIn(info, project);
+    const schrijf = volgSchrijfacties(page);
+    const poort = await startMp(page, rol);
+    const vandaag = mpIso(KRUIST);
+    await page.route('**/api/planning-notes**', (route) => (route.request().method() === 'GET'
+      ? route.fulfill({ json: [{ driverId: '43', date: vandaag, note: NOTITIE }] })
+      : route.fallback()));
+    await eersteMpBezoek(page, info, poort, rol);
+    const naEerste = schrijf.length;
+    await mpTerugVastgehouden(page, info, poort, 120_000);
+    await toontVersie(page, info, 1);
+    const cel = (v: number) => (telefoon(info)
+      ? page.getByRole('button', { name: new RegExp(`^${mpCode(v, '43', vandaag)} Alex Du Priez`) })
+      : page.locator(MP_RASTER).locator('tbody tr', { has: page.getByRole('rowheader', { name: 'Alex Du Priez' }) }).locator('td').nth(2).getByRole('button'));
+    const druk = async (v: number) => { if (telefoon(info)) await cel(v).tap(); else await cel(v).click(); };
+    const venster = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Alex Du Priez', exact: true }) });
+
+    await druk(1);
+    await page.waitForTimeout(400);
+    await expect(venster).toHaveCount(0);
+    await druk(1);
+    await page.waitForTimeout(400);
+    await expect(venster).toHaveCount(0);
+
+    mpLaatLos(poort);
+    await toontVersie(page, info, 2);
+    await expect(venster, 'een tik van vóór het loslaten opent achteraf niets').toHaveCount(0);
+    await druk(2);
+    await expect(venster).toBeVisible();
+    await expect(venster.getByLabel('Notitie voor de chauffeur')).toHaveValue(NOTITIE);
+    await expect(venster.getByRole('button', { name: 'Notitie opslaan' })).toBeVisible();
+    await expect(venster.getByRole('button', { name: 'Notitie verwijderen' })).toHaveCount(0);
+    expect(schrijf.slice(naEerste).filter((x) => x.includes('/api/planning-notes') || x.includes('shift-swap'))).toEqual([]);
+  });
+}
 
 test('Maandplanning: een maand verder met een 500 geeft de grote Foutkaart, nooit het bord van de vorige maand', async ({ page }, info) => {
   alleenIn(info, IPHONE, DESKTOP);
