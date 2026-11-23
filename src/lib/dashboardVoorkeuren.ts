@@ -128,6 +128,20 @@ export const stripSpans = (n: number): { md: string[]; xl: string } => {
   return { md, xl };
 };
 
+/** De klassen van de statusstrip van de cockpit voor n tegels: het raster
+ *  (`kpi-raster`, 2 kolommen, md = 6, xl = n) en per tegel zijn plaats
+ *  (`stripSpans` op md, één kolom op xl; bij een oneven aantal spant de
+ *  laatste op de telefoon beide kolommen, geen half gat). Eén berekening voor
+ *  de strip én haar laadskelet (ronde 6, punt 3): tekenen die elk hun eigen
+ *  klassen, dan verspringen de tegels bij het wisselen. */
+export const stripKlassen = (n: number): { raster: string; tegels: string[] } => {
+  const { md, xl } = stripSpans(n);
+  return {
+    raster: `kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6 ${xl}`,
+    tegels: md.map((span, i) => `${span} xl:col-span-1${i === n - 1 && n % 2 === 1 ? ' col-span-2' : ''}`),
+  };
+};
+
 /** Kleine chauffeurs-tegels op xl (6 kolommen): 3 → 2, 2 → 3, 1 → 6. */
 export const kleineTegelSpan = (n: number): string => {
   if (n <= 1) return 'xl:col-span-6';

@@ -346,7 +346,7 @@ export function VersheidRegel({ className, ...versheid }: Versheid & { className
   );
 }
 
-export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = false }: {
+export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = false, kopAlsSkelet = false }: {
   /** Het scherm uit de routetabel: dan is de kop echt (eyebrow + titel) en
    *  even hoog als straks, zodat de inhoud niet springt (fase 2, 22-09). */
   view?: View;
@@ -355,19 +355,27 @@ export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = fal
   kpis?: number;
   /** Het scherm zet een beschrijving onder de titel. */
   beschrijving?: boolean;
+  /** De schil van de app (AppSkeleton) kent de rol nog niet: eyebrow en titel
+   *  staan er dan als skeletregel in hetzelfde vak als de tekst, niet als
+   *  tekst die na `/api/me` een ander scherm kan blijken (ronde 6, punt 3). */
+  kopAlsSkelet?: boolean;
 } = {}) {
   // Skeleton i.p.v. spinner: de pagina-opbouw (kop + lijst) staat er al
   // tijdens het laden — dat oogt op 4G rustiger dan een draaiend wiel in
   // een verder leeg scherm. Zelfde shimmer-DNA als de dashboard-skeletons.
   const eyebrow = view ? sectieLabel(view) : null;
-  const titel = view ? routeVan(view).label : null;
+  const titel = view && !kopAlsSkelet ? routeVan(view).label : null;
   return (
     <div className="space-y-6" role="status" aria-busy="true" aria-label="Scherm wordt geladen">
       {/* Zelfde opbouw en maten als PageHeader: text-micro (16 px) + mt-1.5 +
           text-page-title (1,1 × 24/30 px) + mt-2 + text-body (1,55 × 15 px). */}
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
         <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
-          {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
+          {eyebrow ? (
+            kopAlsSkelet
+              ? <div className="flex h-4 items-center"><Skeleton className="h-2.5 w-28" /></div>
+              : <p className="text-micro">{eyebrow}</p>
+          ) : null}
           {titel ? (
             <h1 className={cn('text-page-title', eyebrow && 'mt-1.5')}>{titel}</h1>
           ) : (
@@ -378,13 +386,7 @@ export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = fal
       </header>
       {kpis > 0 && (
         <div className="kpi-raster grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: kpis }).map((_, i) => (
-            <div key={i} className="kpi-tegel surface-card rounded-3xl p-4">
-              <div className="kpi-kop flex items-center gap-2"><Skeleton rounded="lg" className="h-7 w-7 shrink-0" /><Skeleton className="h-3 w-24" /></div>
-              <div className="kpi-getal mt-2.5 flex h-8 items-center"><Skeleton className="h-6 w-10" /></div>
-              <div className="kpi-sub mt-0.5 flex h-4 items-center"><Skeleton className="h-2.5 w-28" /></div>
-            </div>
-          ))}
+          {Array.from({ length: kpis }).map((_, i) => <KpiTegelSkelet key={i} />)}
         </div>
       )}
       {soort === 'tabel' ? (
@@ -403,20 +405,48 @@ export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = fal
             </div>
           ))}
         </div>
-      ) : (
-        <div className="surface-card rounded-3xl overflow-hidden">
-          {/* RecordRij-maat: px-4 py-3, titel 15 px + meta 13 px. */}
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-start justify-between gap-3 border-b border-hairline-subtle px-4 py-3 last:border-0">
-              <div className="min-w-0 flex-1 space-y-2 py-0.5">
-                <Skeleton className="h-3.5 w-3/5" />
-                <Skeleton className="h-3 w-2/5" />
-              </div>
-              <Skeleton rounded="full" className="mt-1 h-5 w-16 shrink-0" />
-            </div>
-          ))}
+      ) : <LijstSkelet />}
+    </div>
+  );
+}
+
+/**
+ * De KPI-tegel als skelet, met de klassen en de regelhoogtes van een OpsStat
+ * (ops.tsx): `kpi-tegel` met `kpi-kop` (1,75 rem), `kpi-getal` (de regel van
+ * text-stat, 2,125 rem) en `kpi-sub` (1 rem), zodat hij even hoog is als de
+ * tegel die volgt en in een `kpi-raster` op de telefoon ook een rij in de
+ * kaart wordt. Eén bron (ronde 6, punt 3): de KPI-rij van `ViewLoader`, de
+ * strip van de cockpit en de gele-boektegel tekenen deze. `className` draagt
+ * de rasterklassen van de tegel die hij vervangt.
+ */
+export function KpiTegelSkelet({ className }: { className?: string }) {
+  return (
+    <div className={cn('kpi-tegel surface-card rounded-3xl p-4', className)}>
+      <div className="kpi-kop flex items-center gap-2"><Skeleton rounded="lg" className="h-7 w-7 shrink-0" /><Skeleton className="h-3 w-24" /></div>
+      <div className="kpi-getal mt-2.5 flex h-[2.125rem] items-center"><Skeleton className="h-6 w-10" /></div>
+      <div className="kpi-sub mt-0.5 flex h-4 items-center"><Skeleton className="h-2.5 w-28" /></div>
+    </div>
+  );
+}
+
+/**
+ * De lijstkaart van het schermskelet: vijf rijen in de RecordRij-maat. Eén
+ * bron voor `ViewLoader` en voor het Rooster, dat onder zijn eigen kop laadt
+ * (ronde 6, punt 3): terugval en scherm tonen zo dezelfde rijen.
+ */
+export function LijstSkelet() {
+  return (
+    <div className="surface-card rounded-3xl overflow-hidden">
+      {/* RecordRij-maat: px-4 py-3, titel 15 px + meta 13 px. */}
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex items-start justify-between gap-3 border-b border-hairline-subtle px-4 py-3 last:border-0">
+          <div className="min-w-0 flex-1 space-y-2 py-0.5">
+            <Skeleton className="h-3.5 w-3/5" />
+            <Skeleton className="h-3 w-2/5" />
+          </div>
+          <Skeleton rounded="full" className="mt-1 h-5 w-16 shrink-0" />
         </div>
-      )}
+      ))}
     </div>
   );
 }
