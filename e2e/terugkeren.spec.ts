@@ -1079,22 +1079,28 @@ test('Maandplanning: komt de verversing na een terugkeer uit de cache van de ser
 
 // Tegenlezing 23-11: na een terugkeer staat het bord uit het geheugen er
 // meteen, maar de staf schrijft vanuit het celdetail (notitie, dienstwissel,
-// terugdraaien). Een cel opent voor hen pas na de lezing van dit bezoek, zoals
-// vroeger onder het skelet: een tik of klik ervoor doet niets, ook een tweede
-// niet. Daarna opent ze met de bestaande notitie in het veld.
+// terugdraaien). Een cel opent voor hen pas na de lezing van dit bezoek én met
+// de notities van de maand binnen (useCelDetail): een tik of klik ervoor doet
+// niets, ook een tweede niet. Daarna opent ze met de bestaande notitie in het
+// veld, nooit met een leeg veld en "Notitie verwijderen".
 const NOTITIE = 'Neem bus 412, eerst tanken.';
 for (const [project, rol] of [[IPHONE, 'planner'], [DESKTOP, 'admin']] as Array<[string, MpRol]>) {
-  test(`Maandplanning (${rol}, ${project}): na een terugkeer opent een cel pas na de verse lezing, met de bestaande notitie in het veld`, async ({ page }, info) => {
+  test(`Maandplanning (${rol}, ${project}): na een terugkeer opent een cel pas na de verse lezing en de notities, met de bestaande notitie in het veld`, async ({ page }, info) => {
     alleenIn(info, project);
     const schrijf = volgSchrijfacties(page);
     const poort = await startMp(page, rol);
     const vandaag = mpIso(KRUIST);
-    await page.route('**/api/planning-notes**', (route) => (route.request().method() === 'GET'
-      ? route.fulfill({ json: [{ driverId: '43', date: vandaag, note: NOTITIE }] })
-      : route.fallback()));
+    const notities = { houd: false, wachtend: [] as Array<() => void> };
+    await page.route('**/api/planning-notes**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      if (notities.houd) await new Promise<void>((los) => notities.wachtend.push(los));
+      return route.fulfill({ json: [{ driverId: '43', date: vandaag, note: NOTITIE }] }).catch(() => undefined);
+    });
     await eersteMpBezoek(page, info, poort, rol);
     const naEerste = schrijf.length;
+    notities.houd = true;
     await mpTerugVastgehouden(page, info, poort, 120_000);
+    await expect.poll(() => notities.wachtend.length, { message: 'de notities zijn gevraagd en worden vastgehouden' }).toBe(1);
     await toontVersie(page, info, 1);
     const cel = (v: number) => (telefoon(info)
       ? page.getByRole('button', { name: new RegExp(`^${mpCode(v, '43', vandaag)} Alex Du Priez`) })
@@ -1109,8 +1115,16 @@ for (const [project, rol] of [[IPHONE, 'planner'], [DESKTOP, 'admin']] as Array<
     await page.waitForTimeout(400);
     await expect(venster).toHaveCount(0);
 
+    // Het bord is vers, de notities nog niet: nog altijd niets.
     mpLaatLos(poort);
     await toontVersie(page, info, 2);
+    await druk(2);
+    await page.waitForTimeout(400);
+    await expect(venster).toHaveCount(0);
+
+    notities.houd = false;
+    for (const los of notities.wachtend.splice(0)) los();
+    await page.waitForTimeout(400);
     await expect(venster, 'een tik van vóór het loslaten opent achteraf niets').toHaveCount(0);
     await druk(2);
     await expect(venster).toBeVisible();

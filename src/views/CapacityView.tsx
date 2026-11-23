@@ -316,13 +316,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // Tik op een cel (desktopraster of daglijst): het detailvenster open, met
   // de bestaande notitie van die chauffeur en dag als concept (useCelDetail).
   // Voor de staf (notitie, dienstwissel, terugdraaien) pas na een lezing van
-  // dit bezoek: na een terugkeer staat het bord uit het geheugen er meteen,
-  // maar de notities komen pas met het bezoek binnen, en een leeg concept
-  // zou een bestaande notitie overschrijven of wissen (de knop heet dan
-  // "Notitie verwijderen"). Tot de verversing binnen is doet een tik niets,
-  // zoals vroeger onder het skelet. Een chauffeur schrijft hier niets.
+  // dit bezoek en met de notities van de maand binnen: na een terugkeer staat
+  // het bord uit het geheugen er meteen, maar de notities komen pas met het
+  // bezoek binnen, en een leeg concept zou een bestaande notitie overschrijven
+  // of wissen (de knop heet dan "Notitie verwijderen"). Tot dan doet een tik
+  // niets, zoals vroeger onder het skelet. Een chauffeur schrijft hier niets.
   const onCel: typeof cel.open = (...args) => {
-    if (canEditNotes && !zl.versDitBezoek) return;
+    if (canEditNotes && !(zl.versDitBezoek && cel.notesGeladen)) return;
     cel.open(...args);
   };
 

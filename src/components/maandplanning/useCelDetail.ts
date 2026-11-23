@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../../lib/api';
 import { notify } from '../../lib/ui';
 import { meldSchrijffout } from '../../lib/fouten';
@@ -19,13 +19,24 @@ export function useCelDetail({ monthFrom, monthTo }: { monthFrom: string; monthT
   // Dienstnotities voor de zichtbare maand. Chauffeurs krijgen server-side
   // alleen hun eigen notities; planners alles.
   const [notes, setNotes] = useState<Map<string, string>>(new Map());
+  // Voor welke maand de notities binnen zijn (geslaagd of niet, zoals
+  // vroeger). Tot dan opent de view geen cel voor de staf: een leeg concept
+  // zou een bestaande notitie overschrijven of wissen (tegenlezing 23-11).
+  // Een laat antwoord van een vorige maand raakt niets meer.
+  const [notesVoor, setNotesVoor] = useState<string | null>(null);
+  const laatsteMaand = useRef(monthFrom);
   const loadNotes = async () => {
+    const maand = monthFrom;
+    laatsteMaand.current = maand;
     try {
       const res = await apiFetch(`/api/planning-notes?from=${monthFrom}&to=${monthTo}`);
       if (!res.ok) return;
       const data = await res.json();
+      if (laatsteMaand.current !== maand) return;
       if (Array.isArray(data)) setNotes(new Map(data.map((n: any) => [noteKey(String(n.driverId), n.date), String(n.note)])));
-    } catch { /* notities zijn nice-to-have */ }
+    } catch { /* notities zijn nice-to-have */ } finally {
+      if (laatsteMaand.current === maand) setNotesVoor(maand);
+    }
   };
   useEffect(() => { void loadNotes(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [monthFrom]);
 
@@ -66,7 +77,7 @@ export function useCelDetail({ monthFrom, monthTo }: { monthFrom: string; monthT
   };
   const sluit = () => setSelected(null);
 
-  return { selected, open, sluit, notes, noteDraft, setNoteDraft, isSavingNote, saveNote };
+  return { selected, open, sluit, notes, notesGeladen: notesVoor === monthFrom, noteDraft, setNoteDraft, isSavingNote, saveNote };
 }
 
 export type CelDetail = ReturnType<typeof useCelDetail>;
