@@ -159,6 +159,50 @@ describe('useLiveUpdates', () => {
     }
   });
 
+  it('volledige catch-up: precies één seintje "planning gewijzigd" per ronde, bij het begin, ook voor een chauffeur; een gebundelde tweede aanleiding stuurt er geen', () => {
+    vi.useFakeTimers();
+    const gezien: string[] = [];
+    const opWijziging = () => gezien.push('planning-gewijzigd');
+    window.addEventListener('vhb-planning-changed', opWijziging);
+    try {
+      for (const wie of [chauffeur, planner]) {
+        gezien.length = 0;
+        const b = maakBronnen();
+        // Het seintje vóór het werk: de fetchers zien het al.
+        b.fetchMyNotes.mockImplementation(async () => { gezien.push('werk'); });
+        const { result } = renderHook(() => useLiveUpdates(true, wie, b));
+        laatste().refetchers.refetchAll();
+        expect(gezien).toEqual(['planning-gewijzigd', 'werk']);
+        // Reconnect en terug-online binnen 30 s: één ronde, één seintje.
+        result.current.catchUp();
+        expect(gezien.filter((g) => g === 'planning-gewijzigd')).toHaveLength(1);
+        vi.advanceTimersByTime(CATCHUP_BUNDEL_MS + 1);
+        result.current.catchUp();
+        expect(gezien.filter((g) => g === 'planning-gewijzigd')).toHaveLength(2);
+        expect(b.boekSync).toHaveBeenCalledTimes(2);
+        expect(meldLive).not.toHaveBeenCalled();
+      }
+    } finally {
+      window.removeEventListener('vhb-planning-changed', opWijziging);
+      vi.useRealTimers();
+    }
+  });
+
+  it('lichte catch-up: alleen bij een gewijzigde planningversie een seintje, zoals voorheen', () => {
+    const gezien = vi.fn();
+    window.addEventListener('vhb-planning-changed', gezien);
+    try {
+      const b = maakBronnen();
+      renderHook(() => useLiveUpdates(true, chauffeur, b));
+      laatste().refetchers.refetchLicht({ planning: false });
+      expect(gezien).not.toHaveBeenCalled();
+      laatste().refetchers.refetchLicht({ planning: true });
+      expect(gezien).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('vhb-planning-changed', gezien);
+    }
+  });
+
   it('lichte catch-up: meldingen, verlof en ruilen; de planning alleen als haar versie wijzigde', () => {
     const b = maakBronnen();
     renderHook(() => useLiveUpdates(true, planner, b));

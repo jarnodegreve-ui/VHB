@@ -35,6 +35,11 @@ export function useLiveUpdates(actief: boolean, currentUser: User | null, bronne
   const volledigeCatchUp = (): Promise<void> => {
     const lopend = catchUpRef.current;
     if (lopend && Date.now() - lopend.op < CATCHUP_BUNDEL_MS) return lopend.belofte;
+    // Ook de planning kan intussen gewijzigd zijn (een gemiste ruil): één
+    // seintje per ronde, zoals bij een realtime-event. Een open Maandplanning
+    // ververst dan stil, en haar geheugen (src/lib/schermGeheugen.ts) telt een
+    // lezing van vóór deze ronde niet meer.
+    window.dispatchEvent(new Event('vhb-planning-changed'));
     const planningFilter = currentUser && !isStaf(currentUser.role)
       ? { driverId: String(currentUser.id) }
       : undefined;

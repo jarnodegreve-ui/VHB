@@ -6,9 +6,12 @@ vi.mock('../../lib/monthPlanning', () => ({ fetchMonthPlanning }));
 // useZelfLadend leest de netwerkstatus via useOnline; hier altijd online.
 vi.mock('../../lib/useOnline', () => ({ useOnline: () => true }));
 
-import type { MonthPlanning } from '../../lib/monthPlanning';
+import type { Herkomst, MonthPlanning } from '../../lib/monthPlanning';
 import { PLANNING_SALVO_MS } from '../../lib/maandplanning';
-import { useImportGrenzen, useMaandLaden, useTweewekenVenster } from './useTweewekenVenster';
+import { LAATSTE_AUTH_KEY, WIS_PRIVE_GEBEURTENIS } from '../../lib/afmelden';
+import { markeerEigenSchrijfactie, resetLiveSignaal } from '../../lib/liveSignaal';
+import { MAX_LEEFTIJD_MS } from '../../lib/schermGeheugen';
+import { leesOnthoudenMaand, maandSleutel, useImportGrenzen, useMaandLaden, useTweewekenVenster } from './useTweewekenVenster';
 
 /**
  * Het tweewekenvenster, het laden van de twee maanden en de grenzen van de
@@ -262,6 +265,225 @@ describe('useMaandLaden', () => {
     await flush();
     expect(b.setExtraData).toHaveBeenLastCalledWith(null);
     expect(b.nu().fout).toBeNull();
+  });
+});
+
+/**
+ * Terug binnen vijf minuten (ronde 6, punt 22, deel 3): de echte
+ * src/lib/schermGeheugen.ts, met een eigenaar in een eigen localStorage
+ * (Node >= 22 zet zelf een functieloze `localStorage`-global, zie
+ * schermGeheugen.test.ts) en een gewist geheugen per test. Zonder eigenaar,
+ * zoals in de proeven hierboven, onthoudt het geheugen niets.
+ */
+describe('useMaandLaden: het geheugen van de Maandplanning', () => {
+  /** Het bord van een maand in versie `v`: één cel met een code die de versie draagt. */
+  const versie = (month: string, v: number): MonthPlanning => ({
+    month, dates: [`${month}-01`], drivers: [{ id: '7', name: 'Rudy Dhaenens' }],
+    cells: { 7: { [`${month}-01`]: { code: `${v}101`, kind: 'service', label: '', segments: [] } } },
+  });
+  const opslag = new Map<string, string>();
+  const zetOpslag = () => {
+    const ls = { getItem: (k: string) => opslag.get(k) ?? null, setItem: (k: string, v: string) => { opslag.set(k, v); }, removeItem: (k: string) => { opslag.delete(k); }, clear: () => opslag.clear() };
+    vi.stubGlobal('localStorage', ls);
+    if (window !== (globalThis as unknown as Window)) Object.defineProperty(window, 'localStorage', { value: ls, configurable: true });
+  };
+  /** Het verzoek: per maand de versie die de server nu geeft, vasthouden kan, en de herkomst. */
+  const server = { v: 1, houd: false, faalt: false, faaltMaand: new Set<string>(), uitCache: new Set<string>(), wachtend: [] as Array<() => void>, perMaand: new Map<string, () => void>() };
+  const laatLos = async () => { server.houd = false; await act(async () => { for (const los of server.wachtend.splice(0)) los(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }); };
+  beforeEach(() => {
+    opslag.clear();
+    zetOpslag();
+    opslag.set(LAATSTE_AUTH_KEY, 'auth-a');
+    resetLiveSignaal();
+    window.dispatchEvent(new Event(WIS_PRIVE_GEBEURTENIS));
+    Object.assign(server, { v: 1, houd: false, faalt: false, faaltMaand: new Set<string>(), uitCache: new Set<string>(), wachtend: [], perMaand: new Map() });
+    fetchMonthPlanning.mockImplementation(async (m: string, herkomst?: Herkomst) => {
+      const v = server.v;
+      if (server.houd) await new Promise<void>((los) => { server.wachtend.push(los); server.perMaand.set(m, los); });
+      if (server.faalt || server.faaltMaand.has(m)) throw new Error('Er ging iets mis (code 500). Probeer het opnieuw.');
+      if (herkomst) herkomst.uitCache = server.uitCache.has(m);
+      return versie(m, v);
+    });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  const opzet = (windowDates: string[], onthoudenOm: number | null = null, monthParam = '2026-10') => {
+    const setData = vi.fn();
+    const setExtraData = vi.fn();
+    const setReloadTick = vi.fn();
+    const hook = renderHook((p: Parameters<typeof useMaandLaden>[0]) => useMaandLaden(p), {
+      initialProps: { monthParam, windowDates, reloadTick: 0, setReloadTick, setData, setExtraData, onthoudenOm },
+    });
+    return { ...hook, setData, setExtraData, setReloadTick, nu: () => hook.result.current };
+  };
+  /** Een eerste bezoek: beide maanden geladen en onthouden, daarna weg van het scherm. */
+  const eersteBezoek = async (windowDates = dagen('2026-10-26')) => {
+    const a = opzet(windowDates);
+    await flush();
+    a.unmount();
+    return a;
+  };
+
+  it('elke geslaagde lezing gaat per maand in het geheugen, met het vertrek als tijd; een antwoord uit de cache van de service worker niet', async () => {
+    server.uitCache.add('2026-11');
+    const t0 = Date.now();
+    await eersteBezoek();
+    expect(leesOnthoudenMaand('2026-10')).toEqual({ antwoord: versie('2026-10', 1), om: t0 });
+    expect(leesOnthoudenMaand('2026-11')).toBeNull();
+    expect(maandSleutel('2026-10')).toBe('maandplanning:2026-10');
+  });
+
+  it('terug met een onthouden hoofdmaand: geen skelet, de onthouden tijd in de regel, de maand achter de vensterrand meteen uit het geheugen; daarna de verse borden en de nieuwe tijd', async () => {
+    await eersteBezoek();
+    const onthouden = leesOnthoudenMaand('2026-10')!;
+    vi.advanceTimersByTime(2 * 60_000);
+    server.v = 2;
+    server.houd = true;
+    const b = opzet(dagen('2026-10-26'), onthouden.om);
+    // Vóór enig antwoord: de tweede maand uit het geheugen, geen laad, de oude tijd.
+    expect(b.setExtraData).toHaveBeenCalledWith(versie('2026-11', 1));
+    expect(b.nu().laden).toBe(false);
+    expect(b.nu().versheid).toEqual({ laatstGeladen: onthouden.om, verversen: false, online: true });
+    expect(fetchMonthPlanning.mock.calls.slice(-2).map((c) => c[0]).sort()).toEqual(['2026-10', '2026-11']);
+    await flush();
+    expect(b.nu().versheid.laatstGeladen).toBe(onthouden.om);
+    await laatLos();
+    expect(b.setData).toHaveBeenLastCalledWith(versie('2026-10', 2));
+    expect(b.setExtraData).toHaveBeenLastCalledWith(versie('2026-11', 2));
+    expect(b.nu().versheid.laatstGeladen).toBe(Date.now());
+    expect(b.nu().fout).toBeNull();
+    // En het geheugen draagt nu de verse borden.
+    expect(leesOnthoudenMaand('2026-10')?.antwoord).toEqual(versie('2026-10', 2));
+    expect(leesOnthoudenMaand('2026-11')?.antwoord).toEqual(versie('2026-11', 2));
+  });
+
+  it('zonder geheugentreffer voor de hoofdmaand komt ook de tweede maand niet uit het geheugen', async () => {
+    await eersteBezoek();
+    server.houd = true;
+    const b = opzet(dagen('2026-10-26'), null);
+    expect(b.nu().laden).toBe(true);
+    expect(b.setExtraData).not.toHaveBeenCalled();
+    await laatLos();
+    expect(b.setExtraData).toHaveBeenCalledWith(versie('2026-11', 1));
+  });
+
+  it('mislukt de verversing na een terugkeer: een fout (de kleine Foutkaart), de onthouden tijd blijft, en de onthouden kolommen van de tweede maand blijven staan', async () => {
+    await eersteBezoek();
+    const onthouden = leesOnthoudenMaand('2026-10')!;
+    vi.advanceTimersByTime(60_000);
+    server.faalt = true;
+    const b = opzet(dagen('2026-10-26'), onthouden.om);
+    await flush();
+    expect(b.nu().fout).toBe('Er ging iets mis (code 500). Probeer het opnieuw.');
+    expect(b.nu().laden).toBe(false);
+    expect(b.nu().versheid.laatstGeladen).toBe(onthouden.om);
+    expect(b.setData).not.toHaveBeenCalled();
+    expect(b.setExtraData.mock.calls).toEqual([[versie('2026-11', 1)]]);
+    // Een volgende verversing die slaagt vervangt ze en wist de fout.
+    server.faalt = false;
+    server.v = 3;
+    b.rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-26'), reloadTick: 1, setReloadTick: b.setReloadTick, setData: b.setData, setExtraData: b.setExtraData, onthoudenOm: onthouden.om });
+    await flush();
+    expect(b.nu().fout).toBeNull();
+    expect(b.setData).toHaveBeenLastCalledWith(versie('2026-10', 3));
+    expect(b.setExtraData).toHaveBeenLastCalledWith(versie('2026-11', 3));
+  });
+
+  // Onthouden kolommen van de tweede maand blijven alleen staan zolang de
+  // hoofdmaand zelf nog uit het geheugen komt (of mislukte, met de kleine
+  // Foutkaart erboven). Is de hoofdmaand vers en mislukte de tweede maand,
+  // dan lege kolommen zoals zonder geheugen, in beide volgordes van aankomst:
+  // nooit kolommen van een vorige keer onder een verse regel, zonder fout.
+  const losVoor = async (maand: string) => {
+    await act(async () => { server.perMaand.get(maand)!(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+  };
+  for (const volgorde of [['2026-10', '2026-11'], ['2026-11', '2026-10']]) {
+    it(`terug, de hoofdmaand slaagt en de tweede maand mislukt (eerst ${volgorde[0]}): lege kolommen zoals zonder geheugen, geen fout`, async () => {
+      await eersteBezoek();
+      const onthouden = leesOnthoudenMaand('2026-10')!;
+      vi.advanceTimersByTime(60_000);
+      server.v = 2;
+      server.houd = true;
+      server.faaltMaand.add('2026-11');
+      const b = opzet(dagen('2026-10-26'), onthouden.om);
+      expect(b.setExtraData.mock.calls).toEqual([[versie('2026-11', 1)]]);
+      await flush();
+      for (const maand of volgorde) await losVoor(maand);
+      expect(b.setData).toHaveBeenLastCalledWith(versie('2026-10', 2));
+      expect(b.setExtraData).toHaveBeenLastCalledWith(null);
+      expect(b.nu().fout).toBeNull();
+      expect(b.nu().versheid.laatstGeladen).toBe(Date.now());
+    });
+  }
+
+  it('terug, de tweede maand slaagt en de hoofdmaand mislukt: de verse kolommen, het onthouden bord en de fout', async () => {
+    await eersteBezoek();
+    const onthouden = leesOnthoudenMaand('2026-10')!;
+    vi.advanceTimersByTime(60_000);
+    server.v = 2;
+    server.faaltMaand.add('2026-10');
+    const b = opzet(dagen('2026-10-26'), onthouden.om);
+    await flush();
+    expect(b.setData).not.toHaveBeenCalled();
+    expect(b.setExtraData).toHaveBeenLastCalledWith(versie('2026-11', 2));
+    expect(b.nu().fout).toBe('Er ging iets mis (code 500). Probeer het opnieuw.');
+    expect(b.nu().versheid.laatstGeladen).toBe(onthouden.om);
+  });
+
+  it('een planningswijziging terwijl het verzoek onderweg is: het bord wordt getoond maar niet onthouden; de stille verversing erna wel', async () => {
+    server.houd = true;
+    const a = opzet(dagen('2026-10-05'));
+    window.dispatchEvent(new Event('vhb-planning-changed'));
+    await laatLos();
+    expect(a.setData).toHaveBeenCalledWith(versie('2026-10', 1));
+    expect(leesOnthoudenMaand('2026-10')).toBeNull();
+    // Het salvo-venster loopt af: de herlaadtik vertrekt ná de wijziging en telt.
+    act(() => { vi.advanceTimersByTime(PLANNING_SALVO_MS); });
+    expect(a.setReloadTick).toHaveBeenCalledTimes(1);
+    a.rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-05'), reloadTick: 1, setReloadTick: a.setReloadTick, setData: a.setData, setExtraData: a.setExtraData, onthoudenOm: null });
+    await flush();
+    expect(leesOnthoudenMaand('2026-10')?.antwoord).toEqual(versie('2026-10', 1));
+  });
+
+  it('na vijf minuten, na een eigen schrijfactie of een planningswijziging sinds het vertrek, en voor een andere gebruiker: niets onthouden', async () => {
+    await eersteBezoek();
+    expect(leesOnthoudenMaand('2026-10')).not.toBeNull();
+    vi.advanceTimersByTime(MAX_LEEFTIJD_MS);
+    expect(leesOnthoudenMaand('2026-10')).toBeNull();
+
+    await eersteBezoek();
+    vi.advanceTimersByTime(1);
+    markeerEigenSchrijfactie();
+    expect(leesOnthoudenMaand('2026-10')).toBeNull();
+
+    vi.advanceTimersByTime(1);
+    await eersteBezoek();
+    window.dispatchEvent(new Event('vhb-planning-changed'));
+    expect(leesOnthoudenMaand('2026-10')).toBeNull();
+    expect(leesOnthoudenMaand('2026-11')).toBeNull();
+
+    await eersteBezoek();
+    opslag.set(LAATSTE_AUTH_KEY, 'auth-b');
+    expect(leesOnthoudenMaand('2026-10')).toBeNull();
+  });
+
+  it('een laat antwoord van de vorige maand na een maandwissel raakt het bord niet meer', async () => {
+    const wacht = new Map<string, () => void>();
+    fetchMonthPlanning.mockImplementation((m: string) => new Promise<MonthPlanning>((los) => { wacht.set(m, () => los(versie(m, 1))); }));
+    const a = opzet(dagen('2026-10-05'));
+    a.rerender({ monthParam: '2026-11', windowDates: dagen('2026-11-02'), reloadTick: 0, setReloadTick: a.setReloadTick, setData: a.setData, setExtraData: a.setExtraData, onthoudenOm: null });
+    await act(async () => { wacht.get('2026-11')!(); await Promise.resolve(); await Promise.resolve(); });
+    expect(a.setData).toHaveBeenLastCalledWith(versie('2026-11', 1));
+    await act(async () => { wacht.get('2026-10')!(); await Promise.resolve(); await Promise.resolve(); });
+    expect(a.setData).toHaveBeenCalledTimes(1);
+    expect(a.setData).not.toHaveBeenCalledWith(versie('2026-10', 1));
+  });
+
+  it('een antwoord dat niet de gevraagde maand draagt, wordt niet onthouden', async () => {
+    fetchMonthPlanning.mockImplementation(async () => versie('2026-09', 1));
+    await eersteBezoek(dagen('2026-10-05'));
+    expect(leesOnthoudenMaand('2026-10')).toBeNull();
+    expect(leesOnthoudenMaand('2026-09')).toBeNull();
   });
 });
 

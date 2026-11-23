@@ -200,3 +200,74 @@ describe('schermGeheugen', () => {
     expect(lees('s1')?.antwoord).toBe('s1 opnieuw');
   });
 });
+
+describe('schermGeheugen: lezingen die aan de planning hangen (Maandplanning)', () => {
+  const planningGewijzigd = () => window.dispatchEvent(new Event('vhb-planning-changed'));
+  const metPlanning = (sleutel: string, antwoord: unknown) => bewaar(begin(sleutel, { planning: true }), antwoord);
+
+  it('een planningswijziging tussen vertrek en aankomst: niet geldig, ook op dezelfde milliseconde als het vertrek', () => {
+    const l = begin('maandplanning:2026-11', { planning: true });
+    planningGewijzigd(); // zelfde Date.now() als het vertrek
+    bewaar(l, 'bord');
+    expect(lees('maandplanning:2026-11')).toBeNull();
+
+    const l2 = begin('maandplanning:2026-12', { planning: true });
+    vi.advanceTimersByTime(800);
+    planningGewijzigd();
+    vi.advanceTimersByTime(400);
+    bewaar(l2, 'bord');
+    expect(lees('maandplanning:2026-12')).toBeNull();
+  });
+
+  it('een planningswijziging vóór het vertrek: geldig, ook op dezelfde milliseconde (de stille verversing na een salvo)', () => {
+    planningGewijzigd();
+    metPlanning('maandplanning:2026-11', 'na de wijziging');
+    expect(lees('maandplanning:2026-11')).toEqual({ antwoord: 'na de wijziging', om: T0 });
+
+    vi.advanceTimersByTime(1200);
+    planningGewijzigd();
+    planningGewijzigd();
+    vi.advanceTimersByTime(1);
+    metPlanning('maandplanning:2026-12', 'ook');
+    expect(lees('maandplanning:2026-12')?.antwoord).toBe('ook');
+  });
+
+  it('een planningswijziging na het bewaren maakt de lezing ongeldig, ook terwijl geen scherm open staat', () => {
+    metPlanning('maandplanning:2026-11', 'bord');
+    expect(lees('maandplanning:2026-11')).not.toBeNull();
+    vi.advanceTimersByTime(60_000);
+    planningGewijzigd();
+    expect(lees('maandplanning:2026-11')).toBeNull();
+    // Een nieuwe lezing na de wijziging is weer geldig.
+    metPlanning('maandplanning:2026-11', 'vers');
+    expect(lees('maandplanning:2026-11')?.antwoord).toBe('vers');
+  });
+
+  it('een lezing zonder de planning-optie (Vervaldata) merkt niets van een planningswijziging', () => {
+    const onderweg = begin('vervaldata');
+    planningGewijzigd();
+    bewaar(onderweg, 'x');
+    expect(lees('vervaldata')?.antwoord).toBe('x');
+    planningGewijzigd();
+    expect(lees('vervaldata')?.antwoord).toBe('x');
+  });
+
+  it('de andere regels gelden ook: een eigen schrijfactie, vijf minuten, een andere eigenaar en de wisgebeurtenis', () => {
+    metPlanning('a', 'A');
+    markeerEigenSchrijfactie();
+    expect(lees('a')).toBeNull();
+
+    vi.advanceTimersByTime(1);
+    metPlanning('b', 'B');
+    vi.setSystemTime(T0 + 1 + MAX_LEEFTIJD_MS);
+    expect(lees('b')).toBeNull();
+
+    metPlanning('c', 'C');
+    wieIsHet('auth-b');
+    expect(lees('c')).toBeNull();
+    wieIsHet('auth-a');
+    expect(lees('c')?.antwoord).toBe('C');
+    wis();
+    expect(lees('c')).toBeNull();
+  });
+});

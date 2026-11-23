@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Table2 } from 'lucide-react';
 import { downloadBlob, notify } from '../lib/ui';
-import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../components/ui';
 import { ActieMenu } from '../components/ActieMenu';
 import { AanwezigOpScherm } from '../components/AanwezigOpScherm';
 import { apiFetch } from '../lib/api';
@@ -30,7 +30,7 @@ import { MaandoverzichtModal } from '../components/maandplanning/MaandoverzichtM
 import { DagWeergave } from '../components/maandplanning/DagWeergave';
 import { useCelDetail } from '../components/maandplanning/useCelDetail';
 import { useDienstwissel } from '../components/maandplanning/useDienstwissel';
-import { useImportGrenzen, useMaandLaden, useTweewekenVenster } from '../components/maandplanning/useTweewekenVenster';
+import { leesOnthoudenMaand, useImportGrenzen, useMaandLaden, useTweewekenVenster } from '../components/maandplanning/useTweewekenVenster';
 import { MD_QUERY, useMedia } from '../lib/useMinWidth';
 
 /**
@@ -74,9 +74,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     const now = new Date();
     return startMaand ?? new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  // Terug binnen vijf minuten (ronde 6, punt 22, deel 3): het laatste
+  // antwoord van de server voor de maand waarop het scherm opent, uit het
+  // geheugen van de schermen (src/lib/schermGeheugen.ts), staat er meteen;
+  // useMaandLaden ververst stil en zet de maand achter de vensterrand erbij.
+  // Precies wat de server gaf (voor een chauffeur zijn venster vanaf deze
+  // week), niets afgeleid. Bladeren binnen het scherm laadt zoals vroeger.
+  const [onthouden] = useState(() => leesOnthoudenMaand(maandNaarParam(viewMonth)));
   // De hoofdmaand en de maand achter de vensterrand (geladen door
   // useMaandLaden; het bord, de dienstwissel en de grenzen lezen ze).
-  const [data, setData] = useState<MonthPlanning | null>(null);
+  const [data, setData] = useState<MonthPlanning | null>(() => onthouden?.antwoord ?? null);
   const [extraData, setExtraData] = useState<MonthPlanning | null>(null);
 
   const year = viewMonth.getFullYear();
@@ -175,7 +182,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // Het tweewekenvenster (desktop) met de maand in de URL, het laden van de
   // twee maanden en de grenzen van de import; in deze volgorde.
   const venster = useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaandParam, dagParam, setViewMonth, todayIso });
-  const zl = useMaandLaden({ monthParam, windowDates: venster.windowDates, reloadTick, setReloadTick, setData, setExtraData });
+  const zl = useMaandLaden({ monthParam, windowDates: venster.windowDates, reloadTick, setReloadTick, setData, setExtraData, onthoudenOm: onthouden?.om ?? null });
   const { laatsteDag, beginUitleg, maandVoorbij, kanTerug, kanVooruit, kanMaandTerug, kanMaandVooruit } = useImportGrenzen({
     data, extraData, monthParam, year, monthIndex, windowStart: venster.windowStart, setWindowStart: venster.setWindowStart, setViewMonth,
   });
@@ -193,6 +200,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   // Ook een venster dat alleen in de extra maand planning heeft telt als data.
   const hasData = (dates.length > 0 || (extraData?.dates?.length ?? 0) > 0) && drivers.length > 0;
+  // Het bord in beeld is dat van de maand in de kop. Mislukt dan een laad (de
+  // verversing na een terugkeer), dan de kleine Foutkaart boven het bord; na
+  // een mislukte maandwissel staat er nog het bord van de vorige maand, en
+  // dan de grote Foutkaart in plaats van het bord, zoals altijd.
+  const bordVanDezeMaand = data?.month === monthParam;
 
   // Sectie-koppen tonen zodra minstens één chauffeur een sectie heeft (anders
   // gedraagt de lijst zich als voorheen — één alfabetische groep, geen koppen).
@@ -325,6 +337,20 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 het actiemenu van de regel van het zoekveld; kijkt er niemand
                 mee, dan is het vak leeg en neemt het geen plaats. */}
             {canEditNotes && <div className="empty:hidden max-sm:w-full"><AanwezigOpScherm /></div>}
+            {/* "Bijgewerkt om …" (ronde 6, punt 22, deel 3), na een terugkeer
+                de tijd van de onthouden lezing tot de verversing binnen is.
+                Vanaf xl links van zoekveld en vensterknoppen: de acties staan
+                rechts, dus wat de regel doet (verschijnen, "Bijwerken…") duwt
+                niets wat rechts ervan staat. Daaronder op een eigen regel
+                onder de knoppen (op de telefoon via VersheidRegel zelf), want
+                tot 1280 px past ze niet op de rij: Vandaag en het menu zakten
+                dan naar een tweede rij (gemeten 23-11 op 1024 px). Op die
+                eigen regel telt ze niet mee voor de breedte van deze houder
+                (`contain-inline-size`, en `-mr-2` heft de tussenruimte op):
+                anders werd de houder breder dan de knoppen en duwde de
+                `ml-auto` van het menu de rest naar links (gemeten: 61 px op
+                768, 37 px op 1024, en 8 px met alleen de tussenruimte). */}
+            <VersheidRegel {...zl.versheid} className="-mr-2 contain-inline-size md:order-last md:basis-full md:text-right xl:order-none xl:mr-0 xl:basis-auto xl:contain-none" />
             {/* Gedeeld zoekveld (loep + wisknop); op de telefoon vult het de
                 regel naast Vandaag en het actiemenu. */}
             <SearchField
@@ -386,7 +412,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         )}
       />
 
-      {zl.fout ? (
+      {/* Opnieuw proberen ververst hier stil (de herlaadtik: beide maanden,
+          ook de onthouden kolommen achter de vensterrand); het bord blijft. */}
+      {zl.fout && bordVanDezeMaand && (
+        <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={herlaad} bezig={zl.verversen} />
+      )}
+      {zl.fout && !bordVanDezeMaand ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden || maandVoorbij ? (
         /* Skeleton i.p.v. spinner — zelfde shimmer als de rest van de app.

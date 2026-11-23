@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { weekRangeLabel } from '../../lib/week';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { isoDate } from '../../lib/availability';
-import { fetchMonthPlanning, type MonthPlanning } from '../../lib/monthPlanning';
+import { fetchMonthPlanning, type Herkomst, type MonthPlanning } from '../../lib/monthPlanning';
+import { begin, bewaar, lees, type Lezing } from '../../lib/schermGeheugen';
 import { formatDatumDMJ } from '../../lib/format';
 import { addDaysIso, formatDayMonth, maandNaarParam, mondayOf, monthOf, PLANNING_SALVO_MS } from '../../lib/maandplanning';
 
@@ -15,7 +16,8 @@ import { addDaysIso, formatDayMonth, maandNaarParam, mondayOf, monthOf, PLANNING
  *     dagen, verschuiven, naar vandaag) en de hoofdmaand in de URL;
  *  2. `useMaandLaden`: de hoofdmaand via useZelfLadend, de tweede maand achter
  *     de vensterrand stil erbij, en de stille herlaad-momenten (eigen wissel,
- *     salvo van planning-wijzigingen van collega's);
+ *     salvo van planning-wijzigingen van collega's); sinds ronde 6 (punt 22,
+ *     deel 3) onthoudt het elke maand in het geheugen van de schermen;
  *  3. `useImportGrenzen`: de grenzen van de geïmporteerde planning en de
  *     terugblikgrens van de server, die het venster en de knoppen sturen.
  *
@@ -97,20 +99,67 @@ export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaa
   return { windowStart, setWindowStart, windowDates, windowLabel, goPrevWindow, goNextWindow, naarVandaag };
 }
 
-export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTick, setData, setExtraData }: {
+/** De sleutel van één maand in het geheugen van de schermen
+ *  (src/lib/schermGeheugen.ts): dezelfde voor de hoofdmaand en de maand achter
+ *  de vensterrand, want het is hetzelfde antwoord van de server. */
+export const maandSleutel = (maand: string) => `maandplanning:${maand}`;
+
+/** Een onthouden maand, alleen als het antwoord ook echt die maand is. */
+export function leesOnthoudenMaand(maand: string): { antwoord: MonthPlanning; om: number } | null {
+  const o = lees<MonthPlanning>(maandSleutel(maand));
+  return o && o.antwoord?.month === maand ? o : null;
+}
+
+export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTick, setData, setExtraData, onthoudenOm = null }: {
   monthParam: string;
   windowDates: string[];
   reloadTick: number;
   setReloadTick: (volgende: (t: number) => number) => void;
   setData: (data: MonthPlanning | null) => void;
   setExtraData: (data: MonthPlanning | null) => void;
+  /** Terug binnen vijf minuten (ronde 6, punt 22, deel 3): het tijdstip van
+   *  de hoofdmaand die de view bij de mount al uit het geheugen toont
+   *  (`leesOnthoudenMaand`), of null. Alleen bij de mount gelezen. */
+  onthoudenOm?: number | null;
 }) {
   // Hoofdmaand: laad, fout en "Opnieuw proberen" via de gedeelde hook (punt
-  // 17); geen focus-refresh, de realtime-laag hieronder ververst al.
-  const zl = useZelfLadend(async () => { setData(await fetchMonthPlanning(monthParam)); }, {
+  // 17); geen focus-refresh, de realtime-laag hieronder ververst al. Met een
+  // onthouden hoofdmaand is de eerste laad stil (geen skelet) en noemt de
+  // regel de tijd van die lezing tot de verversing binnen is.
+  //
+  // Elke geslaagde lezing gaat in het geheugen, onder de regels daarvan (vijf
+  // minuten, geen eigen schrijfactie en geen planningswijziging sinds het
+  // vertrek, dezelfde gebruiker), behalve een antwoord uit de cache van de
+  // service worker: dat is het bord van een vorige keer.
+  const laatsteHoofd = useRef<Lezing | null>(null);
+  // De kolommen van de maand achter de vensterrand die nog uit het geheugen
+  // komen (de maand, of null), of hun eigen lezing mislukte, en of de
+  // hoofdmaand intussen vers binnen is; zie het effect van de extra maand.
+  const extraUitGeheugen = useRef<string | null>(null);
+  const extraMislukt = useRef(false);
+  const hoofdVers = useRef(false);
+  const zl = useZelfLadend(async () => {
+    const lezing = begin(maandSleutel(monthParam), { planning: true });
+    laatsteHoofd.current = lezing;
+    const herkomst: Herkomst = {};
+    const res = await fetchMonthPlanning(monthParam, herkomst);
+    if (!herkomst.uitCache && res?.month === monthParam) bewaar(lezing, res);
+    // Een nieuwere lezing vertrok intussen (een maandwissel, een verversing):
+    // die beslist, een laat antwoord raakt het bord niet meer.
+    if (laatsteHoofd.current !== lezing) return;
+    setData(res);
+    hoofdVers.current = true;
+    // Mislukte de lezing van de onthouden kolommen al, dan gaan ze nu weg:
+    // onder een verse regel staan geen kolommen van een vorige keer.
+    if (extraUitGeheugen.current && extraMislukt.current) {
+      extraUitGeheugen.current = null;
+      setExtraData(null);
+    }
+  }, {
     deps: [monthParam],
     focusRefresh: false,
     boodschap: (e) => (e instanceof Error && e.message ? e.message : 'Kon de maandplanning niet laden.'),
+    onthoudenOm,
   });
 
   // Stille herlaad-momenten: na een eigen wissel (reloadTick) en wanneer een
@@ -127,12 +176,45 @@ export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTi
     const maanden = Array.from(new Set(windowDates.map(monthOf)));
     return maanden.find((m) => m !== monthParam) ?? null;
   }, [windowDates, monthParam]);
+  // De maand achter de vensterrand bij de mount uit het geheugen, alleen als
+  // de hoofdmaand er ook uit kwam (anders stonden onthouden kolommen onder
+  // een verse regel). Een layout-effect: het eerste beeld heeft de kolommen
+  // al. Alleen een geslaagd antwoord voor die maand vervangt ze. Mislukt haar
+  // lezing, dan blijven ze staan zolang ook de hoofdmaand nog uit het
+  // geheugen komt (of mislukte: dan staat de kleine Foutkaart erboven); is
+  // de hoofdmaand vers, dan lege kolommen zoals zonder geheugen, in welke
+  // volgorde de twee antwoorden ook binnenkomen.
+  useLayoutEffect(() => {
+    if (onthoudenOm === null || !extraMonth) return;
+    const o = leesOnthoudenMaand(extraMonth);
+    if (!o) return;
+    extraUitGeheugen.current = extraMonth;
+    setExtraData(o.antwoord);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
+    if (extraUitGeheugen.current !== extraMonth) extraUitGeheugen.current = null;
     if (!extraMonth) { setExtraData(null); return; }
     let cancelled = false;
-    fetchMonthPlanning(extraMonth)
-      .then((res) => { if (!cancelled) setExtraData(res); })
-      .catch(() => { if (!cancelled) setExtraData(null); /* lege kolommen; volgende verversing herstelt */ });
+    extraMislukt.current = false;
+    const lezing = begin(maandSleutel(extraMonth), { planning: true });
+    const herkomst: Herkomst = {};
+    fetchMonthPlanning(extraMonth, herkomst)
+      .then((res) => {
+        if (!herkomst.uitCache && res?.month === extraMonth) bewaar(lezing, res);
+        if (cancelled) return;
+        extraUitGeheugen.current = null;
+        setExtraData(res);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Onthouden kolommen naast een hoofdmaand die nog niet vers is: ze
+        // blijven (zie hierboven).
+        if (extraUitGeheugen.current === extraMonth && !hoofdVers.current) { extraMislukt.current = true; return; }
+        // Lege kolommen; de volgende verversing herstelt.
+        extraUitGeheugen.current = null;
+        setExtraData(null);
+      });
     return () => { cancelled = true; };
   }, [extraMonth, reloadTick]);
 
