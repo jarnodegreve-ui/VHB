@@ -232,6 +232,22 @@ describe('useMaandLaden', () => {
     expect(setExtraData).toHaveBeenCalledTimes(2);
   });
 
+  it('een herlaadtik terwijl de zichtbare laad nog loopt: zichtbaar opnieuw, en het skelet gaat uit zodra die binnen is', async () => {
+    // Vroeger haalde een stille laad de zichtbare in en bleef `laden` daarna
+    // waar: het skelet stond er tot de volgende maandwissel.
+    const wacht: Array<() => void> = [];
+    fetchMonthPlanning.mockImplementation((m: string) => new Promise<MonthPlanning>((los) => { wacht.push(() => los(bord(m))); }));
+    const { nu, rerender, setData, setExtraData, setReloadTick } = opzet(dagen('2026-10-05'));
+    expect(nu().laden).toBe(true);
+    rerender({ monthParam: '2026-10', windowDates: dagen('2026-10-05'), reloadTick: 1, setReloadTick, setData, setExtraData });
+    expect(nu().laden).toBe(true);
+    expect(nu().verversen).toBe(false);
+    await act(async () => { for (const los of wacht.splice(0)) los(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+    expect(nu().laden).toBe(false);
+    expect(nu().fout).toBeNull();
+    expect(setData).toHaveBeenLastCalledWith(bord('2026-10'));
+  });
+
   it('een salvo van planning-wijzigingen wordt één tik na 1,2 s stilte; na het sluiten luistert niets meer', () => {
     fetchMonthPlanning.mockImplementation(async (m: string) => bord(m));
     const { unmount, setReloadTick } = opzet(dagen('2026-10-05'));

@@ -166,9 +166,13 @@ export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTi
   // collega de planning wijzigt (realtime planning_version → App dispatcht
   // 'vhb-planning-changed'). Géén skeleton — de bestaande data blijft staan
   // tot de verse binnen is, anders flitst het scherm bij elke wissel.
+  // Loopt er nog een zichtbare laad (het skelet staat er), dan zichtbaar
+  // opnieuw: een stille laad die een zichtbare inhaalt, zet het skelet nooit
+  // meer uit (useZelfLadend), en sinds de inhaalronde ook 'vhb-planning-changed'
+  // stuurt, valt zo'n tik vaker midden in een laad (ronde 6, punt 22, deel 3).
   useEffect(() => {
     if (reloadTick === 0) return;
-    void zl.ververs();
+    void (zl.laden ? zl.opnieuw() : zl.ververs());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadTick]);
 
