@@ -1032,6 +1032,8 @@ test('Maandplanning: mislukt de verversing na een terugkeer (500), dan blijft he
   const kaart = (await page.getByText('Bijwerken is niet gelukt').boundingBox())!;
   const bord = (await page.locator(telefoon(info) ? MP_STRIP : MP_RASTER).boundingBox())!;
   expect(kaart.y).toBeLessThan(bord.y);
+  // De regel staat onder de knoppen, boven de kaart, en niets ligt erover.
+  await regelOnderDeKnoppen(page, telefoon(info));
   expect(await mpSkeletGezien(page)).toBe(false);
 
   // Opnieuw proberen ververst stil; lukt het, dan het verse bord en geen kaart meer.
@@ -1188,9 +1190,16 @@ for (const [project, rol, tijd, maanden] of [[DESKTOP, 'admin', KRUIST, ['2026-1
 }
 
 // --- toetssteen 8: de regel in de kop ------------------------------------------
+//
+// De regel staat op elke breedte net onder de knoppen van de kop (vanaf sm
+// rechts, onder het menu; op de telefoon links, onder het zoekveld), absoluut
+// in de tussenruimte boven het bord: ze neemt geen plaats in de kop. Op de rij
+// of op een eigen regel duwde ze, met een breedte die van de tekst afhangt, de
+// beschrijving of de knoppen om (nakijker 23-11: 25 tot 28 px op 1366 tot
+// 1560 px, en kop en bord sprongen 24,5 px bij elke stille verversing omdat
+// "Bijwerken…" smaller is dan "Bijgewerkt om hh:mm"; het bord zakte 24 px op
+// 768 tot 1180 px en op de telefoon).
 
-/** De kop van het scherm (PageHeader), met titel en acties. */
-const mpKop = (page: Page) => page.locator('main header').filter({ has: page.getByRole('heading', { level: 1, name: 'Maandplanning' }) });
 /** Waar zoekveld en knoppen van de kop staan (afgerond op een halve pixel). */
 const kopPlaatsen = (page: Page) => page.evaluate(() => {
   const kop = document.querySelector('main h1')!.closest('header')!;
@@ -1209,15 +1218,46 @@ const kopPlaatsen = (page: Page) => page.evaluate(() => {
   };
 });
 
+/** De regel onder de knoppen: niet over een knop of het bord, binnen het
+ *  scherm, en bovenop (wat onder zijn midden ligt is de regel zelf). */
+async function regelOnderDeKnoppen(page: Page, telefoonBreed: boolean) {
+  // Wat onder het midden van de regel ligt, is de regel zelf (de lade van
+  // Meer vangt na het sluiten nog even tikken op: daar wachten we op).
+  await expect.poll(() => page.evaluate(() => {
+    const p = [...document.querySelector('main h1')!.closest('header')!.querySelectorAll('p[aria-live="polite"]')].find((x) => /^(Bijgewerkt om|Bijwerken)/.test(x.textContent!.trim()))!;
+    const r = p.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === p;
+  }), { message: 'niets ligt over de regel' }).toBe(true);
+  const plek = await page.evaluate(() => {
+    const kop = document.querySelector('main h1')!.closest('header')!;
+    const p = [...kop.querySelectorAll('p[aria-live="polite"]')].find((x) => /^(Bijgewerkt om|Bijwerken)/.test(x.textContent!.trim()))!;
+    const r = p.getBoundingClientRect();
+    const knoppen = [...kop.querySelectorAll('button, input')].map((el) => el.getBoundingClientRect()).filter((b) => b.width > 0);
+    const volgende = kop.nextElementSibling!.getBoundingClientRect();
+    const menu = [...kop.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === 'Meer acties')?.getBoundingClientRect() ?? null;
+    const zoek = kop.querySelector('input[type="search"]')!.getBoundingClientRect();
+    return {
+      boven: r.top, onder: r.bottom, links: r.left, rechts: r.right,
+      knoppenOnder: Math.max(...knoppen.map((b) => b.bottom)),
+      volgendeBoven: volgende.top,
+      menuRechts: menu?.right ?? null, zoekLinks: zoek.left,
+      overloop: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(plek.boven, 'onder de knoppen van de kop').toBeGreaterThanOrEqual(plek.knoppenOnder);
+  expect(plek.onder, 'boven het bord (of de kleine Foutkaart)').toBeLessThanOrEqual(plek.volgendeBoven);
+  expect(plek.links).toBeGreaterThanOrEqual(0);
+  expect(plek.rechts).toBeLessThanOrEqual(page.viewportSize()!.width);
+  expect(plek.overloop, 'geen horizontale overloop').toBeLessThanOrEqual(0);
+  if (telefoonBreed) expect(Math.abs(plek.links - plek.zoekLinks), 'links, onder het zoekveld').toBeLessThanOrEqual(1);
+  else expect(Math.abs(plek.rechts - plek.menuRechts!), 'rechts, onder het menu').toBeLessThanOrEqual(1);
+}
+
 for (const [project, breedte, thema] of [
   [IPHONE, 360, 'light'], [IPHONE, 360, 'dark'], [IPHONE, 390, 'light'], [IPHONE, 390, 'dark'], [IPHONE, 700, 'light'],
   [DESKTOP, 768, 'light'], [DESKTOP, 1024, 'light'], [DESKTOP, 1280, 'light'], [DESKTOP, 1440, 'dark'],
 ] as Array<[string, number, 'light' | 'dark']>) {
-  // Vanaf 1280 px op de rij, links van zoekveld en vensterknoppen; daaronder
-  // op een eigen regel onder de knoppen (op 1024 px paste ze niet op de rij
-  // en zakten Vandaag en het menu naar een tweede rij, gemeten 23-11).
-  const opDeRij = breedte >= 1280;
-  test(`Maandplanning, de regel in de kop op ${breedte} px (${thema}): duwt geen knop van zijn plek${opDeRij ? ', links van zoekveld en vensterknoppen' : ', op een eigen regel'}`, async ({ page }, info) => {
+  test(`Maandplanning, de regel in de kop op ${breedte} px (${thema}): duwt geen knop van zijn plek, onder de knoppen`, async ({ page }, info) => {
     alleenIn(info, project);
     const rol: MpRol = telefoon(info) ? 'planner' : 'admin';
     const poort = await startMp(page, rol, { thema });
@@ -1236,21 +1276,106 @@ for (const [project, breedte, thema] of [
     const met = await kopPlaatsen(page);
     info.annotations.push({ type: `kop op ${breedte} px`, description: `zonder regel ${JSON.stringify(zonder)} · met regel ${JSON.stringify(met)}` });
     expect(met, 'geen knop schoof').toEqual(zonder);
-    const r = (await regel(page).boundingBox())!;
-    if (opDeRij) {
-      const vorige = (await mpKop(page).getByRole('button', { name: 'Vorige 2 weken' }).boundingBox())!;
-      const zoek = (await mpKop(page).getByRole('searchbox').boundingBox())!;
-      expect(r.x + r.width, 'links van het zoekveld').toBeLessThanOrEqual(zoek.x);
-      expect(r.x + r.width, 'links van de vensterknoppen').toBeLessThanOrEqual(vorige.x);
-      expect(r.y + r.height / 2, 'op dezelfde rij').toBeGreaterThan(vorige.y);
-      expect(r.y + r.height / 2, 'op dezelfde rij').toBeLessThan(vorige.y + vorige.height);
-    } else {
-      const vandaag = (await mpKop(page).getByRole('button', { name: 'Vandaag', exact: true }).boundingBox())!;
-      expect(r.y, 'op een eigen regel onder de knoppen').toBeGreaterThanOrEqual(vandaag.y + vandaag.height - 1);
-      // Binnen het scherm, geen horizontale overloop.
-      expect(r.x).toBeGreaterThanOrEqual(0);
-      expect(r.x + r.width).toBeLessThanOrEqual(breedte);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+    await regelOnderDeKnoppen(page, breedte < 640);
+  });
+}
+
+/** Knoppen van de kop, de kop zelf en de bovenkant van het bord (datumstrip
+ *  en eerste rij op de telefoon, eerste rij van het raster op desktop), in
+ *  coördinaten van de pagina en afgerond op een halve pixel. */
+const kopEnBord = (page: Page) => page.evaluate(([raster, strip]) => {
+  const kop = document.querySelector('main h1')!.closest('header')!;
+  const vak = (el: Element | null | undefined) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return [r.x + window.scrollX, r.y + window.scrollY, r.width, r.height].map((n) => Math.round(n * 2) / 2);
+  };
+  const knop = (naam: string) => [...kop.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') || b.textContent || '').trim() === naam) ?? null;
+  const tabel = document.querySelector(raster);
+  const eersteRij = tabel
+    ? tabel.querySelector('tbody tr')
+    : [...document.querySelectorAll('main button')].find((b) => !kop.contains(b) && /Test Chauffeur/.test(b.textContent ?? ''));
+  return {
+    kop: vak(kop),
+    zoek: vak(kop.querySelector('input[type="search"]')),
+    vorige: vak(knop('Vorige 2 weken')),
+    volgende: vak(knop('Volgende 2 weken')),
+    vandaag: vak(knop('Vandaag')),
+    menu: vak(knop('Meer acties')),
+    strip: vak(document.querySelector(strip)),
+    eersteRij: vak(eersteRij),
+  };
+}, [MP_RASTER, MP_STRIP] as const);
+/** Meten op stilstand: twee gelijke metingen na elkaar. */
+async function kopEnBordStil(page: Page) {
+  let vorige = JSON.stringify(await kopEnBord(page));
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(80);
+    const nu = JSON.stringify(await kopEnBord(page));
+    if (nu === vorige) return JSON.parse(nu) as Awaited<ReturnType<typeof kopEnBord>>;
+    vorige = nu;
+  }
+  throw new Error('kop en bord kwamen niet tot stilstand');
+}
+
+// Op de basis (c721e2ca) bestond de regel niet: kop en bord staan nu waar
+// ze zonder regel staan (de regel met display: none, zoals op de basis), met
+// "Bijgewerkt om", tijdens "Bijwerken…" en erna, op elke breedte en ook met
+// een andere letter (een breedte die van de tekst afhangt, mag niets duwen).
+/** Het salvo-venster na 'vhb-planning-changed' (PLANNING_SALVO_MS, 1200 ms in
+ *  src/lib/maandplanning.ts) plus marge; met de klok van de pagina overgeslagen. */
+const PLANNING_SALVO_PROEF_MS = 1300;
+const KOP_BREEDTES: Record<string, number[]> = {
+  [DESKTOP]: [768, 1024, 1180, 1280, 1366, 1400, 1440, 1536, 1560, 1680, 1920],
+  [IPHONE]: [360, 390],
+  [WEBKIT]: [360, 390],
+};
+for (const letter of ['eigen', 'monospace', 'sans-serif'] as const) {
+  test(`Maandplanning, de regel in de kop (letter: ${letter}): kop en bord staan waar ze zonder regel staan, ook tijdens "Bijwerken…", op elke breedte; de regel staat onder de knoppen, boven het bord`, async ({ page }, info) => {
+    alleenIn(info, IPHONE, WEBKIT, DESKTOP);
+    test.setTimeout(120_000);
+    if (letter !== 'eigen') {
+      await page.addInitScript((f) => {
+        addEventListener('DOMContentLoaded', () => {
+          const s = document.createElement('style');
+          s.textContent = `*{font-family:${f} !important}`;
+          document.head.appendChild(s);
+        });
+      }, letter);
     }
+    const poort = await startMp(page, telefoon(info) ? 'planner' : 'admin');
+    await mpNaar(page, info, 'Maandplanning');
+    await toontVersie(page, info, 1);
+    await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+    const metingen: string[] = [];
+    for (const breedte of KOP_BREEDTES[info.project.name]) {
+      await page.setViewportSize({ width: breedte, height: telefoon(info) ? 844 : 900 });
+      const met = await kopEnBordStil(page);
+
+      // Zoals op de basis: zonder regel.
+      await regel(page).evaluate((el) => { (el as HTMLElement).style.display = 'none'; });
+      const zonder = await kopEnBordStil(page);
+      await regel(page).evaluate((el) => { (el as HTMLElement).style.display = ''; });
+      expect(met, `${breedte} px: kop en bord staan waar ze zonder regel staan`).toEqual(zonder);
+      await regelOnderDeKnoppen(page, breedte < 640);
+
+      // Een stille verversing (zoals na een planningswijziging): "Bijwerken…".
+      poort.houd = true;
+      const voor = poort.gets.length;
+      await page.evaluate(() => window.dispatchEvent(new Event('vhb-planning-changed')));
+      await page.clock.runFor(PLANNING_SALVO_PROEF_MS);
+      await expect.poll(() => poort.gets.length - voor, { message: 'de stille verversing is vertrokken' }).toBeGreaterThanOrEqual(1);
+      await expect(regel(page)).toHaveText('Bijwerken…');
+      const bezig = await kopEnBordStil(page);
+      expect(bezig, `${breedte} px: niets verspringt tijdens "Bijwerken…"`).toEqual(met);
+      await regelOnderDeKnoppen(page, breedte < 640);
+
+      mpLaatLos(poort);
+      await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+      const erna = await kopEnBordStil(page);
+      expect(erna, `${breedte} px: niets verspringt na de verversing`).toEqual(met);
+      metingen.push(`${breedte}: Vandaag y ${met.vandaag?.[1]}, eerste rij y ${met.eersteRij?.[1]}`);
+    }
+    info.annotations.push({ type: `kop en bord (${letter})`, description: metingen.join(' · ') });
   });
 }

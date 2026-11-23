@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Table2 } from 'lucide-react';
-import { cn, downloadBlob, notify } from '../lib/ui';
+import { downloadBlob, notify } from '../lib/ui';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../components/ui';
 import { ActieMenu } from '../components/ActieMenu';
 import { AanwezigOpScherm } from '../components/AanwezigOpScherm';
@@ -52,7 +52,7 @@ import { MD_QUERY, useMedia } from '../lib/useMinWidth';
  * mobiele dag-weergave.
  */
 /** De plaats van de versheidsregel in de kop (zie de uitleg bij de regel). */
-const REGEL_PLAATS = '-mr-2 contain-inline-size md:order-last md:basis-full md:text-right xl:order-none xl:mr-0 xl:basis-auto xl:contain-none';
+const REGEL_PLAATS = 'absolute top-full left-0 mt-1 sm:left-auto sm:right-0 md:mt-2';
 
 export function CapacityView({ currentUser }: { currentUser: User }) {
   const ownId = String(currentUser?.id ?? '');
@@ -343,7 +343,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         title="Maandplanning"
         description="Wie rijdt welke dienst, zoals in het chauffeurslokaal."
         actions={(
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex flex-wrap items-center gap-2">
             {/* "Kijkt ook mee", alleen voor staf: dit is ook een scherm van
                 chauffeurs, en die zien en volgen niemand (src/lib/presence.ts
                 houdt hun lijst al leeg; de rol hier maakt het zichtbaar). Op
@@ -353,24 +353,21 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             {canEditNotes && <div className="empty:hidden max-sm:w-full"><AanwezigOpScherm /></div>}
             {/* "Bijgewerkt om …" (ronde 6, punt 22, deel 3), na een terugkeer
                 de tijd van de onthouden lezing tot de verversing binnen is.
-                Vanaf xl links van zoekveld en vensterknoppen: de acties staan
-                rechts, dus wat de regel doet (verschijnen, "Bijwerken…") duwt
-                niets wat rechts ervan staat. Daaronder op een eigen regel
-                onder de knoppen (op de telefoon via VersheidRegel zelf), want
-                tot 1280 px past ze niet op de rij: Vandaag en het menu zakten
-                dan naar een tweede rij (gemeten 23-11 op 1024 px). Op die
-                eigen regel telt ze niet mee voor de breedte van deze houder
-                (`contain-inline-size`, en `-mr-2` heft de tussenruimte op):
-                anders werd de houder breder dan de knoppen en duwde de
-                `ml-auto` van het menu de rest naar links (gemeten: 61 px op
-                768, 37 px op 1024, en 8 px met alleen de tussenruimte). */}
+                Op elke breedte net onder de knoppen (vanaf sm rechts, op de
+                telefoon links, zoals de acties), absoluut in de tussenruimte
+                boven het bord (24 px, vanaf md 32 px): de regel neemt geen
+                plaats in de kop. Op de rij of op een eigen regel duwde ze, met
+                een breedte die van de tekst afhangt, de beschrijving of de
+                knoppen om, en sprongen kop en bord bij elke stille verversing
+                ("Bijwerken…" is smaller; gemeten 23-11 van 768 tot 1560 px en
+                op de telefoon). */}
             {/* Een bord uit de cache van de service worker zonder bord van
                 de server: nooit "Bijgewerkt om", want useZelfLadend zet na
                 elke laad het uur van nu en de server bevestigde niets; de
-                vorm van Mijn dag (cacheRegel), in dezelfde opmaak en op
-                dezelfde plaats als VersheidRegel (components/ui.tsx). */}
+                vorm van Mijn dag (cacheRegel), in de opmaak van VersheidRegel
+                (components/ui.tsx) en op dezelfde plaats. */}
             {zl.uitCache ? (
-              <p className={cn('text-xs text-slate-500 order-last basis-full self-center whitespace-nowrap text-right max-sm:text-left md:order-none md:basis-auto md:text-left', REGEL_PLAATS)} aria-live="polite">
+              <p className={`${REGEL_PLAATS} whitespace-nowrap text-xs text-slate-500`} aria-live="polite">
                 {cacheRegel(zl.uitCache.datum, zl.online)}
               </p>
             ) : (
