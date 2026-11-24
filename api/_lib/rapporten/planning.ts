@@ -28,8 +28,8 @@ type PlanningCode = { code: string; countsAsShift?: boolean; isPaidAbsence?: boo
  * ?format=summary het rekent: de cel-waarheid van het bord (matrix +
  * goedgekeurde ruilen + afwezigheden) door `berekenMaandoverzicht`, over de
  * dagen tot en met de grens van de planning (`laatste`, dagenTotGrens: na de
- * laatste dag met een dienst tellen verlof, ziekte en ruilen niet mee; null =
- * geen grens, alles). Hier en in de gelijkheidstest gebruikt, zodat "gelijk
+ * laatste dag met een dienst telt niets meer mee, ook geen codes uit de Excel
+ * zelf; null = geen grens, alles). Hier en in de gelijkheidstest gebruikt, zodat "gelijk
  * aan het Maandoverzicht" een test is en geen belofte.
  */
 export const maandoverzichtVan = (maand: string, bron: CelWaarheidInvoer, laatste: string | null): Maandoverzicht => {
@@ -163,8 +163,9 @@ const redenTekst = (info: { name: string; reason: string } | undefined): string 
  * de toestand van NU, geen historiek van wanneer een gat ontstond.
  *
  * Ook de dagen ná de grens van de planning (de laatste dag met een dienst,
- * 24-11) staan er niet in: op een lege matrixrij ontbreekt elke verwachte
- * dienst, maar daar is nog niets ingepland, dus geen dienst staat open. Het
+ * 24-11) staan er niet in: op een dag zonder dienst (een lege matrixrij, of
+ * alleen afwezigheid of andere codes) ontbreekt elke verwachte dienst, maar
+ * daar is nog niets ingepland, dus geen dienst staat open. Het
  * bereik zegt al "t/m <grens>". De dekking zelf (berekenDekkingsGaten, het
  * scherm Openstaande diensten, de cockpit en de ochtendmail) telt daar nog
  * wel door; dat is een apart voorstel.

@@ -969,7 +969,83 @@ describe('de grens van de planning in het import-voorbeeld, het Maandoverzicht e
       expect(praktijk.find((x) => Number(x[0]) === serial0105)![kolomB]).toBe('bv');
     });
 
-    it('een maand na de grens telt niets; zonder matrix verandert er niets', async () => {
+    it('ook wat de Excel zelf na de grens zet telt niet: verlof, vrij, opleiding die als dienst telt en een dienst zonder uren', async () => {
+      // Tegenlezing 24-11: de kap haalt alles na de grens weg, niet alleen de overlay.
+      mem.leave = [];
+      mem.planningCodes = [...mem.planningCodes, { code: 'opl', description: 'Opleiding', category: 'training', countsAsShift: true }];
+      // Een dienst zonder geldige uren: de opbouw maakt er geen planningrij van, dus hij verlegt de grens niet.
+      mem.services = [...mem.services, { id: 'd99', serviceNumber: '99', startTime: '', endTime: '' }];
+      const naGrens: Record<string, Record<string, string>> = {
+        '2027-01-05': { 'Chauffeur B': 'bv' },
+        '2027-01-06': { 'Chauffeur A': 'opl' },
+        '2027-01-07': { 'Chauffeur B': 'vrij' },
+        '2027-01-08': { 'Chauffeur A': '99' },
+      };
+      mem.planningMatrix = mem.planningMatrix.map((r: any) => (naGrens[r.source_date] ? { ...r, assignments: naGrens[r.source_date] } : r));
+
+      // Eerst: de grens blijft 03/01, anders bewijst de rest niets.
+      const bord = (await api('GET', '/api/month-planning?month=2027-01', { token: 'tok-planner' })).json;
+      expect(bord.geimporteerd).toEqual({ eerste: '2027-01-01', laatste: '2027-01-03' });
+      // Het bord toont ze nog (de client dempt de dagen na de grens zelf), en het eerste tabblad ook.
+      expect([bord.cells['4']['2027-01-05'].code, bord.cells['3']['2027-01-06'].code, bord.cells['4']['2027-01-07'].code, bord.cells['3']['2027-01-08'].code])
+        .toEqual(['bv', 'opl', 'vrij', '99']);
+      const { praktijk, overzicht } = await xlsx();
+      const kolomA = (praktijk[0] as any[]).map(String).indexOf('Chauffeur A');
+      const serial0106 = Math.round((Date.parse('2027-01-06T00:00:00Z') - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+      expect(praktijk.find((x) => Number(x[0]) === serial0106)![kolomA]).toBe('opl');
+
+      // Scherm, tweede tabblad en rapport: alleen 01/01 tot 03/01.
+      const summary = (await api('GET', '/api/month-planning?month=2027-01&format=summary', { token: 'tok-planner' })).json;
+      const perNaam = Object.fromEntries(summary.rijen.map((r: any) => [r.naam, r]));
+      expect(perNaam['Chauffeur A']).toMatchObject({ diensten: 3, anderWerk: 0, dagen: 3 });
+      expect(perNaam['Chauffeur B']).toMatchObject({ diensten: 2, betaald: 0, vrij: 1, dagen: 3 });
+      expect(summary.totaal).toMatchObject({ diensten: 5, anderWerk: 0, betaald: 0, vrij: 1, dagen: 6 });
+      expect(summary.dagen).toBe(3);
+      expect(String(overzicht[1][0])).toContain('(3 dagen)');
+      const kop = (overzicht[3] as any[]).map(String);
+      const kolom = (naam: string) => kop.indexOf(naam);
+      for (const naam of ['Chauffeur A', 'Chauffeur B']) {
+        const r = overzicht.find((x) => x[0] === naam)!;
+        expect([r[kolom('diensten')], r[kolom('ander werk')], r[kolom('betaalde afwezigheid')], r[kolom('vrij')], r[kolom('dagen ingepland')]], naam)
+          .toEqual([perNaam[naam].diensten, perNaam[naam].anderWerk, perNaam[naam].betaald, perNaam[naam].vrij, perNaam[naam].dagen]);
+      }
+      const { bouwOverzichtPerChauffeur, maandoverzichtVan } = await import('../../api/_lib/rapporten/planning');
+      const bron = { rows: mem.planningMatrix, users: mem.users, services: mem.services, codes: mem.planningCodes, leave: mem.leave, swaps: mem.swaps, grenzen: bord.geimporteerd } as any;
+      const rapport = bouwOverzichtPerChauffeur(bron, { van: '2027-01-01', tot: '2027-01-31', keuzes: {} });
+      for (const r of summary.rijen) {
+        const rij = rapport.rijen.find((x) => x.id === r.driverId)!;
+        for (const cijfer of CIJFERS) expect(rij[cijfer], `${r.naam}: ${cijfer}`).toBe(r[cijfer]);
+      }
+
+      // Wat de kap weghaalt: zonder grens telden de vier codes wel mee.
+      const vroeger = Object.fromEntries(maandoverzichtVan('2027-01', bron, null).rijen.map((r) => [r.naam, r]));
+      expect(vroeger['Chauffeur A']).toMatchObject({ diensten: 4, anderWerk: 1, dagen: 5 });
+      expect(vroeger['Chauffeur B']).toMatchObject({ diensten: 2, betaald: 1, vrij: 2, dagen: 5 });
+    });
+
+    it('zonder grens (laatste null) terwijl de matrix er staat: niets wordt afgekapt, het gedrag van vóór 24-11', async () => {
+      const storage = await import('../../api/_lib/storage.js');
+      // Twee verzoeken (summary en xlsx): een blijvende mock, hersteld in finally.
+      const spion = vi.spyOn(storage, 'getPlanningMatrixGrenzen').mockResolvedValue({ eerste: '2027-01-01', laatste: null });
+      try {
+        const summary = (await api('GET', '/api/month-planning?month=2027-01&format=summary', { token: 'tok-planner' })).json;
+        expect(summary.dagen).toBe(31);
+        const perNaam = Object.fromEntries(summary.rijen.map((r: any) => [r.naam, r]));
+        // A: de ziekte van 20 en 21/01 telt mee. B: het betaald verlof van 03/01 tot 12/01 telt helemaal.
+        expect(perNaam['Chauffeur A']).toMatchObject({ diensten: 3, ziek: 2, dagen: 5 });
+        expect(perNaam['Chauffeur B']).toMatchObject({ diensten: 1, vrij: 1, betaald: 10, dagen: 12 });
+        const { overzicht } = await xlsx();
+        expect(String(overzicht[1][0])).toContain('(31 dagen)');
+        const kop = (overzicht[3] as any[]).map(String);
+        const b = overzicht.find((x) => x[0] === 'Chauffeur B')!;
+        expect([b[kop.indexOf('betaalde afwezigheid')], b[kop.indexOf('dagen ingepland')]]).toEqual([10, 12]);
+        expect(spion).toHaveBeenCalledTimes(2);
+      } finally {
+        spion.mockRestore();
+      }
+    });
+
+    it('een maand na de grens telt niets; zonder matrix een lege telling', async () => {
       mem.planningMatrix = [...mem.planningMatrix, rij('2027-02-01', {}), rij('2027-02-02', {})];
       mem.leave = [verlof('l-g3', '4', '2027-02-01', '2027-02-02', 'betaald_verlof')];
       const feb = (await api('GET', '/api/month-planning?month=2027-02&format=summary', { token: 'tok-planner' })).json;

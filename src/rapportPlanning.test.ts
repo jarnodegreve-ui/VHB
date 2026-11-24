@@ -131,8 +131,9 @@ describe('Overzicht per chauffeur is het Maandoverzicht van de maandplanning', (
   });
 
   // 24-11: de grens van de planning is de laatste dag met een dienst (api/_lib/planningGrens.ts).
-  // Op de lege matrixrijen daarna legt de cel-waarheid nog goedgekeurd verlof, ziekte en ruilen;
-  // die tellen niet meer mee, in het rapport én in het Maandoverzicht (dagenTotGrens).
+  // Niets op de dagen daarna telt nog mee, in het rapport én in het Maandoverzicht (dagenTotGrens):
+  // niet wat de cel-waarheid er overlegt (verlof, ziekte, ruilen) en ook geen codes uit de Excel zelf
+  // (die staan in src/apiIntegratie/planning.test.ts, waar de grens echt berekend wordt).
   describe('de grens van de planning midden in de maand (de upload van Jarno: rijen tot 31/01, diensten tot 03/01)', () => {
     const januari = [
       { source_date: '2027-01-01', assignments: { 'Jan Janssen': '2102', 'An Peeters': 'vrij', 'Piet Nieuw': 'eek' } },

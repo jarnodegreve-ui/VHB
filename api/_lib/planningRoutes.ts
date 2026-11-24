@@ -568,8 +568,9 @@ export function mountPlanningRoutes(app: express.Express) {
           return res.status(403).json({ error: "Onvoldoende rechten." });
         }
         // Alleen de dagen tot en met de grens van de planning tellen
-        // (dagenTotGrens, 24-11): verlof, ziekte en ruilen op de lege rijen
-        // erna tellen niet, zoals in het tweede Excel-tabblad en het rapport
+        // (dagenTotGrens, 24-11): niets op de dagen erna telt, ook geen codes
+        // uit de Excel zelf (verlof, vrij, opleiding, ander werk dat geen
+        // dienstcode is), zoals in het tweede Excel-tabblad en het rapport
         // Overzicht per chauffeur. `dagen` = het aantal getelde dagen.
         const geteld = dagenTotGrens(dates, grenzen.laatste);
         const overzicht = berekenMaandoverzicht(geteld, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
@@ -929,16 +930,23 @@ export function mountPlanningRoutes(app: express.Express) {
       // `existingEnd` is sinds 24-11 de grens van de planning: de laatste
       // matrixdag met minstens één dienst (`getPlanningMatrixGrenzen().laatste`,
       // dezelfde dag als het Rooster en de Maandplanning; regel in
-      // api/_lib/planningGrens.ts), niet de laatste matrixrij. Lege rijen op
-      // het einde zijn geen planning: met rijen tot 31/01 en diensten tot 03/01
+      // api/_lib/planningGrens.ts), niet de laatste matrixrij. Lege rijen en
+      // dagen zonder dienst (alleen afwezigheid of andere codes) op het einde
+      // zijn geen planning: met rijen tot 31/01 en diensten tot 03/01
       // zegt het scherm "Actief: … t/m 03/01" en geeft een bestand vanaf 01/02
       // het gat van 04/01 tot 31/01. `existingStart` blijft de eerste matrixrij.
       // `replacedExistingDays` en `retainedDays` blijven matrixrijen tellen: de
-      // import vervangt of houdt ook een lege rij. Kost één lezing van de grens
-      // naast de matrix, geen tweede matrixlezing. Lukt die lezing niet (of
-      // valt de grens buiten de matrix die hier gelezen is, bv. een import
-      // ertussen), dan de laatste matrixrij zoals vroeger: het voorbeeld mag
-      // hier niet op stranden, zonder voorbeeld geen import.
+      // import vervangt of houdt ook een lege rij. Kost naast de matrix de
+      // lezing van de grens plus de eerste matrixrij (getPlanningMatrixGrenzen
+      // leest `eerste` mee, hier ongebruikt), geen tweede matrixlezing. Lukt
+      // die lezing niet, of valt de grens buiten de matrix die hier gelezen is,
+      // dan de laatste matrixrij zoals vroeger: het voorbeeld mag hier niet op
+      // stranden, zonder voorbeeld geen import. Buiten de matrix is na de
+      // laatste rij (een import ertussen) of vóór de eerste rij: de planning
+      // loopt achter op de matrix (gewist of korter, diensten zonder uren), en
+      // dan zou de badge een einde vóór het begin tonen. In dat randgeval zegt
+      // het voorbeeld de laatste matrixrij, terwijl Rooster, Maandplanning en
+      // het Maandoverzicht de grens gebruiken.
       const [bestaandeMatrix, grens] = await Promise.all([
         getPlanningMatrixRows(),
         getPlanningMatrixGrenzen().then(
