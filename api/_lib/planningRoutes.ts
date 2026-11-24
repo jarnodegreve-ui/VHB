@@ -943,8 +943,10 @@ export function mountPlanningRoutes(app: express.Express) {
       // dan de laatste matrixrij zoals vroeger: het voorbeeld mag hier niet op
       // stranden, zonder voorbeeld geen import. Buiten de matrix is na de
       // laatste rij (een import ertussen) of vóór de eerste rij: de planning
-      // loopt achter op de matrix (gewist of korter, diensten zonder uren), en
-      // dan zou de badge een einde vóór het begin tonen. In dat randgeval zegt
+      // loopt achter op de matrix (korter maar niet leeg, bv. een heropbouw
+      // die dagen miste of alleen diensten zonder uren; een lege planning
+      // geeft de laatste matrixrij als grens), en dan zou de badge een einde
+      // vóór het begin tonen. In dat randgeval zegt
       // het voorbeeld de laatste matrixrij, terwijl Rooster, Maandplanning en
       // het Maandoverzicht de grens gebruiken.
       const [bestaandeMatrix, grens] = await Promise.all([
