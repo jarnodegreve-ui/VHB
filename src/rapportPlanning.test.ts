@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { berekenMaandoverzicht, telMaandoverzichtenOp } from '../api/_lib/helpers';
 import { berekenCelWaarheid } from '../api/_lib/celWaarheid';
+import { dagenTotGrens } from '../api/_lib/dagenTotGrens';
 import { bouwDienstenPerDag, bouwOpenstaandeDiensten, bouwOverzichtPerChauffeur, maandoverzichtVan, type DienstenBron, type OverzichtBron } from '../api/_lib/rapporten/planning';
 import { rapportVan } from '../shared/rapporten/register';
 import { berekenTotalen, totalenVoor } from '../shared/rapporten/opmaak';
@@ -57,10 +58,10 @@ const swaps = [
 ];
 const bron = { rows, users, services, codes, leave, swaps, grenzen: { eerste: '2026-09-29', laatste: '2026-10-02' } } as unknown as OverzichtBron;
 
-/** Wat GET /api/month-planning?format=summary voor deze maand antwoordt (zelfde twee aanroepen als de route). */
-const maandoverzichtVanDeRoute = (maand: string) => {
-  const { dates, chauffeurs, cells } = berekenCelWaarheid(maand, bron);
-  return berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services, codes);
+/** Wat GET /api/month-planning?format=summary voor deze maand antwoordt (zelfde aanroepen als de route: de dagen tot en met de grens van de planning, sinds 24-11). */
+const maandoverzichtVanDeRoute = (maand: string, b: OverzichtBron = bron) => {
+  const { dates, chauffeurs, cells } = berekenCelWaarheid(maand, b);
+  return berekenMaandoverzicht(dagenTotGrens(dates, b.grenzen.laatste), chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, b.services as any, b.codes as any);
 };
 const CIJFERS = ['diensten', 'minuten', 'anderWerk', 'ziek', 'betaald', 'vrij', 'dagen'] as const;
 
@@ -80,7 +81,7 @@ describe('Overzicht per chauffeur is het Maandoverzicht van de maandplanning', (
       const totalen = totalenVoor(def, rapport.rijen);
       for (const cijfer of [...CIJFERS, 'overig'] as const) expect(totalen[cijfer], cijfer).toBe(overzicht.totaal[cijfer]);
       // `maandoverzichtVan` is geen tweede telling maar dezelfde twee aanroepen.
-      expect(maandoverzichtVan(maand, bron)).toEqual(overzicht);
+      expect(maandoverzichtVan(maand, bron, bron.grenzen.laatste)).toEqual(overzicht);
     });
   }
 
@@ -127,6 +128,65 @@ describe('Overzicht per chauffeur is het Maandoverzicht van de maandplanning', (
     expect(voor.bereik).toEqual({ van: '2026-09-29', tot: '2026-10-02' });
     expect(bereikToestand({ van: '2026-06-01', tot: '2026-06-30' }, voor.bereik)).toBe('buiten');
     expect(bouwOverzichtPerChauffeur({ ...bron, rows: [], grenzen: { eerste: null, laatste: null } }, filters('2026-09-01', '2026-09-30')).bereik).toBeNull();
+  });
+
+  // 24-11: de grens van de planning is de laatste dag met een dienst (api/_lib/planningGrens.ts).
+  // Op de lege matrixrijen daarna legt de cel-waarheid nog goedgekeurd verlof, ziekte en ruilen;
+  // die tellen niet meer mee, in het rapport én in het Maandoverzicht (dagenTotGrens).
+  describe('de grens van de planning midden in de maand (de upload van Jarno: rijen tot 31/01, diensten tot 03/01)', () => {
+    const januari = [
+      { source_date: '2027-01-01', assignments: { 'Jan Janssen': '2102', 'An Peeters': 'vrij', 'Piet Nieuw': 'eek' } },
+      { source_date: '2027-01-02', assignments: { 'Jan Janssen': '2102', 'An Peeters': '2703', 'Piet Nieuw': 'bv' } },
+      { source_date: '2027-01-03', assignments: { 'Jan Janssen': 'vrij', 'An Peeters': '2703', 'Piet Nieuw': '2999' } },
+      ...Array.from({ length: 28 }, (_, i) => ({ source_date: `2027-01-${String(i + 4).padStart(2, '0')}`, assignments: {} })),
+    ];
+    const verlof = [
+      // Ziekte over de grens heen: 03/01 (een vrije dag wordt "ziek") en 04/01 tot 06/01 (lege rijen).
+      { userId: '1', startDate: '2027-01-03', endDate: '2027-01-06', status: 'approved', type: 'ziekte' },
+      // Betaald verlof alleen na de grens.
+      { userId: '2', startDate: '2027-01-11', endDate: '2027-01-15', status: 'approved', type: 'betaald_verlof' },
+    ];
+    const metGrens = { ...bron, rows: januari, leave: verlof, swaps: [], grenzen: { eerste: '2027-01-01', laatste: '2027-01-03' } } as unknown as OverzichtBron;
+    const zonderKap = { ...metGrens, grenzen: { eerste: '2027-01-01', laatste: '2027-01-31' } } as unknown as OverzichtBron;
+
+    it('rapport en Maandoverzicht tellen alleen tot en met de grens, cijfer voor cijfer gelijk', () => {
+      const overzicht = maandoverzichtVanDeRoute('2027-01', metGrens);
+      const rapport = bouwOverzichtPerChauffeur(metGrens, filters('2027-01-01', '2027-01-31'));
+      for (const r of overzicht.rijen) {
+        const rij = rapport.rijen.find((x) => x.id === r.driverId)!;
+        for (const cijfer of CIJFERS) expect(rij[cijfer], `${r.naam}: ${cijfer}`).toBe(r[cijfer]);
+      }
+      expect(maandoverzichtVan('2027-01', metGrens, '2027-01-03')).toEqual(overzicht);
+      const perNaam = Object.fromEntries(rapport.rijen.map((r) => [r.naam, r]));
+      // Jan: 01 en 02 de 2102, 03/01 ziek; de ziekte van 04 tot 06/01 telt niet.
+      expect(perNaam['Jan Janssen']).toMatchObject({ diensten: 2, ziek: 1, vrij: 0, dagen: 3 });
+      // An: het verlof van 11 tot 15/01 telt niet.
+      expect(perNaam['An Peeters']).toMatchObject({ diensten: 2, vrij: 1, betaald: 0, dagen: 3 });
+      expect(perNaam['Piet Nieuw']).toMatchObject({ diensten: 1, anderWerk: 1, betaald: 1, dagen: 3 });
+      expect(overzicht.totaal.dagen).toBe(9);
+    });
+
+    it('wat de grens weghaalt: zonder grens telden de ziekte en het verlof op de lege rijen mee', () => {
+      const vroeger = bouwOverzichtPerChauffeur(zonderKap, filters('2027-01-01', '2027-01-31'));
+      const nu = bouwOverzichtPerChauffeur(metGrens, filters('2027-01-01', '2027-01-31'));
+      const van = (uit: typeof nu, naam: string) => uit.rijen.find((r) => r.naam === naam)!;
+      expect(van(vroeger, 'Jan Janssen')).toMatchObject({ ziek: 4, dagen: 6 });
+      expect(van(nu, 'Jan Janssen')).toMatchObject({ ziek: 1, dagen: 3 });
+      expect(van(vroeger, 'An Peeters')).toMatchObject({ betaald: 5, dagen: 8 });
+      expect(van(nu, 'An Peeters')).toMatchObject({ betaald: 0, dagen: 3 });
+      // Het bereik zegt wat het al zei: de planning loopt tot de grens.
+      expect(nu.bereik).toEqual({ van: '2027-01-01', tot: '2027-01-03' });
+    });
+
+    it('een maand na de grens telt niets, ook niet het verlof erin; zonder grens het gedrag van vroeger', () => {
+      const februari = [{ source_date: '2027-02-01', assignments: {} }, { source_date: '2027-02-02', assignments: {} }];
+      const feb = { ...metGrens, rows: [...januari, ...februari], leave: [{ userId: '2', startDate: '2027-02-01', endDate: '2027-02-02', status: 'approved', type: 'betaald_verlof' }] } as unknown as OverzichtBron;
+      const uit = bouwOverzichtPerChauffeur(feb, filters('2027-02-01', '2027-02-28'));
+      expect(uit.rijen.every((r) => r.dagen === 0 && r.betaald === 0)).toBe(true);
+      expect(maandoverzichtVanDeRoute('2027-02', feb).totaal.dagen).toBe(0);
+      // Geen grens (null): niets wordt afgekapt.
+      expect(maandoverzichtVan('2027-02', feb, null).totaal.betaald).toBe(2);
+    });
   });
 });
 
@@ -221,6 +281,19 @@ describe('Openstaande diensten', () => {
     expect(uit.bereik).toEqual({ van: '2026-09-21', tot: '2026-11-08' });
     // Een periode die helemaal voorbij is valt buiten het bereik: het scherm zegt dan vanaf wanneer.
     expect(bereikToestand({ van: '2026-08-01', tot: '2026-08-31' }, uit.bereik)).toBe('buiten');
+  });
+
+  it('na de grens van de planning (de laatste dag met een dienst) staat geen rij, ook niet voor een lege matrixrij (24-11)', () => {
+    const tot0811 = { eerste: '2026-07-01', laatste: '2026-09-21' };
+    const uit = bouwOpenstaandeDiensten({ gaten, grenzen: tot0811 }, filters('2026-09-21', '2026-10-18'), '2026-09-20');
+    // 20/09 en 21/09 liggen tot en met de grens, 22/09 had geen gat; niets erna.
+    expect(uit.rijen.map((r) => r.datum)).toEqual(['2026-09-20', '2026-09-21', '2026-09-21', '2026-09-21']);
+    const naGrens: DayGap[] = [...gaten, { date: '2026-09-23', dayType: 'schooldag', expected: 2, covered: 0, missing: ['2101', '2115'] }];
+    expect(bouwOpenstaandeDiensten({ gaten: naGrens, grenzen: tot0811 }, filters('2026-09-21', '2026-10-18'), '2026-09-20').rijen.some((r) => String(r.datum) > '2026-09-21')).toBe(false);
+    // Met een grens verderop blijft die dag er gewoon in, en het bereik is ongewijzigd.
+    const verder = bouwOpenstaandeDiensten({ gaten: naGrens, grenzen }, filters('2026-09-21', '2026-10-18'), '2026-09-20');
+    expect(verder.rijen.filter((r) => r.datum === '2026-09-23').map((r) => r.dienst)).toEqual(['2101', '2115']);
+    expect(uit.bereik).toEqual({ van: '2026-09-20', tot: '2026-09-21' });
   });
 
   it('planning die al afgelopen is, en geen planning', () => {
