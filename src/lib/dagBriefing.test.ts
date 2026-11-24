@@ -127,6 +127,50 @@ describe('bouwWeekPunten › de weekstrook', () => {
   });
 });
 
+// Na de grens van de dekking (24-11, tegenlezing dekking-grens): de server
+// geeft voor die dag geen rij meer. Zonder eigen staat las een ontbrekende rij
+// als "geen open diensten" en zei Vandaag "Alles geregeld" en "Niets te melden".
+describe('na de grens van de dekking', () => {
+  const GRENS = '2027-01-03';
+  const tot3jan = [{ date: '2027-01-02', missing: ['2607'] }, { date: GRENS, missing: [] }] as never;
+  const bron = { ...leeg, coverageDays: tot3jan, planningTot: GRENS };
+
+  it('een dag na de grens heeft geen planning: geen open diensten, en de kop zegt dat, niet "Alles geregeld"', () => {
+    const b = bouwDagBriefing({ ...bron, dag: '2027-01-04' });
+    expect(b.geenPlanning).toBe(true);
+    expect(b.openDiensten).toEqual([]);
+    expect(b.aandacht).toBe(0);
+    expect(briefingKop(b, 'maandag')).toBe('Geen planning voor maandag');
+  });
+
+  it('tot en met de grens zoals vroeger; zonder grens of met onbekende dekking ook', () => {
+    expect(bouwDagBriefing({ ...bron, dag: GRENS }).geenPlanning).toBe(false);
+    expect(bouwDagBriefing({ ...bron, dag: '2027-01-02' }).openDiensten).toEqual(['2607']);
+    const zonderGrens = bouwDagBriefing({ ...bron, planningTot: null, dag: '2027-01-04' });
+    expect(zonderGrens.geenPlanning).toBe(false);
+    expect(briefingKop(zonderGrens, 'maandag')).toBe('Alles geregeld voor maandag');
+    const onbekend = bouwDagBriefing({ ...bron, coverageDays: null, dag: '2027-01-04' });
+    expect(onbekend.geenPlanning).toBe(false);
+    expect(briefingKop(onbekend, 'maandag')).toBe('Dekking voor maandag nog niet geladen');
+  });
+
+  it('een open ruil op een dag na de grens blijft een punt dat een beslissing vraagt', () => {
+    const b = bouwDagBriefing({ ...bron, dag: '2027-01-04', swaps: [ruil({ status: 'pending', shiftDate: '2027-01-04', shiftLine: '2230' })] });
+    expect(b.geenPlanning).toBe(true);
+    expect(b.aandacht).toBe(1);
+    expect(briefingKop(b, 'maandag')).toBe('1 punt vraagt nog een beslissing');
+  });
+
+  it('de weekstrook markeert de dagen na de grens, met dezelfde telling als de briefing', () => {
+    const week = bouwWeekPunten({ ...bron, vandaag: '2026-12-30' });
+    expect(week.map((w) => w.dag)).toEqual(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03', '2027-01-04', '2027-01-05']);
+    expect(week.map((w) => w.geenPlanning)).toEqual([false, false, false, false, false, true, true]);
+    expect(week.every((w) => !w.onbekend)).toBe(true);
+    expect(week.map((w) => w.aandacht)).toEqual([0, 0, 0, 1, 0, 0, 0]);
+    expect(bouwWeekPunten({ ...bron, planningTot: null, vandaag: '2026-12-30' }).some((w) => w.geenPlanning)).toBe(false);
+  });
+});
+
 describe('dagWoordVoor', () => {
   it('vandaag, morgen, daarna de weekdag', () => {
     expect(dagWoordVoor('2026-09-22', '2026-09-22')).toBe('vandaag');

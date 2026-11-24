@@ -41,6 +41,9 @@ export type DagBriefing = {
   afwezigen: BriefingAfwezige[];
   /** Dienstnummers zonder chauffeur; null = dekking nog niet geladen (onbekend, niet "alles gedekt"). */
   openDiensten: string[] | null;
+  /** De dag valt na de grens van de dekking (24-11): de server gaf er geen
+   *  dekking voor, dus een lege `openDiensten` is daar geen "alles gedekt". */
+  geenPlanning: boolean;
   ruilen: BriefingRuil[];
   omleidingen: Diversion[];
   /** Aantal punten dat vandaag nog een beslissing vraagt. */
@@ -53,7 +56,7 @@ const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
 const RUIL_IN_BEELD = new Set<SwapRequest['status']>(['pending', 'accepted', 'approved', 'completed']);
 const normCode = (c: unknown) => String(c ?? '').trim().toLowerCase();
 
-export function bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, diversions, coverageDays }: {
+export function bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, diversions, coverageDays, planningTot = null }: {
   dag: string;
   users: readonly User[];
   shifts: Shift[];
@@ -61,6 +64,8 @@ export function bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, dive
   swaps: readonly SwapRequest[];
   diversions: Diversion[];
   coverageDays: DayGap[] | null;
+  /** Grens uit hetzelfde antwoord als `coverageDays` (`dekkingTot`); null = niet afgekapt. */
+  planningTot?: string | null;
 }): DagBriefing {
   const gebruiker = (id: string) => users.find((u) => String(u.id) === String(id));
 
@@ -123,12 +128,14 @@ export function bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, dive
     + (openDiensten?.length ?? 0)
     + ruilen.filter((r) => r.open).length;
 
-  return { dag, afwezigen, openDiensten, ruilen, omleidingen, aandacht };
+  const geenPlanning = coverageDays !== null && !!planningTot && dag > planningTot;
+
+  return { dag, afwezigen, openDiensten, geenPlanning, ruilen, omleidingen, aandacht };
 }
 
 /** "3 punten vragen nog een beslissing" / "Alles geregeld". */
 export function briefingKop(b: DagBriefing, dagWoord: string): string {
-  if (b.aandacht === 0) return b.openDiensten === null ? `Dekking voor ${dagWoord} nog niet geladen` : `Alles geregeld voor ${dagWoord}`;
+  if (b.aandacht === 0) return b.openDiensten === null ? `Dekking voor ${dagWoord} nog niet geladen` : b.geenPlanning ? `Geen planning voor ${dagWoord}` : `Alles geregeld voor ${dagWoord}`;
   return `${b.aandacht} ${b.aandacht === 1 ? 'punt vraagt' : 'punten vragen'} nog een beslissing`;
 }
 
@@ -139,6 +146,7 @@ export function briefingKop(b: DagBriefing, dagWoord: string): string {
  * de dekking (`coverageDays`) precies dat venster laadt; verder kijken is
  * Openstaande diensten. `onbekend` = de dekking van die dag is nog niet
  * geladen, dus het cijfer kan te laag zijn (de strook toont dan geen 0).
+ * `geenPlanning` = de dag valt na de grens van de dekking: ook dan geen 0.
  */
 export const WEEKSTROOK_DAGEN = 7;
 
@@ -146,6 +154,7 @@ export type WeekDagPunt = {
   dag: string;
   aandacht: number;
   onbekend: boolean;
+  geenPlanning: boolean;
 };
 
 export function bouwWeekPunten(bron: Omit<Parameters<typeof bouwDagBriefing>[0], 'dag'> & { vandaag: string }): WeekDagPunt[] {
@@ -156,7 +165,7 @@ export function bouwWeekPunten(bron: Omit<Parameters<typeof bouwDagBriefing>[0],
     d.setDate(start.getDate() + i);
     const dag = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const b = bouwDagBriefing({ ...bron, dag });
-    uit.push({ dag, aandacht: b.aandacht, onbekend: b.openDiensten === null });
+    uit.push({ dag, aandacht: b.aandacht, onbekend: b.openDiensten === null, geenPlanning: b.geenPlanning });
   }
   return uit;
 }

@@ -69,9 +69,11 @@ function Weekstrook({ week, vandaag, gekozen, onKies }: {
           const isVandaag = punt.dag === vandaag;
           const actief = punt.dag === gekozen;
           const woord = hoofdletter(dagWoordVoor(punt.dag, vandaag));
+          // Na de grens van de dekking: geen 0, maar een streepje en "geen planning".
+          const streep = punt.onbekend || (punt.geenPlanning && punt.aandacht === 0);
           const telling = punt.onbekend
             ? 'dekking nog niet geladen'
-            : punt.aandacht === 0 ? 'niets te beslissen' : `${punt.aandacht} ${punt.aandacht === 1 ? 'punt vraagt' : 'punten vragen'} een beslissing`;
+            : punt.aandacht === 0 ? (punt.geenPlanning ? 'geen planning' : 'niets te beslissen') : `${punt.aandacht} ${punt.aandacht === 1 ? 'punt vraagt' : 'punten vragen'} een beslissing`;
           return (
             <Pressable
               key={punt.dag}
@@ -99,7 +101,7 @@ function Weekstrook({ week, vandaag, gekozen, onKies }: {
                 aria-hidden="true"
                 // Het cijfer als CSS-inhoud (`.teller-badge`, index.css): een
                 // teller is geen label, de naam hierboven zegt het aantal.
-                data-teller={punt.onbekend ? '–' : String(punt.aandacht)}
+                data-teller={streep ? '–' : String(punt.aandacht)}
                 className={cn(
                   'teller-badge mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-2xs font-bold tabular-nums leading-none',
                   punt.onbekend ? 'text-slate-400' : punt.aandacht > 0 ? 'bg-amber-500/15 text-amber-700' : 'text-slate-400',
@@ -114,7 +116,7 @@ function Weekstrook({ week, vandaag, gekozen, onKies }: {
 }
 
 export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: string[]) => void }) {
-  const { users, shifts, leaveRequests, swaps, diversions, diversionsGeladen, coverageDays } = useAppDataContext();
+  const { users, shifts, leaveRequests, swaps, diversions, diversionsGeladen, coverageDays, dekkingTot } = useAppDataContext();
   // De dag verspringt om middernacht; een tik per minuut volstaat.
   const [vandaag, setVandaag] = useState(() => isoDate(new Date()));
   useEffect(() => {
@@ -133,12 +135,12 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
   const naarOpenDiensten = () => onNavigate('dekking', [dag.slice(0, 7), dag]);
 
   const briefing = useMemo(
-    () => bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, diversions, coverageDays }),
-    [dag, users, shifts, leaveRequests, swaps, diversions, coverageDays],
+    () => bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, diversions, coverageDays, planningTot: dekkingTot }),
+    [dag, users, shifts, leaveRequests, swaps, diversions, coverageDays, dekkingTot],
   );
   const week = useMemo(
-    () => bouwWeekPunten({ vandaag, users, shifts, leaveRequests, swaps, diversions, coverageDays }),
-    [vandaag, users, shifts, leaveRequests, swaps, diversions, coverageDays],
+    () => bouwWeekPunten({ vandaag, users, shifts, leaveRequests, swaps, diversions, coverageDays, planningTot: dekkingTot }),
+    [vandaag, users, shifts, leaveRequests, swaps, diversions, coverageDays, dekkingTot],
   );
   const naamVan = (id: string | null) => (id ? users.find((u) => String(u.id) === id)?.name ?? `Onbekend (${id})` : 'nog geen collega');
 
@@ -147,7 +149,7 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
   // De omleidingen laden ná de poort (poort.ts, 15-10): tot ze binnen zijn
   // is "rustig" niet zeker en toont het paneel een skeletrij.
   const helemaalLeeg = briefing.aandacht === 0 && briefing.afwezigen.length === 0 && briefing.ruilen.length === 0
-    && diversionsGeladen && briefing.omleidingen.length === 0 && briefing.openDiensten !== null;
+    && diversionsGeladen && briefing.omleidingen.length === 0 && briefing.openDiensten !== null && !briefing.geenPlanning;
 
   const afwezigTekst = (a: BriefingAfwezige) =>
     `${AFWEZIG_WOORD[a.type]}${a.tot > dag ? ` t/m ${formatDatumDMJ(a.tot)}` : ''}`;
@@ -252,6 +254,8 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
           >
             {briefing.openDiensten === null ? (
               <Stil>De dekking is nog niet geladen.</Stil>
+            ) : briefing.geenPlanning ? (
+              <Stil>De planning loopt tot en met {formatDatumDMJ(dekkingTot!)}.</Stil>
             ) : briefing.openDiensten.length === 0 ? (
               <Stil>Elke verwachte dienst heeft een chauffeur.</Stil>
             ) : (

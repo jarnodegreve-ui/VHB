@@ -155,6 +155,37 @@ test.describe('Dashboard, Deze week', () => {
   });
 });
 
+// Vandaag leest dezelfde dekking als "Deze week" (tegenlezing 24-11): een dag na
+// de grens krijgt geen rij van de server, en las dan als "Alles geregeld".
+test.describe('Vandaag', () => {
+  test('maandag 4/1 na de grens (klok 30/12/2026): "Geen planning", geen "Alles geregeld" of "Niets te melden", een streepje in de strook', async ({ page }) => {
+    await open(page, '/vandaag/2027-01-04', { nu: '2026-12-30T08:00:00+01:00', grens: GRENS, open: { '2027-01-02': ['2607'] } });
+    await expect(page.getByRole('heading', { level: 1, name: 'Maandag' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Geen planning voor maandag/)).toBeVisible();
+    await expect(page.getByText(/Alles geregeld/)).toHaveCount(0);
+    await expect(page.getByText(/Niets te melden/)).toHaveCount(0);
+    await expect(page.getByText('Elke verwachte dienst heeft een chauffeur.')).toHaveCount(0);
+    await expect(page.getByText('De planning loopt tot en met 03/01/2027.')).toBeVisible();
+    const strook = page.getByRole('group', { name: 'Dag kiezen' });
+    await expect(strook.getByRole('button')).toHaveCount(7);
+    // 30/12 tot 3/1 zoals vroeger (2/1 één open dienst), 4/1 en 5/1 geen planning.
+    await expect(strook.getByRole('button').nth(3)).toHaveAccessibleName(/: 1 punt vraagt een beslissing$/);
+    await expect(strook.getByRole('button').nth(4)).toHaveAccessibleName(/: niets te beslissen$/);
+    for (const i of [5, 6]) {
+      await expect(strook.getByRole('button').nth(i)).toHaveAccessibleName(/: geen planning$/);
+      await expect(strook.getByRole('button').nth(i).locator('[data-teller]')).toHaveAttribute('data-teller', '–');
+    }
+    await expect(strook.getByRole('button').nth(4).locator('[data-teller]')).toHaveAttribute('data-teller', '0');
+  });
+
+  test('zonder grens in de dekking: zoals vroeger', async ({ page }) => {
+    await open(page, '/vandaag/2027-01-04', { nu: '2026-12-30T08:00:00+01:00', grens: null });
+    await expect(page.getByRole('heading', { level: 1, name: 'Maandag' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Geen planning/)).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Dag kiezen' }).getByRole('button').nth(5)).toHaveAccessibleName(/: (niets te beslissen|\d+ punt)/);
+  });
+});
+
 test.describe('Openstaande diensten', () => {
   const NU = '2026-12-30T08:00:00+01:00';
   const titel = (page: Page) => page.getByRole('heading', { name: 'Openstaande diensten', level: 1 });
