@@ -87,6 +87,10 @@ describe('dekking op De Lijn-codes (dagtypekalender deel 2, 11-10)', () => {
     mem.dagtypeKalender = [];
     mem.leave = [];
     mem.swaps = [];
+    // Alleen een matrix, geen opgebouwde planning: de grens van de planning
+    // is dan de laatste matrixrij (planningGrens.ts). De vaste planning van
+    // het harnas (tot 08/07/2026) hoort bij zijn eigen matrix.
+    mem.planning = [];
     mem.planningMatrix = [
       // Maandag met code 21: de schooldaglijst (12, 14); alleen 12 is ingevuld.
       { id: 'c1', source_date: '2030-09-02', day_type: '21', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
@@ -615,6 +619,8 @@ describe('dekking: eigenaar via ruil zonder actief account (nr. 48)', () => {
     usersVoor = mem.users;
     mem.users = [...usersVoor, { id: '5', name: 'Daniel Decock', email: 'd@vhb.be', role: 'chauffeur', isActive: false } as (typeof mem.users)[number]];
     mem.planningMatrix = [{ id: 'm-48', source_date: DAG, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' }];
+    // Geen opgebouwde planning bij deze matrix: de grens is de laatste matrixrij.
+    mem.planning = [];
     mem.leave = [];
     mem.swaps = [];
     mem.coverageExpectations = { week: ['12', '11'] } as any;
@@ -649,5 +655,135 @@ describe('dekking: eigenaar via ruil zonder actief account (nr. 48)', () => {
     const res = await api('GET', '/api/coverage-gaps?from=2020-07-15&to=2020-07-15', { token: 'tok-planner' });
     expect(res.json.days[0]).toMatchObject({ covered: 2, missing: [] });
     expect(res.json.days[0].uitval).toBeUndefined();
+  });
+});
+
+// De dekking stopt op de grens van de planning (24-11, akkoord Jarno): de
+// laatste matrixdag met minstens één dienst (api/_lib/planningGrens.ts). Zoals
+// in productie: matrixrijen tot eind februari, maar na 4 januari staat er in
+// geen cel iets. Vroeger was daar elke verwachte dienst een gat.
+describe('dekking: geen dagen na de grens van de planning (24-11)', () => {
+  const dagen = (van: string, tot: string) => {
+    const uit: string[] = [];
+    for (let d = new Date(`${van}T00:00:00Z`); d.toISOString().slice(0, 10) <= tot; d.setUTCDate(d.getUTCDate() + 1)) uit.push(d.toISOString().slice(0, 10));
+    return uit;
+  };
+  const GRENS = '2031-01-04';
+  let spionnen: Array<{ mockRestore: () => void }> = [];
+  beforeEach(() => {
+    mem.coverageExpectations = { week: ['12', '11'] } as any;
+    // SCH is een code-dienst (schoolrit): geen planningrijen, wel een dienst.
+    mem.planningCodes = [{ id: 'pc-sch', code: 'SCH', description: 'Schoolrit', category: 'service' }] as any;
+    mem.planningMatrix = dagen('2030-12-30', '2031-02-28').map((d) => ({
+      id: `g-${d}`,
+      source_date: d,
+      day_type: 'week',
+      // Tot 3/1 diensten met uren, op 4/1 alleen de schoolrit, daarna niets.
+      assignments: d <= '2031-01-03' ? { 'Chauffeur A': '12' } : d === GRENS ? { 'Chauffeur B': 'SCH' } : {},
+      raw_row: '',
+    }));
+    // De opgebouwde planning: alleen de diensten met uren (tot 3/1).
+    mem.planning = dagen('2030-12-30', '2031-01-03').map((d) => ({ id: `sh-${d}`, driverId: '3', date: d, line: '12', startTime: '08:00', endTime: '16:00' }));
+    // Ziek op 2/1 en 3/1; op 3/1 nam Chauffeur B dienst 12 over (opgevangen).
+    mem.leave = [{ id: 'l-g', userId: '3', startDate: '2031-01-02', endDate: '2031-01-03', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-12-20T06:00:00Z', decidedAt: '2030-12-20T06:00:00Z' }];
+    mem.swaps = [{
+      id: 's-g', shiftId: 'sh-2031-01-03', requesterId: '3', targetDriverId: '4', status: 'approved', reason: 'Ziekte',
+      createdAt: '2030-12-21T08:00:00Z', decidedAt: '2030-12-21T09:00:00Z', shiftDate: '2031-01-03', shiftLine: '12', swapType: 'overname',
+    }] as any;
+  });
+  afterEach(() => { spionnen.forEach((s) => s.mockRestore()); spionnen = []; });
+  const storage = () => import('../../api/_lib/storage.js');
+  /** De uitkomst zoals op de basis (27dc6d40): zonder grens kapte niets af. */
+  const zoalsVroeger = async (van: string, tot: string) => {
+    const s = vi.spyOn(await storage(), 'getPlanningMatrixGrenzen').mockResolvedValueOnce({ eerste: null, laatste: null });
+    const res = await api('GET', `/api/coverage-gaps?from=${van}&to=${tot}`, { token: 'tok-planner' });
+    s.mockRestore();
+    return res.json.days as any[];
+  };
+
+  it('januari: dagen tot en met de grens, precies zoals vroeger, en planningTot noemt de grens', async () => {
+    const vroeger = await zoalsVroeger('2031-01-01', '2031-01-31');
+    // Vroeger: elke dag van januari, ook de lege, met elke dienst open.
+    expect(vroeger.map((d) => d.date)).toEqual(dagen('2031-01-01', '2031-01-31'));
+    expect(vroeger.find((d) => d.date === '2031-01-20')).toMatchObject({ missing: ['12', '11'] });
+
+    const spion = vi.spyOn(await storage(), 'getPlanningMatrixGrenzen');
+    spionnen.push(spion);
+    const res = await api('GET', '/api/coverage-gaps?from=2031-01-01&to=2031-01-31', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ from: '2031-01-01', to: '2031-01-31', planningTot: GRENS });
+    expect(res.json.days.map((d: any) => d.date)).toEqual(['2031-01-01', '2031-01-02', '2031-01-03', GRENS]);
+    // Dagen tot en met de grens: identiek, ook uitval, opgevangen en de dag met alleen een code-dienst.
+    expect(res.json.days).toEqual(vroeger.filter((d) => d.date <= GRENS));
+    const per = Object.fromEntries(res.json.days.map((d: any) => [d.date, d]));
+    expect(per['2031-01-02']).toMatchObject({ missing: ['12', '11'], uitval: { 12: { name: 'Chauffeur A', reason: 'ziek' } } });
+    expect(per['2031-01-03']).toMatchObject({ missing: ['11'], opgevangen: { 12: { name: 'Chauffeur A', reason: 'ziek', door: 'Chauffeur B' } } });
+    // Kost: één lezing van de grens per oproep.
+    expect(spion).toHaveBeenCalledTimes(1);
+  });
+
+  it('een maand helemaal na de grens heeft geen dagen, wel de grens', async () => {
+    const res = await api('GET', '/api/coverage-gaps?from=2031-02-01&to=2031-02-28', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ from: '2031-02-01', to: '2031-02-28', days: [], planningTot: GRENS });
+  });
+
+  it('een venster dat vóór de grens eindigt: zoals vroeger, met de grens erbij', async () => {
+    const vroeger = await zoalsVroeger('2030-12-30', '2031-01-02');
+    const res = await api('GET', '/api/coverage-gaps?from=2030-12-30&to=2031-01-02', { token: 'tok-planner' });
+    expect(res.json.days).toEqual(vroeger);
+    expect(res.json.planningTot).toBe(GRENS);
+  });
+
+  it('geen grens: zoals vroeger, planningTot null', async () => {
+    const vroeger = await zoalsVroeger('2031-01-01', '2031-01-31');
+    spionnen.push(vi.spyOn(await storage(), 'getPlanningMatrixGrenzen').mockResolvedValueOnce({ eerste: null, laatste: null }));
+    const res = await api('GET', '/api/coverage-gaps?from=2031-01-01&to=2031-01-31', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.days).toEqual(vroeger);
+    expect(res.json.planningTot).toBeNull();
+  });
+
+  it('planning gewist (de grens is niet te vertrouwen): de laatste matrixrij, dus zoals vroeger', async () => {
+    const vroeger = await zoalsVroeger('2031-01-01', '2031-01-31');
+    mem.planning = [];
+    const res = await api('GET', '/api/coverage-gaps?from=2031-01-01&to=2031-01-31', { token: 'tok-planner' });
+    expect(res.json.days).toEqual(vroeger);
+    expect(res.json.planningTot).toBe('2031-02-28');
+  });
+
+  it('een grens die gooit: zoals vroeger met een waarschuwing, nooit een 500', async () => {
+    const vroeger = await zoalsVroeger('2031-01-01', '2031-01-31');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    spionnen.push(warn);
+    spionnen.push(vi.spyOn(await storage(), 'getPlanningMatrixGrenzen').mockRejectedValue(new Error('planning_matrix_rows: connection failure')));
+    const res = await api('GET', '/api/coverage-gaps?from=2031-01-01&to=2031-01-31', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.days).toEqual(vroeger);
+    expect(res.json.planningTot).toBeNull();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('[dekking] grens van de planning niet gelezen'))).toBe(true);
+    // De verwachtingscheck valt evenmin om.
+    const check = await api('GET', '/api/coverage-expectation-check?from=2031-02-01&to=2031-02-28', { token: 'tok-planner' });
+    expect(check.status).toBe(200);
+    expect(check.json.dagen).toBe(28);
+  });
+
+  it('de verwachtingscheck kapt mee: na de grens is geen verwachte dienst "nooit gereden"', async () => {
+    const feb = await api('GET', '/api/coverage-expectation-check?from=2031-02-01&to=2031-02-28', { token: 'tok-planner' });
+    expect(feb.status).toBe(200);
+    expect(feb.json).toEqual({ from: '2031-02-01', to: '2031-02-28', dagen: 0, afwijkingen: [] });
+    // Januari: alleen de dagen tot en met de grens tellen (vier), dienst 11 rijdt er nooit.
+    const jan = await api('GET', '/api/coverage-expectation-check?from=2031-01-01&to=2031-01-31', { token: 'tok-planner' });
+    expect(jan.json).toMatchObject({ dagen: 4, afwijkingen: [{ dayType: 'week', dagen: 4, nooitGereden: ['11'] }] });
+    // Zonder grens was februari 28 dagen lang een structurele afwijking.
+    spionnen.push(vi.spyOn(await storage(), 'getPlanningMatrixGrenzen').mockResolvedValueOnce({ eerste: null, laatste: null }));
+    const vroeger = await api('GET', '/api/coverage-expectation-check?from=2031-02-01&to=2031-02-28', { token: 'tok-planner' });
+    expect(vroeger.json).toMatchObject({ dagen: 28, afwijkingen: [{ dayType: 'week', dagen: 28, nooitGereden: ['12', '11'] }] });
+  });
+
+  it('de gedeelde berekening (ochtendmail, rapport) kapt op dezelfde grens', async () => {
+    const { berekenDekkingsGaten } = await import('../../api/_lib/coverageRoutes.js');
+    const gaten = await berekenDekkingsGaten('2031-01-01', '2031-01-07');
+    expect(gaten.map((d) => d.date)).toEqual(['2031-01-01', '2031-01-02', '2031-01-03', GRENS]);
   });
 });

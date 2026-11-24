@@ -3750,6 +3750,10 @@ describe('verbeterronde 20-08, import-signalen & planning-aanwezigheid', () => {
       { id: 'm-a', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
       { id: 'm-b', source_date: '2030-09-02', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
     ];
+    // Alleen een matrix, geen opgebouwde planning: de grens is dan de laatste
+    // matrixrij (planningGrens.ts). De vaste planning van het harnas (tot
+    // 08/07/2026) hoort bij zijn eigen matrix en legde de grens vóór deze.
+    mem.planning = [];
     mem.coverageExpectations = { school: ['2101', '2114'] };
     const res = await api('GET', '/api/coverage-expectation-check?from=2030-09-01&to=2030-09-30', { token: 'tok-planner' });
     expect(res.status).toBe(200);

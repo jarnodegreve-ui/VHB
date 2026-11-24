@@ -35,6 +35,9 @@ export type CoverageGaps = {
   from: string;
   to: string;
   days: DayGap[];
+  /** Tot wanneer er planning is (24-11): de server geeft geen dagen na die
+   *  dag. null of afwezig = geen grens (of niet gelezen), dan is er niet afgekapt. */
+  planningTot?: string | null;
 };
 
 export function fetchCoverageConfig(): Promise<CoverageConfig> {
