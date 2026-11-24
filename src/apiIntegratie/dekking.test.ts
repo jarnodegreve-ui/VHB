@@ -576,6 +576,10 @@ describe('verbeterronde 22-08, voorstel, batch-advies en maandoverzicht', () => 
     mem.planningMatrix = [
       { id: 's-1', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
     ];
+    // De opgebouwde planning volgt de matrix, zoals na elke import. Zonder die
+    // rij lag de grens van de planning op de laatste planningdag van het
+    // harnas (juli 2026) en telt het overzicht sinds 24-11 niets (dagenTotGrens).
+    mem.planning = [{ id: 's-p1', driverId: '3', date: '2030-09-01', line: '12', startTime: '08:00', endTime: '16:00' }];
     mem.planningCodes = [{ code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true }];
     const res = await api('GET', '/api/month-planning?month=2030-09&format=summary', { token: 'tok-planner' });
     expect(res.status).toBe(200);

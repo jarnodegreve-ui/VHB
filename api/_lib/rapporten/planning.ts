@@ -4,6 +4,7 @@ import { maandenInPeriode } from "../../../shared/rapporten/periode.js";
 import type { RapportBereik, RapportFilters, RapportResultaat, RapportRij } from "../../../shared/rapporten/types.js";
 import { berekenMaandoverzicht, dienstMinuten, telMaandoverzichtenOp, type Maandoverzicht } from "../helpers.js";
 import { berekenCelWaarheid, type CelWaarheidInvoer } from "../celWaarheid.js";
+import { dagenTotGrens, naGrens } from "../dagenTotGrens.js";
 import { persoonZoeker, weekdagKort, type RapportGebruiker } from "./gedeeld.js";
 
 /**
@@ -25,13 +26,15 @@ type PlanningCode = { code: string; countsAsShift?: boolean; isPaidAbsence?: boo
 /**
  * Het maandoverzicht van één maand, precies zoals GET /api/month-planning
  * ?format=summary het rekent: de cel-waarheid van het bord (matrix +
- * goedgekeurde ruilen + afwezigheden) door `berekenMaandoverzicht`. Hier en
- * in de gelijkheidstest gebruikt, zodat "gelijk aan het Maandoverzicht" een
- * test is en geen belofte.
+ * goedgekeurde ruilen + afwezigheden) door `berekenMaandoverzicht`, over de
+ * dagen tot en met de grens van de planning (`laatste`, dagenTotGrens: na de
+ * laatste dag met een dienst telt niets meer mee, ook geen codes uit de Excel
+ * zelf; null = geen grens, alles). Hier en in de gelijkheidstest gebruikt, zodat "gelijk
+ * aan het Maandoverzicht" een test is en geen belofte.
  */
-export const maandoverzichtVan = (maand: string, bron: CelWaarheidInvoer): Maandoverzicht => {
+export const maandoverzichtVan = (maand: string, bron: CelWaarheidInvoer, laatste: string | null): Maandoverzicht => {
   const { dates, chauffeurs, cells, dagtypes } = berekenCelWaarheid(maand, bron);
-  return berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, bron.services, bron.codes as PlanningCode[], dagtypes, bron.versies);
+  return berekenMaandoverzicht(dagenTotGrens(dates, laatste), chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, bron.services, bron.codes as PlanningCode[], dagtypes, bron.versies);
 };
 
 /**
@@ -42,7 +45,7 @@ export const maandoverzichtVan = (maand: string, bron: CelWaarheidInvoer): Maand
  */
 export function bouwOverzichtPerChauffeur(bron: OverzichtBron, filters: RapportFilters): RapportResultaat {
   const maanden = maandenInPeriode({ van: filters.van ?? "", tot: filters.tot ?? "" });
-  const som = telMaandoverzichtenOp(maanden.map((maand) => maandoverzichtVan(maand, bron)));
+  const som = telMaandoverzichtenOp(maanden.map((maand) => maandoverzichtVan(maand, bron, bron.grenzen.laatste)));
   const sectieVan = new Map(bron.users.map((u) => [String(u.id), String(u.section ?? "").trim()]));
   const rijen: RapportRij[] = som.rijen
     .filter((r) => !filters.chauffeur || r.driverId === filters.chauffeur)
@@ -158,12 +161,20 @@ const redenTekst = (info: { name: string; reason: string } | undefined): string 
  * dekking is een vooruitkijk-instrument (een achteraf ingevoerd ziektebriefje
  * maakt van een gereden dag geen gat), dus het bereik begint vandaag. Het is
  * de toestand van NU, geen historiek van wanneer een gat ontstond.
+ *
+ * Ook de dagen ná de grens van de planning (de laatste dag met een dienst,
+ * 24-11) staan er niet in: op een dag zonder dienst (een lege matrixrij, of
+ * alleen afwezigheid of andere codes) ontbreekt elke verwachte dienst, maar
+ * daar is nog niets ingepland, dus geen dienst staat open. Het
+ * bereik zegt al "t/m <grens>". De dekking zelf (berekenDekkingsGaten, het
+ * scherm Openstaande diensten, de cockpit en de ochtendmail) telt daar nog
+ * wel door; dat is een apart voorstel.
  */
 export function bouwOpenstaandeDiensten(bron: OpenstaandeBron, _filters: RapportFilters, vandaag: string): RapportResultaat {
   const norm = (code: string) => code.trim().toLowerCase();
   const rijen: RapportRij[] = [];
   for (const dag of bron.gaten) {
-    if (dag.date < vandaag) continue;
+    if (dag.date < vandaag || naGrens(dag.date, bron.grenzen.laatste)) continue;
     const basis = { datum: dag.date, dag: weekdagKort(dag.date), dagtype: dag.dayType || null };
     for (const dienst of dag.missing) {
       rijen.push({
