@@ -82,7 +82,7 @@ export function PlannerDashboardWidgets({
   const {
     users, shifts, diversions, diversionsGeladen, updates, leaveRequests, swaps,
     planningMatrixRows, planningMatrixGeladen, planningMatrixHistory: matrixHistory, activityLog, activityLogGeladen, coverageDays, vervaldata, pendingDevices,
-    planningTot, isInitialLoad, reportSick: onSickReport,
+    dekkingTot, isInitialLoad, reportSick: onSickReport,
     fetchPlanning, fetchSwaps, refreshCoverageGaps,
   } = useAppDataContext();
   /** Wissel vanuit de ziekmeld-flow: planning, ruilen en dekking meteen mee
@@ -617,14 +617,18 @@ export function PlannerDashboardWidgets({
   // de derde kolom op brede schermen. null = nog niet geladen; een lege lijst
   // of overal expected 0 = er zijn geen verwachte diensten ingesteld.
   // Na de grens van de planning (24-11) is er geen dekking: die dagen zijn
-  // niet "gedekt" maar een neutrale cel. planningTot (x-planning-tot) is
-  // dezelfde grens waarop de server de dekking afkapt; onbekend = zoals vroeger.
+  // niet "gedekt" maar een neutrale cel. dekkingTot komt uit hetzelfde
+  // antwoord als coverageDays (de grens waarop de server afkapte), dus dagen
+  // en grens horen altijd bij elkaar; null = niet afgekapt, zoals vroeger.
   const weekEinde = isoDate(addDays(now, 6));
-  const naGrens = (d: string) => !!planningTot && d > planningTot;
+  const naGrens = (d: string) => !!dekkingTot && d > dekkingTot;
   const weekDagen = (coverageDays ?? []).filter((d) => d.date >= today && d.date <= weekEinde && !naGrens(d.date)).sort((a, b) => a.date.localeCompare(b.date));
   const zonderPlanning = coverageDays === null ? [] : [0, 1, 2, 3, 4, 5, 6].map((i) => isoDate(addDays(now, i))).filter(naGrens);
   const weekZonderPlanning = zonderPlanning.length === 7;
-  const geenVerwachtingen = coverageDays !== null && !weekZonderPlanning && (weekDagen.length === 0 || weekDagen.every((d) => d.expected === 0));
+  // "Nog geen verwachte diensten" alleen voor een week zonder dag na de grens:
+  // een lege zondag vóór de grens zegt niets over de dagen erna.
+  const nietsVerwacht = weekDagen.length === 0 || weekDagen.every((d) => d.expected === 0);
+  const geenVerwachtingen = coverageDays !== null && zonderPlanning.length === 0 && nietsVerwacht;
   const weekOpen = weekDagen.reduce((n, d) => n + d.missing.length, 0);
 
   // Status-strip: elke tegel als functie van zijn rasterklassen, zodat de
@@ -912,7 +916,7 @@ export function PlannerDashboardWidgets({
       className="hidden lg:block"
       icon={<CalendarDays size={16} />}
       title="Deze week"
-      aside={coverageDays === null ? 'laden…' : weekZonderPlanning ? 'geen planning' : geenVerwachtingen ? undefined : weekOpen > 0 ? `${weekOpen} open` : zonderPlanning.length > 0 ? `alles gedekt t/m ${formatDay(planningTot!)}` : 'alles gedekt'}
+      aside={coverageDays === null ? 'laden…' : weekZonderPlanning ? 'geen planning' : weekOpen > 0 ? `${weekOpen} open` : nietsVerwacht ? undefined : zonderPlanning.length > 0 ? `alles gedekt t/m ${formatDay(dekkingTot!)}` : 'alles gedekt'}
       onSeeAll={() => onNavigate('dekking')}
       seeAllLabel="Openstaande diensten"
     >

@@ -6,7 +6,8 @@ import { ADMIN, AXE_TAGS, seed } from './helpers';
  * Dekking-grens (24-11, akkoord Jarno): de dekking stopt op de laatste dag met
  * een dienst, de grens waarop Rooster en Maandplanning al stoppen. De server
  * geeft geen dagen na die grens en zegt in `planningTot` tot wanneer er
- * planning is; het dashboard leest dezelfde grens uit `x-planning-tot`.
+ * planning is; het dashboard leest de grens uit datzelfde antwoord (niet uit
+ * `x-planning-tot`, een ander verzoek).
  * Daarna is een dag niet "open" en ook niet "gedekt": er is geen planning.
  *
  * Draait in iPhone 13 (chromium): de naam staat in geen eigen project van
@@ -25,12 +26,13 @@ const dagenTussen = (van: string, tot: string) => {
 };
 
 /** Zoals de server sinds 24-11: dagen van [van, tot] tot en met de grens, plus `planningTot`. */
-const dekking = (van: string, tot: string, grens: string | null, open: Record<string, string[]>) => ({
+const dekking = (van: string, tot: string, grens: string | null, open: Record<string, string[]>, verwacht: Record<string, number> = {}) => ({
   from: van,
   to: tot,
   days: dagenTussen(van, grens && grens < tot ? grens : tot).map((date) => {
     const missing = open[date] ?? [];
-    return { date, dayType: 'schooldag', expected: 2, covered: 2 - missing.length, missing, unknown: [], bron: { soort: 'basis' } };
+    const expected = verwacht[date] ?? 2;
+    return { date, dayType: 'schooldag', expected, covered: expected - missing.length, missing, unknown: [], bron: { soort: 'basis' } };
   }),
   planningTot: grens,
 });
@@ -46,9 +48,9 @@ const CONFIG = {
 /** Een paar diensten tot de grens: het dashboard heeft planning (geen "begin hier"). */
 const PLANNING = dagenTussen('2026-12-28', GRENS).map((date, i) => ({ id: `p${i}`, date, startTime: '06:12', endTime: '14:30', line: '2101', busNumber: '', loopnr: '4500', driverId: '42' }));
 
-type Opties = { nu: string; grens: string | null; header?: boolean; open?: Record<string, string[]>; vasthouden?: (van: string) => Promise<void> | undefined };
+type Opties = { nu: string; grens: string | null; header?: boolean; open?: Record<string, string[]>; verwacht?: Record<string, number>; vasthouden?: (van: string) => Promise<void> | undefined };
 
-async function open(page: Page, pad: string, { nu, grens, header = true, open: gaten = {}, vasthouden }: Opties) {
+async function open(page: Page, pad: string, { nu, grens, header = true, open: gaten = {}, verwacht = {}, vasthouden }: Opties) {
   await page.clock.setFixedTime(new Date(nu));
   await seed(page, {
     user: ADMIN,
@@ -63,7 +65,7 @@ async function open(page: Page, pad: string, { nu, grens, header = true, open: g
     const van = url.searchParams.get('from') ?? '';
     const tot = url.searchParams.get('to') ?? '';
     await vasthouden?.(van);
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(dekking(van, tot, grens, gaten)) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(dekking(van, tot, grens, gaten, verwacht)) });
   });
   await page.goto(pad);
 }
@@ -108,6 +110,39 @@ test.describe('Dashboard, Deze week', () => {
     for (let i = 0; i < 7; i += 1) await expect(lijst.getByRole('listitem').nth(i)).toHaveAttribute('title', /geen planning/);
     await expect(paneelKop(page)).toContainText('geen planning');
     await expect(page.getByText('Nog geen verwachte diensten')).toHaveCount(0);
+  });
+
+  // De grens komt uit het antwoord van de dekking zelf, niet uit x-planning-tot
+  // (tegenlezing 24-11: een ander verzoek, dat de grens kan missen of een
+  // oudere kan dragen terwijl de dagen al afgekapt zijn).
+  test('zonder x-planning-tot, met planningTot in de dekking: de week na de grens blijft "geen planning"', async ({ page }) => {
+    await open(page, '/', { nu: '2027-01-10T08:00:00+01:00', grens: GRENS, header: false });
+    const lijst = dezeWeek(page);
+    await expect(lijst.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 });
+    for (let i = 0; i < 7; i += 1) await expect(lijst.getByRole('listitem').nth(i)).toHaveAttribute('title', /geen planning/);
+    await expect(paneelKop(page)).toContainText('geen planning');
+    await expect(page.getByText('Nog geen verwachte diensten')).toHaveCount(0);
+  });
+
+  test('zonder x-planning-tot, met planningTot in de dekking: over de grens heen zeven cellen, "alles gedekt t/m"', async ({ page }) => {
+    await open(page, '/', { nu: '2026-12-30T08:00:00+01:00', grens: GRENS, header: false });
+    const lijst = dezeWeek(page);
+    await expect(lijst.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 });
+    await expect(lijst.locator('[aria-label="gedekt"]')).toHaveCount(5);
+    await expect(lijst.getByRole('listitem').nth(5)).toHaveAttribute('title', /geen planning/);
+    await expect(paneelKop(page)).toContainText(/alles gedekt t\/m \S+ 3 jan/);
+  });
+
+  test('de laatste dag vóór de grens heeft geen verwachte diensten (zondag 3/1): de strook blijft, geen "nog geen verwachte diensten"', async ({ page }) => {
+    await open(page, '/', { nu: '2027-01-03T08:00:00+01:00', grens: GRENS, verwacht: { [GRENS]: 0 } });
+    const lijst = dezeWeek(page);
+    await expect(lijst.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 });
+    for (let i = 1; i < 7; i += 1) await expect(lijst.getByRole('listitem').nth(i)).toHaveAttribute('title', /geen planning/);
+    await expect(page.getByText('Nog geen verwachte diensten')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Verwachte diensten instellen' })).toHaveCount(0);
+    // Niets verwacht tot de grens: ook geen "alles gedekt".
+    await expect(paneelKop(page)).not.toContainText('gedekt');
+    await expect(paneelKop(page)).not.toContainText('geen planning');
   });
 
   test('zonder grens van de server: zoals vroeger', async ({ page }) => {
