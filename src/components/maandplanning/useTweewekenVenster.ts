@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { weekRangeLabel } from '../../lib/week';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { isoDate } from '../../lib/availability';
-import { fetchMonthPlanning, type MonthPlanning } from '../../lib/monthPlanning';
-import { formatDatumDMJ } from '../../lib/format';
+import { fetchMonthPlanning, type Herkomst, type MonthPlanning } from '../../lib/monthPlanning';
+import { begin, bewaar, lees, type Lezing } from '../../lib/schermGeheugen';
+import { formatDatumDMJ, formatSyncedTime } from '../../lib/format';
 import { addDaysIso, formatDayMonth, maandNaarParam, mondayOf, monthOf, PLANNING_SALVO_MS } from '../../lib/maandplanning';
 
 /**
@@ -15,7 +16,8 @@ import { addDaysIso, formatDayMonth, maandNaarParam, mondayOf, monthOf, PLANNING
  *     dagen, verschuiven, naar vandaag) en de hoofdmaand in de URL;
  *  2. `useMaandLaden`: de hoofdmaand via useZelfLadend, de tweede maand achter
  *     de vensterrand stil erbij, en de stille herlaad-momenten (eigen wissel,
- *     salvo van planning-wijzigingen van collega's);
+ *     salvo van planning-wijzigingen van collega's); sinds ronde 6 (punt 22,
+ *     deel 3) onthoudt het elke maand in het geheugen van de schermen;
  *  3. `useImportGrenzen`: de grenzen van de geïmporteerde planning en de
  *     terugblikgrens van de server, die het venster en de knoppen sturen.
  *
@@ -97,29 +99,130 @@ export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaa
   return { windowStart, setWindowStart, windowDates, windowLabel, goPrevWindow, goNextWindow, naarVandaag };
 }
 
-export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTick, setData, setExtraData }: {
+/** De sleutel van één maand in het geheugen van de schermen
+ *  (src/lib/schermGeheugen.ts): dezelfde voor de hoofdmaand en de maand achter
+ *  de vensterrand, want het is hetzelfde antwoord van de server. */
+export const maandSleutel = (maand: string) => `maandplanning:${maand}`;
+
+/** De fout van een verversing die alleen een antwoord uit de cache van de
+ *  service worker kreeg: het netwerk viel weg en de server bevestigde niets. */
+export const GEEN_VERBINDING = 'Geen verbinding met de server.';
+
+/** De regel boven een bord uit de cache van de service worker (zonder bord
+ *  van de server ernaast), naar de vorm van Mijn dag: nooit "Bijgewerkt", want
+ *  de server bevestigde niets. Het uur van het oorspronkelijke antwoord (de
+ *  Date-kop) alleen als dat vandaag was; een ouder of onbekend uur zegt niets
+ *  en valt weg. */
+export function cacheRegel(datum: number | null, online: boolean, nu: Date = new Date()): string {
+  const uur = datum !== null && new Date(datum).toDateString() === nu.toDateString() ? formatSyncedTime(datum) : '';
+  if (online) return uur ? `Opgeslagen gegevens van ${uur}` : 'Opgeslagen gegevens';
+  return uur ? `Offline · gegevens van ${uur}` : 'Offline · opgeslagen gegevens';
+}
+
+/** Een onthouden maand, alleen als het antwoord ook echt die maand is. */
+export function leesOnthoudenMaand(maand: string): { antwoord: MonthPlanning; om: number } | null {
+  const o = lees<MonthPlanning>(maandSleutel(maand));
+  return o && o.antwoord?.month === maand ? o : null;
+}
+
+export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTick, setData, setExtraData, onthoudenOm = null }: {
   monthParam: string;
   windowDates: string[];
   reloadTick: number;
   setReloadTick: (volgende: (t: number) => number) => void;
   setData: (data: MonthPlanning | null) => void;
   setExtraData: (data: MonthPlanning | null) => void;
+  /** Terug binnen vijf minuten (ronde 6, punt 22, deel 3): het tijdstip van
+   *  de hoofdmaand die de view bij de mount al uit het geheugen toont
+   *  (`leesOnthoudenMaand`), of null. Alleen bij de mount gelezen. */
+  onthoudenOm?: number | null;
 }) {
   // Hoofdmaand: laad, fout en "Opnieuw proberen" via de gedeelde hook (punt
-  // 17); geen focus-refresh, de realtime-laag hieronder ververst al.
-  const zl = useZelfLadend(async () => { setData(await fetchMonthPlanning(monthParam)); }, {
+  // 17); geen focus-refresh, de realtime-laag hieronder ververst al. Met een
+  // onthouden hoofdmaand is de eerste laad stil (geen skelet) en noemt de
+  // regel de tijd van die lezing tot de verversing binnen is.
+  //
+  // Elke geslaagde lezing gaat in het geheugen, onder de regels daarvan (vijf
+  // minuten, geen eigen schrijfactie en geen planningswijziging sinds het
+  // vertrek, dezelfde gebruiker), behalve een antwoord uit de cache van de
+  // service worker: dat is het bord van een vorige keer.
+  const laatsteHoofd = useRef<Lezing | null>(null);
+  // De kolommen van de maand achter de vensterrand die nog uit het geheugen
+  // komen (de maand, of null), of hun eigen lezing mislukte, en of de
+  // hoofdmaand intussen vers binnen is; zie het effect van de extra maand.
+  const extraUitGeheugen = useRef<string | null>(null);
+  const extraMislukt = useRef(false);
+  const hoofdVers = useRef(false);
+  // De maand van het bord van de server dat in beeld staat (uit het geheugen
+  // of van dit bezoek); null = geen, of een bord uit de cache van de service
+  // worker. Zo'n antwoord uit de cache vervangt nooit een bord van de server:
+  // het telt als een mislukte verversing, dus het bord en zijn ware tijd
+  // blijven (uit het geheugen met de kleine Foutkaart erboven, zoals bij een
+  // 500). Zonder bord van de server (een koude start zonder bereik, een
+  // maandwissel) toont het scherm het zoals vroeger, met `uitCache` erbij,
+  // want useZelfLadend zet na elke laad de tijd van nu.
+  const bordVanServer = useRef<string | null>(onthoudenOm === null ? null : monthParam);
+  const [uitCache, setUitCache] = useState<{ datum: number | null } | null>(null);
+  // In dit bezoek kwam er een antwoord voor de hoofdmaand (van de server, of
+  // uit de cache van de service worker, ook als dat het bord niet verving);
+  // na een terugkeer pas met de verversing. De view opent pas dan een cel
+  // voor de staf: op hetzelfde moment als vroeger, toen het bord pas met dat
+  // antwoord verscheen. Een mislukte lezing (500) telt niet.
+  const [versDitBezoek, setVersDitBezoek] = useState(onthoudenOm === null);
+  // De nieuwste lezing van de hoofdmaand loopt nog. Haalt een zichtbare laad
+  // een stille in (een maandwissel vlak na een terugkeer), dan zet
+  // useZelfLadend `verversen` nooit meer uit; dit houdt de regel en de knop
+  // van de kleine Foutkaart eerlijk.
+  const [hoofdLopend, setHoofdLopend] = useState(false);
+  const zl = useZelfLadend(async () => {
+    const lezing = begin(maandSleutel(monthParam), { planning: true });
+    laatsteHoofd.current = lezing;
+    setHoofdLopend(true);
+    try {
+      const herkomst: Herkomst = {};
+      const res = await fetchMonthPlanning(monthParam, herkomst);
+      if (!herkomst.uitCache && res?.month === monthParam) bewaar(lezing, res);
+      // Een nieuwere lezing vertrok intussen (een maandwissel, een verversing):
+      // die beslist, een laat antwoord raakt het bord niet meer.
+      if (laatsteHoofd.current !== lezing) return;
+      if (herkomst.uitCache && bordVanServer.current === monthParam) {
+        // Het bord blijft; wel kwam er in dit bezoek een antwoord, op hetzelfde
+        // moment als vroeger het bord uit de cache verscheen.
+        setVersDitBezoek(true);
+        throw new Error(GEEN_VERBINDING);
+      }
+      setData(res);
+      bordVanServer.current = herkomst.uitCache ? null : (res?.month ?? null);
+      setUitCache(herkomst.uitCache ? { datum: herkomst.datum ?? null } : null);
+      setVersDitBezoek(true);
+      hoofdVers.current = true;
+      // Mislukte de lezing van de onthouden kolommen al, dan gaan ze nu weg:
+      // onder een verse regel staan geen kolommen van een vorige keer.
+      if (extraUitGeheugen.current && extraMislukt.current) {
+        extraUitGeheugen.current = null;
+        setExtraData(null);
+      }
+    } finally {
+      if (laatsteHoofd.current === lezing) setHoofdLopend(false);
+    }
+  }, {
     deps: [monthParam],
     focusRefresh: false,
     boodschap: (e) => (e instanceof Error && e.message ? e.message : 'Kon de maandplanning niet laden.'),
+    onthoudenOm,
   });
 
   // Stille herlaad-momenten: na een eigen wissel (reloadTick) en wanneer een
   // collega de planning wijzigt (realtime planning_version → App dispatcht
   // 'vhb-planning-changed'). Géén skeleton — de bestaande data blijft staan
   // tot de verse binnen is, anders flitst het scherm bij elke wissel.
+  // Loopt er nog een zichtbare laad (het skelet staat er), dan zichtbaar
+  // opnieuw: een stille laad die een zichtbare inhaalt, zet het skelet nooit
+  // meer uit (useZelfLadend), en sinds de inhaalronde ook 'vhb-planning-changed'
+  // stuurt, valt zo'n tik vaker midden in een laad (ronde 6, punt 22, deel 3).
   useEffect(() => {
     if (reloadTick === 0) return;
-    void zl.ververs();
+    void (zl.laden ? zl.opnieuw() : zl.ververs());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadTick]);
 
@@ -127,12 +230,61 @@ export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTi
     const maanden = Array.from(new Set(windowDates.map(monthOf)));
     return maanden.find((m) => m !== monthParam) ?? null;
   }, [windowDates, monthParam]);
+  // De maand van de kolommen van de server die achter de vensterrand staan
+  // (uit het geheugen of van dit bezoek), of null. Een antwoord uit de cache
+  // van de service worker vervangt ze niet, zoals bij de hoofdmaand: voor
+  // onthouden kolommen is het een mislukte lezing, verse kolommen van dit
+  // bezoek blijven gewoon staan.
+  const extraVanServer = useRef<string | null>(null);
+  // De maand achter de vensterrand bij de mount uit het geheugen, alleen als
+  // de hoofdmaand er ook uit kwam (anders stonden onthouden kolommen onder
+  // een verse regel). Een layout-effect: het eerste beeld heeft de kolommen
+  // al. Alleen een geslaagd antwoord voor die maand vervangt ze. Mislukt haar
+  // lezing, dan blijven ze staan zolang ook de hoofdmaand nog uit het
+  // geheugen komt (of mislukte: dan staat de kleine Foutkaart erboven); is
+  // de hoofdmaand vers, dan lege kolommen zoals zonder geheugen, in welke
+  // volgorde de twee antwoorden ook binnenkomen.
+  useLayoutEffect(() => {
+    if (onthoudenOm === null || !extraMonth) return;
+    const o = leesOnthoudenMaand(extraMonth);
+    if (!o) return;
+    extraUitGeheugen.current = extraMonth;
+    extraVanServer.current = extraMonth;
+    setExtraData(o.antwoord);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
-    if (!extraMonth) { setExtraData(null); return; }
+    if (extraUitGeheugen.current !== extraMonth) extraUitGeheugen.current = null;
+    if (!extraMonth) { extraVanServer.current = null; setExtraData(null); return; }
     let cancelled = false;
-    fetchMonthPlanning(extraMonth)
-      .then((res) => { if (!cancelled) setExtraData(res); })
-      .catch(() => { if (!cancelled) setExtraData(null); /* lege kolommen; volgende verversing herstelt */ });
+    extraMislukt.current = false;
+    const lezing = begin(maandSleutel(extraMonth), { planning: true });
+    const herkomst: Herkomst = {};
+    const mislukt = () => {
+      // Onthouden kolommen naast een hoofdmaand die nog niet vers is: ze
+      // blijven (zie hierboven).
+      if (extraUitGeheugen.current === extraMonth && !hoofdVers.current) { extraMislukt.current = true; return; }
+      // Lege kolommen; de volgende verversing herstelt.
+      extraUitGeheugen.current = null;
+      extraVanServer.current = null;
+      setExtraData(null);
+    };
+    fetchMonthPlanning(extraMonth, herkomst)
+      .then((res) => {
+        if (!herkomst.uitCache && res?.month === extraMonth) bewaar(lezing, res);
+        if (cancelled) return;
+        if (herkomst.uitCache && extraVanServer.current === extraMonth) {
+          if (extraUitGeheugen.current === extraMonth) mislukt();
+          return;
+        }
+        extraUitGeheugen.current = null;
+        extraVanServer.current = herkomst.uitCache ? null : extraMonth;
+        setExtraData(res);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        mislukt();
+      });
     return () => { cancelled = true; };
   }, [extraMonth, reloadTick]);
 
@@ -160,7 +312,11 @@ export function useMaandLaden({ monthParam, windowDates, reloadTick, setReloadTi
     };
   }, []);
 
-  return zl;
+  // `verversen` alleen zolang de nieuwste lezing van de hoofdmaand echt
+  // loopt, en nooit tijdens een zichtbare laad (zie `hoofdLopend`).
+  const verversen = zl.verversen && hoofdLopend && !zl.laden;
+  const versheid = { ...zl.versheid, verversen: zl.versheid.verversen && hoofdLopend && !zl.laden };
+  return { ...zl, verversen, versheid, uitCache, versDitBezoek };
 }
 
 export function useImportGrenzen({ data, extraData, monthParam, year, monthIndex, windowStart, setWindowStart, setViewMonth }: {

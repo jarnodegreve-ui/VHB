@@ -61,6 +61,38 @@ describe('notities laden', () => {
   });
 });
 
+describe('notities geladen (tegenlezing 23-11)', () => {
+  it('pas waar zodra de notities van deze maand binnen zijn, ook na een mislukte lezing; een maandwissel zet het terug tot die maand binnen is', async () => {
+    let los!: (v: unknown) => void;
+    apiFetch.mockReturnValueOnce(new Promise((r) => { los = r; }));
+    const { result, rerender } = renderHook((p: { monthFrom: string; monthTo: string }) => useCelDetail(p), { initialProps: oktober });
+    await flush();
+    expect(result.current.notesGeladen).toBe(false);
+    await act(async () => { los(antwoord([{ driverId: 7, date: '2026-10-15', note: 'Bus 412' }])); await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current.notesGeladen).toBe(true);
+
+    apiFetch.mockResolvedValueOnce(antwoord({ error: 'weg' }, 500));
+    rerender({ monthFrom: '2026-11-01', monthTo: '2026-11-30' });
+    expect(result.current.notesGeladen).toBe(false);
+    await flush();
+    expect(result.current.notesGeladen).toBe(true);
+  });
+
+  it('een laat antwoord van de vorige maand raakt de notities en de vlag van de nieuwe maand niet', async () => {
+    let losOktober!: (v: unknown) => void;
+    apiFetch.mockReturnValueOnce(new Promise((r) => { losOktober = r; }));
+    const { result, rerender } = renderHook((p: { monthFrom: string; monthTo: string }) => useCelDetail(p), { initialProps: oktober });
+    apiFetch.mockResolvedValueOnce(antwoord([{ driverId: 7, date: '2026-11-03', note: 'November' }]));
+    rerender({ monthFrom: '2026-11-01', monthTo: '2026-11-30' });
+    await flush();
+    expect(result.current.notesGeladen).toBe(true);
+    await act(async () => { losOktober(antwoord([{ driverId: 7, date: '2026-10-15', note: 'Bus 412' }])); await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current.notes.get('7:2026-11-03')).toBe('November');
+    expect(result.current.notes.has('7:2026-10-15')).toBe(false);
+    expect(result.current.notesGeladen).toBe(true);
+  });
+});
+
 describe('openen en sluiten', () => {
   it('open zet de cel en de bestaande notitie als concept; een dag zonder notitie geeft een leeg concept; sluit haalt de cel weg', async () => {
     const { nu } = await opzet();

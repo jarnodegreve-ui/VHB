@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Table2 } from 'lucide-react';
 import { downloadBlob, notify } from '../lib/ui';
-import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../components/ui';
 import { ActieMenu } from '../components/ActieMenu';
 import { AanwezigOpScherm } from '../components/AanwezigOpScherm';
 import { apiFetch } from '../lib/api';
@@ -30,7 +30,7 @@ import { MaandoverzichtModal } from '../components/maandplanning/MaandoverzichtM
 import { DagWeergave } from '../components/maandplanning/DagWeergave';
 import { useCelDetail } from '../components/maandplanning/useCelDetail';
 import { useDienstwissel } from '../components/maandplanning/useDienstwissel';
-import { useImportGrenzen, useMaandLaden, useTweewekenVenster } from '../components/maandplanning/useTweewekenVenster';
+import { cacheRegel, leesOnthoudenMaand, useImportGrenzen, useMaandLaden, useTweewekenVenster } from '../components/maandplanning/useTweewekenVenster';
 import { MD_QUERY, useMedia } from '../lib/useMinWidth';
 
 /**
@@ -51,6 +51,9 @@ import { MD_QUERY, useMedia } from '../lib/useMinWidth';
  * herlaadtik) blijft hier, net als de export, het maandoverzicht en de
  * mobiele dag-weergave.
  */
+/** De plaats van de versheidsregel in de kop (zie de uitleg bij de regel). */
+const REGEL_PLAATS = 'absolute top-full left-0 mt-1 sm:left-auto sm:right-0 md:mt-2';
+
 export function CapacityView({ currentUser }: { currentUser: User }) {
   const ownId = String(currentUser?.id ?? '');
   const [maandParam, zetMaandParam] = useRouteParam(0);
@@ -74,9 +77,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     const now = new Date();
     return startMaand ?? new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  // Terug binnen vijf minuten (ronde 6, punt 22, deel 3): het laatste
+  // antwoord van de server voor de maand waarop het scherm opent, uit het
+  // geheugen van de schermen (src/lib/schermGeheugen.ts), staat er meteen;
+  // useMaandLaden ververst stil en zet de maand achter de vensterrand erbij.
+  // Precies wat de server gaf (voor een chauffeur zijn venster vanaf deze
+  // week), niets afgeleid. Bladeren binnen het scherm laadt zoals vroeger.
+  const [onthouden] = useState(() => leesOnthoudenMaand(maandNaarParam(viewMonth)));
   // De hoofdmaand en de maand achter de vensterrand (geladen door
   // useMaandLaden; het bord, de dienstwissel en de grenzen lezen ze).
-  const [data, setData] = useState<MonthPlanning | null>(null);
+  const [data, setData] = useState<MonthPlanning | null>(() => onthouden?.antwoord ?? null);
   const [extraData, setExtraData] = useState<MonthPlanning | null>(null);
 
   const year = viewMonth.getFullYear();
@@ -175,7 +185,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // Het tweewekenvenster (desktop) met de maand in de URL, het laden van de
   // twee maanden en de grenzen van de import; in deze volgorde.
   const venster = useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaandParam, dagParam, setViewMonth, todayIso });
-  const zl = useMaandLaden({ monthParam, windowDates: venster.windowDates, reloadTick, setReloadTick, setData, setExtraData });
+  const zl = useMaandLaden({ monthParam, windowDates: venster.windowDates, reloadTick, setReloadTick, setData, setExtraData, onthoudenOm: onthouden?.om ?? null });
   const { laatsteDag, beginUitleg, maandVoorbij, kanTerug, kanVooruit, kanMaandTerug, kanMaandVooruit } = useImportGrenzen({
     data, extraData, monthParam, year, monthIndex, windowStart: venster.windowStart, setWindowStart: venster.setWindowStart, setViewMonth,
   });
@@ -193,6 +203,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   // Ook een venster dat alleen in de extra maand planning heeft telt als data.
   const hasData = (dates.length > 0 || (extraData?.dates?.length ?? 0) > 0) && drivers.length > 0;
+  // Het bord in beeld is dat van de maand in de kop. Mislukt dan een laad (de
+  // verversing na een terugkeer), dan de kleine Foutkaart boven het bord; na
+  // een mislukte maandwissel staat er nog het bord van de vorige maand, en
+  // dan de grote Foutkaart in plaats van het bord, zoals altijd.
+  const bordVanDezeMaand = data?.month === monthParam;
 
   // Sectie-koppen tonen zodra minstens één chauffeur een sectie heeft (anders
   // gedraagt de lijst zich als voorheen — één alfabetische groep, geen koppen).
@@ -227,9 +242,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     if (dagParam && uitUrl !== dagParam) zetDagParam(uitUrl);
     setMobielDag((cur) => uitUrl ?? kiesDagBinnenImport(dates, [cur, todayIso], laatsteDag));
   }, [dates, todayIso, dagParam, zetDagParam, laatsteDag]);
-  // Rust-groep dichtklappen bij een maandwissel (nieuwe dagenlijst), niet bij
-  // elke dagwissel.
-  useEffect(() => { setToonRust(false); }, [dates]);
+  // Rust-groep dichtklappen bij een maandwissel, niet bij elke dagwissel en
+  // niet bij een stille verversing van dezelfde maand (die geeft een nieuwe
+  // dagenlijst; na een terugkeer uit het geheugen klapte de groep zo vlak
+  // na het opentikken weer dicht).
+  useEffect(() => { setToonRust(false); }, [data?.month]);
   // Tik in de strip of op het aandachtspijltje: dag kiezen én in de URL
   // zetten (replace). De maand moet er dan vóór staan, ook voor de huidige
   // maand die anders een schone URL houdt.
@@ -298,7 +315,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   // Tik op een cel (desktopraster of daglijst): het detailvenster open, met
   // de bestaande notitie van die chauffeur en dag als concept (useCelDetail).
-  const onCel = cel.open;
+  // Voor de staf (notitie, dienstwissel, terugdraaien) pas na een lezing van
+  // dit bezoek en met de notities van de maand binnen: na een terugkeer staat
+  // het bord uit het geheugen er meteen, maar de notities komen pas met het
+  // bezoek binnen, en een leeg concept zou een bestaande notitie overschrijven
+  // of wissen (de knop heet dan "Notitie verwijderen"). Tot dan doet een tik
+  // niets, zoals vroeger onder het skelet. Een chauffeur schrijft hier niets.
+  const onCel: typeof cel.open = (...args) => {
+    if (canEditNotes && !(zl.versDitBezoek && cel.notesGeladen)) return;
+    cel.open(...args);
+  };
 
   // Eén weergave per breedte (ronde 6, punt 22): het raster vanaf md, de
   // dagweergave daaronder. Tot dan stonden ze er allebei en verborg CSS er
@@ -317,7 +343,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         title="Maandplanning"
         description="Wie rijdt welke dienst, zoals in het chauffeurslokaal."
         actions={(
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex flex-wrap items-center gap-2">
             {/* "Kijkt ook mee", alleen voor staf: dit is ook een scherm van
                 chauffeurs, en die zien en volgen niemand (src/lib/presence.ts
                 houdt hun lijst al leeg; de rol hier maakt het zichtbaar). Op
@@ -325,6 +351,28 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 het actiemenu van de regel van het zoekveld; kijkt er niemand
                 mee, dan is het vak leeg en neemt het geen plaats. */}
             {canEditNotes && <div className="empty:hidden max-sm:w-full"><AanwezigOpScherm /></div>}
+            {/* "Bijgewerkt om …" (ronde 6, punt 22, deel 3), na een terugkeer
+                de tijd van de onthouden lezing tot de verversing binnen is.
+                Op elke breedte net onder de knoppen (vanaf sm rechts, op de
+                telefoon links, zoals de acties), absoluut in de tussenruimte
+                boven het bord (24 px, vanaf md 32 px): de regel neemt geen
+                plaats in de kop. Op de rij of op een eigen regel duwde ze, met
+                een breedte die van de tekst afhangt, de beschrijving of de
+                knoppen om, en sprongen kop en bord bij elke stille verversing
+                ("Bijwerken…" is smaller; gemeten 23-11 van 768 tot 1560 px en
+                op de telefoon). */}
+            {/* Een bord uit de cache van de service worker zonder bord van
+                de server: nooit "Bijgewerkt om", want useZelfLadend zet na
+                elke laad het uur van nu en de server bevestigde niets; de
+                vorm van Mijn dag (cacheRegel), in de opmaak van VersheidRegel
+                (components/ui.tsx) en op dezelfde plaats. */}
+            {zl.uitCache ? (
+              <p className={`${REGEL_PLAATS} whitespace-nowrap text-xs text-slate-500`} aria-live="polite">
+                {cacheRegel(zl.uitCache.datum, zl.online)}
+              </p>
+            ) : (
+              <VersheidRegel {...zl.versheid} className={REGEL_PLAATS} />
+            )}
             {/* Gedeeld zoekveld (loep + wisknop); op de telefoon vult het de
                 regel naast Vandaag en het actiemenu. */}
             <SearchField
@@ -386,7 +434,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         )}
       />
 
-      {zl.fout ? (
+      {/* Opnieuw proberen ververst hier stil (de herlaadtik: beide maanden,
+          ook de onthouden kolommen achter de vensterrand); het bord blijft. */}
+      {zl.fout && bordVanDezeMaand && (
+        <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={herlaad} bezig={zl.verversen} />
+      )}
+      {zl.fout && !bordVanDezeMaand ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden || maandVoorbij ? (
         /* Skeleton i.p.v. spinner — zelfde shimmer als de rest van de app.

@@ -1,7 +1,8 @@
-import { test, expect, type Page, type Request, type Route, type TestInfo } from '@playwright/test';
-import { ADMIN, gaIntern, seed, wachtOpAnimaties, type Extra } from './helpers';
+import { test, expect, type BrowserContext, type Page, type Request, type Route, type TestInfo } from '@playwright/test';
+import { ADMIN, CHAUFFEUR, gaIntern, seed, wachtOpAnimaties, type Extra } from './helpers';
 import { apiFixtures, dayOffset } from '../scripts/audit-fixtures.mjs';
 import { logIn } from './deeplinkHulp';
+import { begrensMaandbord, eersteZichtbareDag } from '../shared/maandplanningTerugblik';
 
 /**
  * Terugkeren naar een scherm (ronde 6, punt 22, deel 1: Vervaldata). Wie
@@ -584,3 +585,797 @@ test('tegels tijdens de eerste lezing (geen geheugen): geen getal en geen oordee
   await expect(tegels.filter({ hasText: 'Zonder datums' })).toContainText('nog in te vullen');
   await expect(tegels.filter({ hasText: 'Zonder datums' })).toContainText('2');
 });
+
+// ===========================================================================
+// 6. De Maandplanning (ronde 6, punt 22, deel 3)
+// ===========================================================================
+//
+// Hetzelfde geheugen, één sleutel per maand (useMaandLaden): terug binnen vijf
+// minuten staat het bord er meteen, op desktop ook de kolommen van de maand
+// achter de vensterrand, met "Bijgewerkt om <onthouden tijd>" tot de stille
+// verversing binnen is. Ongeldig ook na elke 'vhb-planning-changed' sinds het
+// vertrek van de lezing (een collega, een lichte ronde met een nieuwe versie,
+// en sinds deze ronde elke volledige inhaalronde), en een antwoord uit de cache
+// van de service worker wordt nooit onthouden.
+//
+// De klok van de pagina staat op een vaste woensdag, zodat de proef niet van de
+// datum afhangt: KRUIST = 28/10/2026 (venster 26/10 tot 08/11, dus twee
+// maanden: oktober en november), BINNEN = 14/10/2026 (venster 12/10 tot 25/10,
+// één maand). De klok loopt, zoals hierboven.
+
+const KRUIST = new Date('2026-10-28T10:00:02');
+const BINNEN = new Date('2026-10-14T10:00:02');
+const MP_RASTER = 'table[aria-label="Maandplanning per chauffeur en dag"]';
+const MP_STRIP = '[role="tablist"][aria-label="Kies een dag"]';
+/** Het skelet van het bord: in de inhoud, niet dat van het lui ladende scherm (ViewLoader, role=status). */
+const MP_SKELET = 'main .skeleton:not([role="status"] .skeleton)';
+const MP_RIJDERS = [
+  { id: '42', name: 'Test Chauffeur' },
+  { id: '43', name: 'Alex Du Priez' },
+  { id: '44', name: 'Diether Van Haute' },
+];
+const mpIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const mpDagen = (maand: string) => {
+  const [jaar, m] = maand.split('-').map(Number);
+  return Array.from({ length: new Date(jaar, m, 0).getDate() }, (_, i) => `${maand}-${String(i + 1).padStart(2, '0')}`);
+};
+const mpPlus = (dag: string, n: number) => { const d = new Date(`${dag}T00:00:00`); d.setDate(d.getDate() + n); return mpIso(d); };
+/** De dienst van chauffeur `id` op `dag` in versie `v` van het bord: vier cijfers, uniek per versie, chauffeur en dag. */
+const mpCode = (v: number, id: string, dag: string) => `${v}${MP_RIJDERS.findIndex((r) => r.id === id) + 1}${dag.slice(8, 10)}`;
+/** Het bord zoals de server het geeft; voor wie geen staf is geknipt op de maandag van de week van `nu`. */
+const mpBord = (maand: string, v: number, chauffeur: boolean, nu: Date) => {
+  const dates = mpDagen(maand);
+  const bord = {
+    month: maand,
+    dates,
+    drivers: MP_RIJDERS.map((r) => ({ ...r, section: null })),
+    cells: Object.fromEntries(MP_RIJDERS.map((r) => [r.id, Object.fromEntries(dates.map((d) => [d, { code: mpCode(v, r.id, d), kind: 'service', label: '', segments: ['05:30 - 13:45'] }]))])),
+    geimporteerd: { eerste: '2026-01-01', laatste: '2099-12-31' },
+  };
+  return chauffeur ? begrensMaandbord(bord, eersteZichtbareDag(nu)) : bord;
+};
+
+/** GET /api/month-planning (het bord, niet de export of het overzicht):
+ *  versie, vasthouden, laten mislukken, de kop van de cache, en elk gevraagde
+ *  maand in volgorde. Wint van de fixtures (later geregistreerd). */
+/** Zo veel ouder is een antwoord uit de cache van de service worker in deze proeven. */
+const CACHE_OUDER_MS = 3 * 3600_000;
+type MaandPoort = { versie: number; status: number; houd: boolean; uitCache: boolean; wachtend: Array<() => void>; gets: string[]; wissels: unknown[] };
+async function maandPoort(page: Page, chauffeur: boolean, nu: Date): Promise<MaandPoort> {
+  const p: MaandPoort = { versie: 1, status: 200, houd: false, uitCache: false, wachtend: [], gets: [], wissels: [] };
+  await page.route('**/api/month-planning**', async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (req.method() !== 'GET' || url.searchParams.get('format')) return route.fallback();
+    const maand = url.searchParams.get('month') ?? '';
+    p.gets.push(maand);
+    if (p.houd) await new Promise<void>((los) => p.wachtend.push(los));
+    if (p.status !== 200) return route.fulfill({ status: p.status, json: { error: 'Serverfout' } }).catch(() => undefined);
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    // Een antwoord uit de cache draagt de Date-kop van het oorspronkelijke
+    // antwoord: hier drie uur vóór de start van de proef, zodat de regel het
+    // uur van die kop van het uur van nu kan onderscheiden.
+    if (p.uitCache) { headers['x-vhb-bron'] = 'cache'; headers.date = new Date(nu.getTime() - CACHE_OUDER_MS).toUTCString(); }
+    return route.fulfill({ status: 200, headers, body: JSON.stringify(mpBord(maand, p.versie, chauffeur, nu)) }).catch(() => undefined);
+  });
+  // Een handmatige dienstwissel: de server heeft daarna een nieuw bord.
+  await page.route('**/api/admin/shift-swap', async (route) => {
+    p.wissels.push(route.request().postDataJSON());
+    p.versie += 1;
+    return route.fulfill({ json: { ok: true } });
+  });
+  return p;
+}
+
+type MpRol = 'chauffeur' | 'planner' | 'admin';
+const MP_GEBRUIKER: Record<MpRol, Record<string, unknown>> = { chauffeur: CHAUFFEUR, planner: PLANNER, admin: ADMIN };
+/** Het andere scherm: het dashboard van een chauffeur vraagt geen bord, dat van de staf wel (PlannerDashboardWidgets); voor staf dus Vervaldata. */
+const anderScherm = (rol: MpRol) => (rol === 'chauffeur' ? 'Dashboard' : 'Vervaldata');
+
+/** Ingelogd op het andere scherm, met de klok van de pagina op `tijd` (die loopt). */
+async function startMp(page: Page, rol: MpRol, opties: { tijd?: Date; thema?: 'light' | 'dark'; extra?: Extra } = {}) {
+  const tijd = opties.tijd ?? KRUIST;
+  await page.clock.install({ time: tijd });
+  await seed(page, { user: MP_GEBRUIKER[rol], view: rol === 'chauffeur' ? 'dashboard' : 'vervaldata', thema: opties.thema, extra: opties.extra });
+  const poort = await maandPoort(page, rol === 'chauffeur', tijd);
+  const hervat = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/auth/session' && r.request().method() === 'POST');
+  await page.goto(rol === 'chauffeur' ? '/' : '/beheer/vervaldata');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+  await hervat;
+  return poort;
+}
+
+/** Naar een scherm zoals een mens: op de telefoon de dock (Maandplanning via
+ *  Meer, met een tik), op desktop de zijbalk met de muis. */
+async function mpNaar(page: Page, info: TestInfo, scherm: 'Maandplanning' | 'Dashboard' | 'Vervaldata' | 'Rooster') {
+  if (telefoon(info)) {
+    const dock = page.locator('nav[aria-label="Hoofdnavigatie"]');
+    if (scherm === 'Maandplanning') {
+      await dock.getByRole('button', { name: 'Meer', exact: true }).tap();
+      const zijbalk = page.getByRole('navigation', { name: 'Zijbalk' });
+      await expect(zijbalk).toBeVisible();
+      await zijbalk.getByRole('button', { name: 'Maandplanning', exact: true }).tap();
+    } else {
+      await dock.getByRole('button', { name: scherm, exact: true }).tap();
+    }
+  } else if ((page.viewportSize()?.width ?? 1440) < 1024) {
+    // Tussen 768 en 1024 px is er geen zijbalk in beeld: via de router, zoals het menu.
+    await gaIntern(page, { Maandplanning: '/maandplanning', Dashboard: '/', Vervaldata: '/beheer/vervaldata', Rooster: '/rooster' }[scherm]);
+  } else {
+    await page.getByRole('navigation', { name: 'Zijbalk' }).getByRole('button', { name: new RegExp(`^${scherm}(\\s|$)`) }).click();
+  }
+  if (scherm === 'Dashboard') await expect(page.getByRole('heading', { level: 1, name: /, \w+$/ })).toBeVisible();
+  else await expect(page.getByRole('heading', { level: 1, name: scherm, exact: true })).toBeVisible();
+}
+
+const mpSkelet = (page: Page) => page.locator(MP_SKELET);
+const volgMpSkelet = (page: Page) => page.evaluate((sel) => {
+  const w = window as unknown as { __mpSkeletGezien?: boolean };
+  w.__mpSkeletGezien = false;
+  const isSkelet = (n: Node) => n instanceof Element && (n.matches(sel) || !!n.querySelector(sel));
+  new MutationObserver((records) => {
+    if (records.some((r) => [...r.addedNodes].some(isSkelet))) w.__mpSkeletGezien = true;
+  }).observe(document.body, { childList: true, subtree: true });
+}, MP_SKELET);
+const mpSkeletGezien = (page: Page) => page.evaluate(() => (window as unknown as { __mpSkeletGezien?: boolean }).__mpSkeletGezien === true);
+
+/** De code in het raster (desktop) voor een chauffeur op een dag van het venster, of null. */
+const rasterCode = (page: Page, wie: string, kolom: number) => page.evaluate(([sel, naam, k]) => {
+  const tabel = document.querySelector(sel as string);
+  const rij = tabel ? [...tabel.querySelectorAll('tbody tr')].find((tr) => tr.querySelector('th')?.textContent?.trim().startsWith(naam as string)) : undefined;
+  return rij?.querySelectorAll('td')[k as number]?.textContent?.trim() || null;
+}, [MP_RASTER, wie, kolom] as const);
+/** Wat het bord van versie `v` toont: op de telefoon de rij van Alex op vandaag,
+ *  op desktop zijn cel op vandaag (oktober) en op 03/11 (de tweede maand). */
+async function toontVersie(page: Page, info: TestInfo, v: number, nu = KRUIST) {
+  const vandaag = mpIso(nu);
+  if (telefoon(info)) {
+    await expect(page.getByRole('button', { name: new RegExp(`^${mpCode(v, '43', vandaag)} Alex Du Priez`) })).toBeVisible();
+    return;
+  }
+  const begin = mpPlus(vandaag, -((nu.getDay() + 6) % 7));
+  const tweede = mpPlus(begin, 8);
+  await expect.poll(() => rasterCode(page, 'Alex Du Priez', 2)).toBe(mpCode(v, '43', vandaag));
+  await expect.poll(() => rasterCode(page, 'Alex Du Priez', 8), `de tweede maand (${tweede})`).toBe(mpCode(v, '43', tweede));
+}
+const toontNietVersie = async (page: Page, info: TestInfo, v: number) => {
+  if (telefoon(info)) await expect(page.getByRole('button', { name: new RegExp(`^${mpCode(v, '43', mpIso(KRUIST))} Alex Du Priez`) })).toHaveCount(0);
+  else expect(await rasterCode(page, 'Alex Du Priez', 2)).not.toBe(mpCode(v, '43', mpIso(KRUIST)));
+};
+/** De dagen in de strip (telefoon), zoals de knoppen ze noemen. */
+const stripDagen = (page: Page) => page.locator(MP_STRIP).getByRole('tab').allInnerTexts();
+
+/** De regel boven een bord uit de cache van de service worker (geen "Bijgewerkt"). */
+const cacheRegelEl = (page: Page) => page.locator('p[aria-live="polite"]').filter({ hasText: /^(Opgeslagen gegevens|Offline · (gegevens van|opgeslagen gegevens))/ });
+
+/** Eerste bezoek (geen geheugen), terug naar het andere scherm. Geeft de regel van die lezing.
+ *  Komt het bord uit de cache van de service worker (`poort.uitCache`), dan noemt de regel het uur
+ *  van dat oorspronkelijke antwoord en nooit "Bijgewerkt om" (tegenlezing 23-11). */
+async function eersteMpBezoek(page: Page, info: TestInfo, poort: MaandPoort, rol: MpRol, maanden = ['2026-10', '2026-11']) {
+  const voor = poort.gets.length;
+  await mpNaar(page, info, 'Maandplanning');
+  await expect.poll(() => poort.gets.slice(voor).sort()).toEqual([...maanden].sort());
+  await toontVersie(page, info, poort.versie);
+  if (poort.uitCache) {
+    const uur = await page.evaluate((t) => new Date(t).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }), KRUIST.getTime() - CACHE_OUDER_MS);
+    await expect(cacheRegelEl(page)).toHaveText(`Opgeslagen gegevens van ${uur}`);
+    await expect(regel(page)).toHaveCount(0);
+  } else {
+    await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+  }
+  const tekst = (await (poort.uitCache ? cacheRegelEl(page) : regel(page)).textContent())!.trim();
+  const strip = telefoon(info) ? await stripDagen(page) : [];
+  await mpNaar(page, info, anderScherm(rol));
+  return { tekst, strip };
+}
+
+/** Terug naar de Maandplanning na `sprongMs`, met elke lezing van het bord vastgehouden. */
+async function mpTerugVastgehouden(page: Page, info: TestInfo, poort: MaandPoort, sprongMs: number, verwacht = 2) {
+  await page.clock.setSystemTime((await nu(page)) + sprongMs);
+  poort.versie += 1;
+  poort.houd = true;
+  const voor = poort.gets.length;
+  await volgMpSkelet(page);
+  await mpNaar(page, info, 'Maandplanning');
+  await expect.poll(() => poort.gets.length - voor, { message: 'de verversing is vertrokken en wordt vastgehouden' }).toBe(verwacht);
+}
+const mpLaatLos = (p: MaandPoort) => {
+  p.houd = false;
+  for (const los of p.wachtend.splice(0)) los();
+};
+
+// --- toetssteen 1 en 4: terug binnen vijf minuten ---------------------------
+
+const MP_TERUG: Array<[string, MpRol]> = [[IPHONE, 'chauffeur'], [IPHONE, 'planner'], [WEBKIT, 'chauffeur'], [DESKTOP, 'admin']];
+for (const [project, rol] of MP_TERUG) {
+  test(`Maandplanning, terug binnen 5 min (${rol}, ${project}): het bord meteen zonder skelet${rol === 'admin' ? ', met de tweede maand' : ''}, de onthouden tijd in de regel tot de verversing binnen is`, async ({ page }, info) => {
+    alleenIn(info, project);
+    const schrijf = volgSchrijfacties(page);
+    const poort = await startMp(page, rol);
+    const eerste = await eersteMpBezoek(page, info, poort, rol);
+    const naEerste = schrijf.length;
+
+    // 2 min 5 s: rond seconde 10 van een minuut, ruim voor de volgende minuutgrens.
+    await mpTerugVastgehouden(page, info, poort, 125_000);
+    await toontVersie(page, info, 1);
+    await expect(regel(page)).toHaveText(eerste.tekst);
+    if (rol === 'chauffeur') {
+      // Toetssteen 4: uit het geheugen precies de dagen die de server gaf, vanaf de maandag van deze week.
+      expect(eerste.strip).toHaveLength(6);
+      expect(await stripDagen(page)).toEqual(eerste.strip);
+    }
+    await page.waitForTimeout(500);
+    await expect(regel(page), 'blijft de onthouden tijd zolang de verversing loopt').toHaveText(eerste.tekst);
+    await expect(mpSkelet(page)).toHaveCount(0);
+    await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+
+    mpLaatLos(poort);
+    await toontVersie(page, info, 2);
+    await toontNietVersie(page, info, 1);
+    const nieuweRegel = await regelVoor(page, await nu(page));
+    expect(nieuweRegel).not.toBe(eerste.tekst);
+    await expect(regel(page)).toHaveText(nieuweRegel);
+    if (rol === 'chauffeur') expect(await stripDagen(page)).toEqual(eerste.strip);
+    expect(await mpSkeletGezien(page), 'het skelet verscheen niet, ook niet even').toBe(false);
+
+    const tussen = schrijf.slice(naEerste);
+    info.annotations.push({ type: 'geheugen', description: `geraakt; schrijfacties bij de start: ${schrijf.slice(0, naEerste).join(', ') || 'geen'}; tussen eerste lezing en terugkeer: ${tussen.join(', ') || 'geen'}` });
+  });
+}
+
+// --- toetssteen 2: het skelet zoals vroeger ----------------------------------
+
+test.describe('Maandplanning: het skelet zoals vroeger', () => {
+  test.beforeEach(async ({}, info) => alleenIn(info, IPHONE, WEBKIT));
+
+  /** Terug met het skelet: geen onthouden bord, na het loslaten het verse. */
+  const metSkelet = async (page: Page, info: TestInfo, poort: MaandPoort, sprongMs: number) => {
+    await mpTerugVastgehouden(page, info, poort, sprongMs);
+    await expect(mpSkelet(page).first()).toBeVisible();
+    await toontNietVersie(page, info, 1);
+    await expect(regel(page)).toHaveCount(0);
+    mpLaatLos(poort);
+    await toontVersie(page, info, 2);
+    await expect(mpSkelet(page)).toHaveCount(0);
+  };
+
+  test('na vijf minuten', async ({ page }, info) => {
+    const poort = await startMp(page, 'chauffeur');
+    await eersteMpBezoek(page, info, poort, 'chauffeur');
+    await metSkelet(page, info, poort, 5 * 60_000 + 1000);
+  });
+
+  test('na een eigen schrijfactie op een ander scherm (een melding gelezen op Rooster)', async ({ page }, info) => {
+    const schrijf = volgSchrijfacties(page);
+    const meldingen = { ongelezen: 1, meldingen: [{ id: 'm1', titel: 'Rooster gewijzigd', tekst: 'Je dienst van morgen is gewijzigd.', soort: 'planning', doel: 'rooster', createdAt: new Date().toISOString() }] };
+    const poort = await startMp(page, 'chauffeur', { extra: (pad, req) => (pad.endsWith('/api/meldingen') && req.method() === 'GET' ? meldingen : undefined) });
+    await eersteMpBezoek(page, info, poort, 'chauffeur');
+    const gelezen = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/meldingen/gelezen' && r.request().method() === 'POST');
+    await mpNaar(page, info, 'Rooster');
+    await gelezen;
+    expect(schrijf.filter((x) => x === 'POST /api/meldingen/gelezen')).toHaveLength(1);
+    await metSkelet(page, info, poort, 30_000);
+  });
+
+  test('na een planningswijziging terwijl je op een ander scherm stond', async ({ page }, info) => {
+    const poort = await startMp(page, 'chauffeur');
+    await eersteMpBezoek(page, info, poort, 'chauffeur');
+    // Wat App doet bij een realtime-event van de planning (refetchPlanning).
+    await page.evaluate(() => window.dispatchEvent(new Event('vhb-planning-changed')));
+    await metSkelet(page, info, poort, 30_000);
+  });
+
+  test('na een volledige inhaalronde terwijl je op een ander scherm stond (offline en terug online)', async ({ page, context }, info) => {
+    const poort = await startMp(page, 'chauffeur');
+    await eersteMpBezoek(page, info, poort, 'chauffeur');
+    await inhaalronde(page, context);
+    await metSkelet(page, info, poort, 30_000);
+  });
+
+  test('als de vorige lezing uit de cache van de service worker kwam (X-VHB-Bron: cache)', async ({ page }, info) => {
+    const poort = await startMp(page, 'chauffeur');
+    poort.uitCache = true;
+    await eersteMpBezoek(page, info, poort, 'chauffeur');
+    poort.uitCache = false;
+    await metSkelet(page, info, poort, 30_000);
+  });
+
+  test('na een afmelding zonder herlaad: niets uit het geheugen, ook niet voor dezelfde persoon, en niets voor wie daarna aanmeldt', async ({ page }, info) => {
+    // Zoals de proef voor Vervaldata hierboven, met twee chauffeurs: hun
+    // dashboard vraagt geen bord. Ook hier zijn afmelding en aanmelding zelf
+    // niet-stille schrijfacties; de wisgebeurtenis bewijzen de unit-proeven.
+    type Wie = 'a' | 'b';
+    const ALEX = { id: '43', name: 'Alex Du Priez', role: 'chauffeur', employeeId: 'VHB-000043', email: 'alex@vhb.be', isActive: true };
+    const GEBRUIKER = { a: CHAUFFEUR, b: ALEX };
+    const staat: { volgende: Wie; geladen: number } = { volgende: 'a', geladen: 0 };
+    page.on('load', () => { staat.geladen += 1; });
+    await page.clock.install({ time: KRUIST });
+    const sessie = (wie: Wie) => ({
+      access_token: `tok-${wie}`, refresh_token: `ververs-${wie}`, token_type: 'bearer', expires_in: 3600,
+      expires_at: Math.floor(KRUIST.getTime() / 1000) + 24 * 3600,
+      user: { id: `auth-${wie}`, email: GEBRUIKER[wie].email, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {} },
+    });
+    const wieVan = (route: Route): Wie => (route.request().headers().authorization === 'Bearer tok-b' ? 'b' : 'a');
+    await page.route('**/auth/v1/**', (route) => route.fulfill({ json: sessie(staat.volgende) }));
+    await page.route('**/auth/v1/token**', (route) => route.fulfill({ json: sessie(staat.volgende) }));
+    await page.route('**/auth/v1/logout**', (route) => route.fulfill({ status: 204, body: '' }));
+    await page.route('**/auth/v1/user**', (route) => route.fulfill({ json: sessie(wieVan(route)).user }));
+    const fixtures = {
+      a: apiFixtures(CHAUFFEUR, (pad: string) => (pad.endsWith('/api/auth/session') ? CHAUFFEUR : undefined)),
+      b: apiFixtures(ALEX, (pad: string) => (pad.endsWith('/api/auth/session') ? ALEX : undefined)),
+    };
+    await page.route('**/api/**', (route) => fixtures[wieVan(route)](route).catch(() => undefined));
+    const poort = await maandPoort(page, true, KRUIST);
+    let sessieLopend = 0;
+    page.on('request', (r) => { if (new URL(r.url()).pathname === '/api/auth/session') sessieLopend += 1; });
+    const klaar = (r: Request) => { if (new URL(r.url()).pathname === '/api/auth/session') sessieLopend -= 1; };
+    page.on('requestfinished', klaar);
+    page.on('requestfailed', klaar);
+    const aangemeld = async (wie: Wie) => {
+      await logIn(page);
+      await expect(page.getByRole('heading', { level: 1, name: new RegExp(`, ${GEBRUIKER[wie].name.split(' ')[0]}$`) })).toBeVisible({ timeout: 15_000 });
+      await expect.poll(() => sessieLopend).toBe(0);
+      await page.waitForTimeout(300);
+    };
+    const meldAfZonderHerlaad = async () => {
+      const geenBereik = (route: Route) => route.abort('internetdisconnected');
+      await page.route('**/api/health**', geenBereik);
+      await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+      await page.getByRole('button', { name: 'Accountmenu' }).tap();
+      await page.getByRole('menuitem', { name: 'Uitloggen' }).tap();
+      await expect(page.getByRole('button', { name: 'Inloggen' })).toBeVisible({ timeout: 15_000 });
+      await page.unroute('**/api/health**', geenBereik);
+      await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    };
+    /** Naar de Maandplanning met het bord vastgehouden: het skelet, na het loslaten het bord van versie v. */
+    const terugMetSkelet = async (v: number) => {
+      poort.houd = true;
+      const voor = poort.gets.length;
+      await mpNaar(page, info, 'Maandplanning');
+      await expect.poll(() => poort.gets.length - voor).toBe(2);
+      await expect(mpSkelet(page).first()).toBeVisible();
+      await expect(regel(page)).toHaveCount(0);
+      mpLaatLos(poort);
+      await toontVersie(page, info, v);
+      await mpNaar(page, info, 'Dashboard');
+    };
+
+    await page.goto('/');
+    await aangemeld('a');
+    // Eerst bewijzen dat het geheugen raakt, anders bewijst de rest niets.
+    await eersteMpBezoek(page, info, poort, 'chauffeur');
+    await mpTerugVastgehouden(page, info, poort, 30_000);
+    await toontVersie(page, info, 1);
+    await expect(mpSkelet(page)).toHaveCount(0);
+    mpLaatLos(poort);
+    await toontVersie(page, info, 2);
+    await mpNaar(page, info, 'Dashboard');
+
+    await meldAfZonderHerlaad();
+    await aangemeld('a');
+    expect(staat.geladen, 'niet herladen').toBe(1);
+    await terugMetSkelet(2);
+
+    await meldAfZonderHerlaad();
+    staat.volgende = 'b';
+    await aangemeld('b');
+    expect(staat.geladen, 'niet herladen').toBe(1);
+    await terugMetSkelet(2);
+  });
+});
+
+/** Een volledige inhaalronde zoals op een telefoon die even geen bereik had:
+ *  offline (de regel of het bord merkt het via de online-store) en terug. Wacht
+ *  op een lezing die alleen de inhaalronde doet (de meldingen, voor elke rol). */
+async function inhaalronde(page: Page, context: BrowserContext) {
+  await context.setOffline(true);
+  await page.waitForTimeout(300);
+  const ronde = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/meldingen' && r.method() === 'GET', { timeout: 10_000 });
+  await context.setOffline(false);
+  await ronde;
+}
+
+test('Maandplanning: na een eigen wissel en de stille herlaad die erop volgt, toont een terugkeer binnen 5 min het bord van na de wissel, zonder skelet', async ({ page }, info) => {
+  alleenIn(info, DESKTOP);
+  const schrijf = volgSchrijfacties(page);
+  const poort = await startMp(page, 'admin');
+  const voor = poort.gets.length;
+  await mpNaar(page, info, 'Maandplanning');
+  await expect.poll(() => poort.gets.length - voor).toBe(2);
+  await toontVersie(page, info, 1);
+
+  // Dienst van Alex op vandaag naar Diether, die zelf rijdt: een 1-op-1-wissel.
+  await page.locator(MP_RASTER).locator('tbody tr', { has: page.getByRole('rowheader', { name: 'Alex Du Priez' }) }).locator('td').nth(2).getByRole('button').click();
+  const venster = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Alex Du Priez', exact: true }) });
+  await expect(venster).toBeVisible();
+  await venster.getByLabel('Nieuwe chauffeur').selectOption('44');
+  await venster.getByRole('button', { name: 'Diensten wisselen…' }).click();
+  const naWissel = poort.gets.length;
+  await page.getByRole('dialog', { name: 'Dienstwissel doorvoeren?' }).getByRole('button', { name: 'Doorvoeren' }).click();
+  await expect.poll(() => poort.wissels.length).toBe(1);
+  // De stille herlaad (reloadTick): beide maanden opnieuw, het bord van na de wissel.
+  await expect.poll(() => poort.gets.length - naWissel).toBe(2);
+  await toontVersie(page, info, 2);
+  await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+  const naHerlaad = (await regel(page).textContent())!.trim();
+  const schrijfNaHerlaad = schrijf.length;
+  await mpNaar(page, info, 'Vervaldata');
+
+  await mpTerugVastgehouden(page, info, poort, 60_000);
+  await toontVersie(page, info, 2);
+  await expect(regel(page)).toHaveText(naHerlaad);
+  await expect(mpSkelet(page)).toHaveCount(0);
+  mpLaatLos(poort);
+  await toontVersie(page, info, 3);
+  expect(await mpSkeletGezien(page)).toBe(false);
+  info.annotations.push({ type: 'schrijfacties', description: `${schrijf.join(', ')}; na de herlaad: ${schrijf.slice(schrijfNaHerlaad).join(', ') || 'geen'}` });
+});
+
+// --- toetssteen 5 en 6: mislukken ----------------------------------------------
+
+test('Maandplanning: mislukt de verversing na een terugkeer (500), dan blijft het onthouden bord met de kleine Foutkaart erboven, op desktop ook de tweede maand', async ({ page }, info) => {
+  alleenIn(info, IPHONE, DESKTOP);
+  const rol: MpRol = telefoon(info) ? 'chauffeur' : 'admin';
+  const poort = await startMp(page, rol);
+  const eerste = await eersteMpBezoek(page, info, poort, rol);
+  await mpTerugVastgehouden(page, info, poort, 120_000);
+  poort.status = 500;
+  mpLaatLos(poort);
+  // apiFetch probeert een 5xx-lezing één keer opnieuw (na 600 ms).
+  await expect(page.getByText('Bijwerken is niet gelukt')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Opnieuw proberen' })).toBeVisible();
+  await expect(page.getByText('Dit kon niet laden')).toHaveCount(0);
+  await toontVersie(page, info, 1);
+  await expect(regel(page)).toHaveText(eerste.tekst);
+  await expect(mpSkelet(page)).toHaveCount(0);
+  // De kaart staat boven het bord.
+  const kaart = (await page.getByText('Bijwerken is niet gelukt').boundingBox())!;
+  const bord = (await page.locator(telefoon(info) ? MP_STRIP : MP_RASTER).boundingBox())!;
+  expect(kaart.y).toBeLessThan(bord.y);
+  // De regel staat onder de knoppen, boven de kaart, en niets ligt erover.
+  await regelOnderDeKnoppen(page, telefoon(info));
+  expect(await mpSkeletGezien(page)).toBe(false);
+
+  // Opnieuw proberen ververst stil; lukt het, dan het verse bord en geen kaart meer.
+  poort.status = 200;
+  await page.getByRole('button', { name: 'Opnieuw proberen' }).click();
+  await toontVersie(page, info, poort.versie);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+  expect(await mpSkeletGezien(page)).toBe(false);
+});
+
+// Tegenlezing 23-11: een antwoord uit de cache van de service worker (het
+// netwerk viel weg, de SW antwoordt uit 'vhb-ritbladen') is geen verversing.
+// Na een terugkeer blijft het onthouden bord met zijn eigen tijd, met de kleine
+// Foutkaart erboven; nooit "Bijgewerkt om <nu>" boven een bord dat de server
+// niet bevestigde. Zonder service worker in deze proef: de kop zoals de SW
+// hem zet (markeerUitCache), met de Date-kop van drie uur eerder.
+test('Maandplanning: komt de verversing na een terugkeer uit de cache van de service worker, dan blijft het onthouden bord met zijn tijd en de kleine Foutkaart erboven, nooit het uur van nu', async ({ page }, info) => {
+  alleenIn(info, IPHONE, DESKTOP);
+  const rol: MpRol = telefoon(info) ? 'chauffeur' : 'admin';
+  const poort = await startMp(page, rol);
+  const eerste = await eersteMpBezoek(page, info, poort, rol);
+  await mpTerugVastgehouden(page, info, poort, 120_000);
+  poort.uitCache = true;
+  mpLaatLos(poort);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/^Geen verbinding met de server\./)).toBeVisible();
+  await expect(page.getByText('Dit kon niet laden')).toHaveCount(0);
+  // Het onthouden bord (versie 1), niet dat uit de cache (versie 2); op desktop ook de tweede maand.
+  await toontVersie(page, info, 1);
+  await expect(regel(page)).toHaveText(eerste.tekst);
+  await expect(cacheRegelEl(page)).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await toontVersie(page, info, 1);
+  await expect(regel(page)).toHaveText(eerste.tekst);
+  await expect(mpSkelet(page)).toHaveCount(0);
+
+  // Opnieuw proberen met bereik: het verse bord en de nieuwe tijd.
+  poort.uitCache = false;
+  await page.getByRole('button', { name: 'Opnieuw proberen' }).click();
+  await toontVersie(page, info, poort.versie);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+  await expect(regel(page)).toHaveText(await regelVoor(page, await nu(page)));
+  expect(await mpSkeletGezien(page)).toBe(false);
+});
+
+// Tegenlezing 23-11: na een terugkeer staat het bord uit het geheugen er
+// meteen, maar de staf schrijft vanuit het celdetail (notitie, dienstwissel,
+// terugdraaien). Een cel opent voor hen pas na de lezing van dit bezoek én met
+// de notities van de maand binnen (useCelDetail): een tik of klik ervoor doet
+// niets, ook een tweede niet. Daarna opent ze met de bestaande notitie in het
+// veld, nooit met een leeg veld en "Notitie verwijderen".
+const NOTITIE = 'Neem bus 412, eerst tanken.';
+for (const [project, rol] of [[IPHONE, 'planner'], [DESKTOP, 'admin']] as Array<[string, MpRol]>) {
+  test(`Maandplanning (${rol}, ${project}): na een terugkeer opent een cel pas na de verse lezing en de notities, met de bestaande notitie in het veld`, async ({ page }, info) => {
+    alleenIn(info, project);
+    const schrijf = volgSchrijfacties(page);
+    const poort = await startMp(page, rol);
+    const vandaag = mpIso(KRUIST);
+    const notities = { houd: false, wachtend: [] as Array<() => void> };
+    await page.route('**/api/planning-notes**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      if (notities.houd) await new Promise<void>((los) => notities.wachtend.push(los));
+      return route.fulfill({ json: [{ driverId: '43', date: vandaag, note: NOTITIE }] }).catch(() => undefined);
+    });
+    await eersteMpBezoek(page, info, poort, rol);
+    const naEerste = schrijf.length;
+    notities.houd = true;
+    await mpTerugVastgehouden(page, info, poort, 120_000);
+    await expect.poll(() => notities.wachtend.length, { message: 'de notities zijn gevraagd en worden vastgehouden' }).toBe(1);
+    await toontVersie(page, info, 1);
+    const cel = (v: number) => (telefoon(info)
+      ? page.getByRole('button', { name: new RegExp(`^${mpCode(v, '43', vandaag)} Alex Du Priez`) })
+      : page.locator(MP_RASTER).locator('tbody tr', { has: page.getByRole('rowheader', { name: 'Alex Du Priez' }) }).locator('td').nth(2).getByRole('button'));
+    const druk = async (v: number) => { if (telefoon(info)) await cel(v).tap(); else await cel(v).click(); };
+    const venster = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Alex Du Priez', exact: true }) });
+
+    await druk(1);
+    await page.waitForTimeout(400);
+    await expect(venster).toHaveCount(0);
+    await druk(1);
+    await page.waitForTimeout(400);
+    await expect(venster).toHaveCount(0);
+
+    // Het bord is vers, de notities nog niet: nog altijd niets.
+    mpLaatLos(poort);
+    await toontVersie(page, info, 2);
+    await druk(2);
+    await page.waitForTimeout(400);
+    await expect(venster).toHaveCount(0);
+
+    notities.houd = false;
+    for (const los of notities.wachtend.splice(0)) los();
+    await page.waitForTimeout(400);
+    await expect(venster, 'een tik van vóór het loslaten opent achteraf niets').toHaveCount(0);
+    await druk(2);
+    await expect(venster).toBeVisible();
+    await expect(venster.getByLabel('Notitie voor de chauffeur')).toHaveValue(NOTITIE);
+    await expect(venster.getByRole('button', { name: 'Notitie opslaan' })).toBeVisible();
+    await expect(venster.getByRole('button', { name: 'Notitie verwijderen' })).toHaveCount(0);
+    expect(schrijf.slice(naEerste).filter((x) => x.includes('/api/planning-notes') || x.includes('shift-swap'))).toEqual([]);
+  });
+}
+
+test('Maandplanning: een maand verder met een 500 geeft de grote Foutkaart, nooit het bord van de vorige maand', async ({ page }, info) => {
+  alleenIn(info, IPHONE, DESKTOP);
+  const rol: MpRol = telefoon(info) ? 'chauffeur' : 'admin';
+  const poort = await startMp(page, rol);
+  await mpNaar(page, info, 'Maandplanning');
+  await toontVersie(page, info, 1);
+  poort.status = 500;
+  if (telefoon(info)) await page.getByRole('button', { name: 'Volgende maand' }).tap();
+  else await page.getByRole('button', { name: 'Volgende 2 weken' }).click();
+  await expect(page.getByText('Dit kon niet laden')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+  await expect(page.locator(MP_RASTER)).toHaveCount(0);
+  await expect(page.locator(MP_STRIP)).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await expect(page.locator(MP_RASTER)).toHaveCount(0);
+  await expect(page.locator(MP_STRIP)).toHaveCount(0);
+});
+
+// --- toetssteen 7: inhaalronde en koude start -----------------------------------
+
+for (const [project, rol, tijd, maanden] of [[DESKTOP, 'admin', KRUIST, ['2026-10', '2026-11']], [IPHONE, 'chauffeur', BINNEN, ['2026-10']]] as Array<[string, MpRol, Date, string[]]>) {
+  test(`Maandplanning (${rol}, ${maanden.length === 2 ? 'venster over een maandgrens' : 'venster in één maand'}): een koude start vraagt elke maand één keer; een inhaalronde met het scherm open ververst stil, zonder skelet`, async ({ page, context }, info) => {
+    alleenIn(info, project);
+    await page.clock.install({ time: tijd });
+    await seed(page, { user: MP_GEBRUIKER[rol], view: 'bezetting' });
+    const poort = await maandPoort(page, rol === 'chauffeur', tijd);
+    await page.goto('/maandplanning');
+    await expect(page.getByRole('heading', { level: 1, name: 'Maandplanning' })).toBeVisible({ timeout: 15_000 });
+    await toontVersie(page, info, 1, tijd);
+    // Ruim na de start (de eerste aansluiting doet geen volledige ronde): niets meer.
+    await page.waitForTimeout(3000);
+    expect([...poort.gets].sort(), 'koude start').toEqual([...maanden].sort());
+
+    poort.versie = 2;
+    await volgMpSkelet(page);
+    const voor = poort.gets.length;
+    await inhaalronde(page, context);
+    // Meteen: de verversing van useZelfLadend bij "verbinding terug" (de
+    // hoofdmaand, zoals op de basis). Na het salvo-venster (1,2 s): de stille
+    // verversing van de inhaalronde, de hoofdmaand en de maand achter de
+    // vensterrand als het venster een maandgrens kruist.
+    await expect.poll(() => poort.gets.length - voor, { timeout: 10_000 }).toBe(1 + maanden.length);
+    await page.waitForTimeout(2500);
+    const erbij = poort.gets.slice(voor);
+    info.annotations.push({ type: 'verzoeken na de inhaalronde', description: erbij.join(', ') });
+    expect(erbij[0]).toBe('2026-10');
+    expect(erbij.slice(1).sort()).toEqual([...maanden].sort());
+    await toontVersie(page, info, 2, tijd);
+    expect(await mpSkeletGezien(page), 'geen skelet').toBe(false);
+  });
+}
+
+// --- toetssteen 8: de regel in de kop ------------------------------------------
+//
+// De regel staat op elke breedte net onder de knoppen van de kop (vanaf sm
+// rechts, onder het menu; op de telefoon links, onder het zoekveld), absoluut
+// in de tussenruimte boven het bord: ze neemt geen plaats in de kop. Op de rij
+// of op een eigen regel duwde ze, met een breedte die van de tekst afhangt, de
+// beschrijving of de knoppen om (nakijker 23-11: 25 tot 28 px op 1366 tot
+// 1560 px, en kop en bord sprongen 24,5 px bij elke stille verversing omdat
+// "Bijwerken…" smaller is dan "Bijgewerkt om hh:mm"; het bord zakte 24 px op
+// 768 tot 1180 px en op de telefoon).
+
+/** Waar zoekveld en knoppen van de kop staan (afgerond op een halve pixel). */
+const kopPlaatsen = (page: Page) => page.evaluate(() => {
+  const kop = document.querySelector('main h1')!.closest('header')!;
+  const vak = (el: Element | null) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return [Math.round(r.x * 2) / 2, Math.round(r.y * 2) / 2, Math.round(r.width * 2) / 2];
+  };
+  const knop = (naam: string) => [...kop.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') || b.textContent || '').trim() === naam) ?? null;
+  return {
+    zoek: vak(kop.querySelector('input[type="search"]')),
+    vorige: vak(knop('Vorige 2 weken')),
+    volgende: vak(knop('Volgende 2 weken')),
+    vandaag: vak(knop('Vandaag')),
+    menu: vak(knop('Meer acties')),
+  };
+});
+
+/** De regel onder de knoppen: niet over een knop of het bord, binnen het
+ *  scherm, en bovenop (wat onder zijn midden ligt is de regel zelf). */
+async function regelOnderDeKnoppen(page: Page, telefoonBreed: boolean) {
+  // Wat onder het midden van de regel ligt, is de regel zelf (de lade van
+  // Meer vangt na het sluiten nog even tikken op: daar wachten we op).
+  await expect.poll(() => page.evaluate(() => {
+    const p = [...document.querySelector('main h1')!.closest('header')!.querySelectorAll('p[aria-live="polite"]')].find((x) => /^(Bijgewerkt om|Bijwerken)/.test(x.textContent!.trim()))!;
+    const r = p.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === p;
+  }), { message: 'niets ligt over de regel' }).toBe(true);
+  const plek = await page.evaluate(() => {
+    const kop = document.querySelector('main h1')!.closest('header')!;
+    const p = [...kop.querySelectorAll('p[aria-live="polite"]')].find((x) => /^(Bijgewerkt om|Bijwerken)/.test(x.textContent!.trim()))!;
+    const r = p.getBoundingClientRect();
+    const knoppen = [...kop.querySelectorAll('button, input')].map((el) => el.getBoundingClientRect()).filter((b) => b.width > 0);
+    const volgende = kop.nextElementSibling!.getBoundingClientRect();
+    const menu = [...kop.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === 'Meer acties')?.getBoundingClientRect() ?? null;
+    const zoek = kop.querySelector('input[type="search"]')!.getBoundingClientRect();
+    return {
+      boven: r.top, onder: r.bottom, links: r.left, rechts: r.right,
+      knoppenOnder: Math.max(...knoppen.map((b) => b.bottom)),
+      volgendeBoven: volgende.top,
+      menuRechts: menu?.right ?? null, zoekLinks: zoek.left,
+      overloop: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(plek.boven, 'onder de knoppen van de kop').toBeGreaterThanOrEqual(plek.knoppenOnder);
+  expect(plek.onder, 'boven het bord (of de kleine Foutkaart)').toBeLessThanOrEqual(plek.volgendeBoven);
+  expect(plek.links).toBeGreaterThanOrEqual(0);
+  expect(plek.rechts).toBeLessThanOrEqual(page.viewportSize()!.width);
+  expect(plek.overloop, 'geen horizontale overloop').toBeLessThanOrEqual(0);
+  if (telefoonBreed) expect(Math.abs(plek.links - plek.zoekLinks), 'links, onder het zoekveld').toBeLessThanOrEqual(1);
+  else expect(Math.abs(plek.rechts - plek.menuRechts!), 'rechts, onder het menu').toBeLessThanOrEqual(1);
+}
+
+for (const [project, breedte, thema] of [
+  [IPHONE, 360, 'light'], [IPHONE, 360, 'dark'], [IPHONE, 390, 'light'], [IPHONE, 390, 'dark'], [IPHONE, 700, 'light'],
+  [DESKTOP, 768, 'light'], [DESKTOP, 1024, 'light'], [DESKTOP, 1280, 'light'], [DESKTOP, 1440, 'dark'],
+] as Array<[string, number, 'light' | 'dark']>) {
+  test(`Maandplanning, de regel in de kop op ${breedte} px (${thema}): duwt geen knop van zijn plek, onder de knoppen`, async ({ page }, info) => {
+    alleenIn(info, project);
+    const rol: MpRol = telefoon(info) ? 'planner' : 'admin';
+    const poort = await startMp(page, rol, { thema });
+    await page.setViewportSize({ width: breedte, height: telefoon(info) ? 844 : 900 });
+    poort.houd = true;
+    const voor = poort.gets.length;
+    await mpNaar(page, info, 'Maandplanning');
+    await expect.poll(() => poort.gets.length - voor).toBeGreaterThanOrEqual(1);
+    await expect(mpSkelet(page).first()).toBeVisible();
+    await expect(regel(page)).toHaveCount(0);
+    await wachtOpAnimaties(page);
+    const zonder = await kopPlaatsen(page);
+    mpLaatLos(poort);
+    await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+    await wachtOpAnimaties(page);
+    const met = await kopPlaatsen(page);
+    info.annotations.push({ type: `kop op ${breedte} px`, description: `zonder regel ${JSON.stringify(zonder)} · met regel ${JSON.stringify(met)}` });
+    expect(met, 'geen knop schoof').toEqual(zonder);
+    await regelOnderDeKnoppen(page, breedte < 640);
+  });
+}
+
+/** Knoppen van de kop, de kop zelf en de bovenkant van het bord (datumstrip
+ *  en eerste rij op de telefoon, eerste rij van het raster op desktop), in
+ *  coördinaten van de pagina en afgerond op een halve pixel. */
+const kopEnBord = (page: Page) => page.evaluate(([raster, strip]) => {
+  const kop = document.querySelector('main h1')!.closest('header')!;
+  const vak = (el: Element | null | undefined) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return [r.x + window.scrollX, r.y + window.scrollY, r.width, r.height].map((n) => Math.round(n * 2) / 2);
+  };
+  const knop = (naam: string) => [...kop.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') || b.textContent || '').trim() === naam) ?? null;
+  const tabel = document.querySelector(raster);
+  const eersteRij = tabel
+    ? tabel.querySelector('tbody tr')
+    : [...document.querySelectorAll('main button')].find((b) => !kop.contains(b) && /Test Chauffeur/.test(b.textContent ?? ''));
+  return {
+    kop: vak(kop),
+    zoek: vak(kop.querySelector('input[type="search"]')),
+    vorige: vak(knop('Vorige 2 weken')),
+    volgende: vak(knop('Volgende 2 weken')),
+    vandaag: vak(knop('Vandaag')),
+    menu: vak(knop('Meer acties')),
+    strip: vak(document.querySelector(strip)),
+    eersteRij: vak(eersteRij),
+  };
+}, [MP_RASTER, MP_STRIP] as const);
+/** Meten op stilstand: twee gelijke metingen na elkaar. */
+async function kopEnBordStil(page: Page) {
+  let vorige = JSON.stringify(await kopEnBord(page));
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(80);
+    const nu = JSON.stringify(await kopEnBord(page));
+    if (nu === vorige) return JSON.parse(nu) as Awaited<ReturnType<typeof kopEnBord>>;
+    vorige = nu;
+  }
+  throw new Error('kop en bord kwamen niet tot stilstand');
+}
+
+// Op de basis (c721e2ca) bestond de regel niet: kop en bord staan nu waar
+// ze zonder regel staan (de regel met display: none, zoals op de basis), met
+// "Bijgewerkt om", tijdens "Bijwerken…" en erna, op elke breedte en ook met
+// een andere letter (een breedte die van de tekst afhangt, mag niets duwen).
+/** Het salvo-venster na 'vhb-planning-changed' (PLANNING_SALVO_MS, 1200 ms in
+ *  src/lib/maandplanning.ts) plus marge; met de klok van de pagina overgeslagen. */
+const PLANNING_SALVO_PROEF_MS = 1300;
+const KOP_BREEDTES: Record<string, number[]> = {
+  [DESKTOP]: [768, 1024, 1180, 1280, 1366, 1400, 1440, 1536, 1560, 1680, 1920],
+  [IPHONE]: [360, 390],
+  [WEBKIT]: [360, 390],
+};
+for (const letter of ['eigen', 'monospace', 'sans-serif'] as const) {
+  test(`Maandplanning, de regel in de kop (letter: ${letter}): kop en bord staan waar ze zonder regel staan, ook tijdens "Bijwerken…", op elke breedte; de regel staat onder de knoppen, boven het bord`, async ({ page }, info) => {
+    alleenIn(info, IPHONE, WEBKIT, DESKTOP);
+    test.setTimeout(120_000);
+    if (letter !== 'eigen') {
+      await page.addInitScript((f) => {
+        addEventListener('DOMContentLoaded', () => {
+          const s = document.createElement('style');
+          s.textContent = `*{font-family:${f} !important}`;
+          document.head.appendChild(s);
+        });
+      }, letter);
+    }
+    const poort = await startMp(page, telefoon(info) ? 'planner' : 'admin');
+    await mpNaar(page, info, 'Maandplanning');
+    await toontVersie(page, info, 1);
+    await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+    const metingen: string[] = [];
+    for (const breedte of KOP_BREEDTES[info.project.name]) {
+      await page.setViewportSize({ width: breedte, height: telefoon(info) ? 844 : 900 });
+      const met = await kopEnBordStil(page);
+
+      // Zoals op de basis: zonder regel.
+      await regel(page).evaluate((el) => { (el as HTMLElement).style.display = 'none'; });
+      const zonder = await kopEnBordStil(page);
+      await regel(page).evaluate((el) => { (el as HTMLElement).style.display = ''; });
+      expect(met, `${breedte} px: kop en bord staan waar ze zonder regel staan`).toEqual(zonder);
+      await regelOnderDeKnoppen(page, breedte < 640);
+
+      // Een stille verversing (zoals na een planningswijziging): "Bijwerken…".
+      poort.houd = true;
+      const voor = poort.gets.length;
+      await page.evaluate(() => window.dispatchEvent(new Event('vhb-planning-changed')));
+      await page.clock.runFor(PLANNING_SALVO_PROEF_MS);
+      await expect.poll(() => poort.gets.length - voor, { message: 'de stille verversing is vertrokken' }).toBeGreaterThanOrEqual(1);
+      await expect(regel(page)).toHaveText('Bijwerken…');
+      const bezig = await kopEnBordStil(page);
+      expect(bezig, `${breedte} px: niets verspringt tijdens "Bijwerken…"`).toEqual(met);
+      await regelOnderDeKnoppen(page, breedte < 640);
+
+      mpLaatLos(poort);
+      await expect(regel(page)).toHaveText(/^Bijgewerkt om \d\d:\d\d$/);
+      const erna = await kopEnBordStil(page);
+      expect(erna, `${breedte} px: niets verspringt na de verversing`).toEqual(met);
+      metingen.push(`${breedte}: Vandaag y ${met.vandaag?.[1]}, eerste rij y ${met.eersteRij?.[1]}`);
+    }
+    info.annotations.push({ type: `kop en bord (${letter})`, description: metingen.join(' · ') });
+  });
+}
