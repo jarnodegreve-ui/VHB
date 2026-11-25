@@ -82,7 +82,7 @@ export function PlannerDashboardWidgets({
   const {
     users, shifts, diversions, diversionsGeladen, updates, leaveRequests, swaps,
     planningMatrixRows, planningMatrixGeladen, planningMatrixHistory: matrixHistory, activityLog, activityLogGeladen, coverageDays, vervaldata, pendingDevices,
-    isInitialLoad, reportSick: onSickReport,
+    dekkingTot, isInitialLoad, reportSick: onSickReport,
     fetchPlanning, fetchSwaps, refreshCoverageGaps,
   } = useAppDataContext();
   /** Wissel vanuit de ziekmeld-flow: planning, ruilen en dekking meteen mee
@@ -616,9 +616,19 @@ export function PlannerDashboardWidgets({
   // "Deze week": dekkingsstatus per dag (vandaag t/m +6) uit coverageDays —
   // de derde kolom op brede schermen. null = nog niet geladen; een lege lijst
   // of overal expected 0 = er zijn geen verwachte diensten ingesteld.
+  // Na de grens van de planning (24-11) is er geen dekking: die dagen zijn
+  // niet "gedekt" maar een neutrale cel. dekkingTot komt uit hetzelfde
+  // antwoord als coverageDays (de grens waarop de server afkapte), dus dagen
+  // en grens horen altijd bij elkaar; null = niet afgekapt, zoals vroeger.
   const weekEinde = isoDate(addDays(now, 6));
-  const weekDagen = (coverageDays ?? []).filter((d) => d.date >= today && d.date <= weekEinde).sort((a, b) => a.date.localeCompare(b.date));
-  const geenVerwachtingen = coverageDays !== null && (weekDagen.length === 0 || weekDagen.every((d) => d.expected === 0));
+  const naGrens = (d: string) => !!dekkingTot && d > dekkingTot;
+  const weekDagen = (coverageDays ?? []).filter((d) => d.date >= today && d.date <= weekEinde && !naGrens(d.date)).sort((a, b) => a.date.localeCompare(b.date));
+  const zonderPlanning = coverageDays === null ? [] : [0, 1, 2, 3, 4, 5, 6].map((i) => isoDate(addDays(now, i))).filter(naGrens);
+  const weekZonderPlanning = zonderPlanning.length === 7;
+  // "Nog geen verwachte diensten" alleen voor een week zonder dag na de grens:
+  // een lege zondag vóór de grens zegt niets over de dagen erna.
+  const nietsVerwacht = weekDagen.length === 0 || weekDagen.every((d) => d.expected === 0);
+  const geenVerwachtingen = coverageDays !== null && zonderPlanning.length === 0 && nietsVerwacht;
   const weekOpen = weekDagen.reduce((n, d) => n + d.missing.length, 0);
 
   // Status-strip: elke tegel als functie van zijn rasterklassen, zodat de
@@ -906,7 +916,7 @@ export function PlannerDashboardWidgets({
       className="hidden lg:block"
       icon={<CalendarDays size={16} />}
       title="Deze week"
-      aside={coverageDays === null ? 'laden…' : geenVerwachtingen ? undefined : weekOpen === 0 ? 'alles gedekt' : `${weekOpen} open`}
+      aside={coverageDays === null ? 'laden…' : weekZonderPlanning ? 'geen planning' : weekOpen > 0 ? `${weekOpen} open` : nietsVerwacht ? undefined : zonderPlanning.length > 0 ? `alles gedekt t/m ${formatDay(dekkingTot!)}` : 'alles gedekt'}
       onSeeAll={() => onNavigate('dekking')}
       seeAllLabel="Openstaande diensten"
     >
@@ -943,6 +953,17 @@ export function PlannerDashboardWidgets({
                 ) : (
                   <span className="rounded-full bg-red-500/12 px-1.5 text-2xs font-bold tabular-nums text-red-700">{d.missing.length}</span>
                 )}
+              </li>
+            );
+          })}
+          {/* Na de grens: geen planning, dus geen stip en geen telling (neutraal). */}
+          {zonderPlanning.map((datum) => {
+            const dag = new Date(`${datum}T00:00:00`);
+            return (
+              <li key={datum} title={`${formatDay(datum)} · geen planning`} className="flex flex-col items-center gap-1 rounded-xl px-1 py-2 ring-1 ring-hairline">
+                <span className="text-micro">{WEEKDAY_SHORT_SUN[dag.getDay()]}</span>
+                <span className="font-mono text-sm font-semibold tabular-nums text-slate-500">{dag.getDate()}</span>
+                <span className="text-xs leading-none text-slate-500"><span aria-hidden="true">—</span><span className="sr-only">geen planning</span></span>
               </li>
             );
           })}

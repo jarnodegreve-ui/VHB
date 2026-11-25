@@ -27,6 +27,11 @@ export function usePlanningData(ctx: DataCtx) {
   // Center van planner/admin. null = (nog) niet geladen — de cockpit toont
   // dan 'onbekend' i.p.v. een vals-groen 'volledig gedekt'.
   const [coverageDays, , zetCoverageUitAntwoord] = useCollectieState<DayGap[] | null>(null);
+  // Tot wanneer die dagen lopen (24-11): `planningTot` uit hetzelfde antwoord
+  // van /api/coverage-gaps, samen met de dagen gezet. Niet x-planning-tot
+  // hieronder: dat is een ander verzoek op een ander moment, en de dagen en
+  // hun grens komen nooit uit twee antwoorden. null = niet afgekapt.
+  const [dekkingTot, setDekkingTot] = useState<string | null>(null);
   // Uitgestelde collecties (staf laadt ze ná de poort, zie useAppData): de
   // vlag gaat aan zodra de eerste laadpoging rond is, ook als ze mislukte
   // (dan toont de view leeg + de laadfout, zoals vroeger in de poort). Views
@@ -268,6 +273,8 @@ export function usePlanningData(ctx: DataCtx) {
       // fetchCoverageGaps geeft de geparste body terug (geen Response): de
       // vergelijking valt terug op de payload.
       zetCoverageUitAntwoord(null, res.days, res.days);
+      // Altijd zetten: de regel hierboven slaat over als de dagen gelijk bleven.
+      setDekkingTot(typeof res.planningTot === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(res.planningTot) ? res.planningTot : null);
     } catch (error) {
       // State blijft null (of houdt de vorige succesvolle fetch) — de
       // cockpit toont dan 'onbekend' i.p.v. vals-groen.
@@ -315,7 +322,7 @@ export function usePlanningData(ctx: DataCtx) {
   };
 
   return {
-    shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays,
+    shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays, dekkingTot,
     planningTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen,
     fetchPlanning, savePlanning, fetchServices, saveServices,

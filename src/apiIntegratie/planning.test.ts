@@ -1062,16 +1062,20 @@ describe('de grens van de planning in het import-voorbeeld, het Maandoverzicht e
       mem.coverageExpectations = { week: ['12', '14'] } as any;
     });
 
-    it('het rapport noemt geen dienst na de grens; het scherm (de dekking zelf) telt daar nog door', async () => {
+    it('het rapport noemt geen dienst na de grens; het scherm (de dekking zelf) stopt er sinds 24-11 ook', async () => {
       const res = await api('GET', '/api/rapporten/openstaande-diensten?van=2027-01-01&tot=2027-01-31', { token: 'tok-planner' });
       expect(res.status).toBe(200);
       // Alleen 01/01: B is vrij en dienst 14 staat open. Van 04/01 tot 31/01 niets.
       expect(res.json.rijen.map((r: any) => [r.datum, r.dienst, r.reden])).toEqual([['2027-01-01', '14', 'Niet toegewezen']]);
       expect(res.json.bereik).toEqual({ van: '2027-01-01', tot: '2027-01-03' });
-      // berekenDekkingsGaten wijzigt niet (apart voorstel): het scherm ziet op elke lege rij elke dienst open.
+      // berekenDekkingsGaten stopt op dezelfde grens (24-11): dagen t/m 03/01,
+      // de grens in `planningTot`, en geen lege rij van 04/01 met elke dienst open.
       const scherm = (await api('GET', '/api/coverage-gaps?from=2027-01-01&to=2027-01-31', { token: 'tok-planner' })).json;
-      expect(scherm.days).toHaveLength(31);
-      expect(scherm.days.find((d: any) => d.date === '2027-01-04').missing).toEqual(['12', '14']);
+      expect(scherm.days.map((d: any) => d.date)).toEqual(['2027-01-01', '2027-01-02', '2027-01-03']);
+      expect(scherm.planningTot).toBe('2027-01-03');
+      expect(scherm.days.find((d: any) => d.date === '2027-01-04')).toBeUndefined();
+      // Tot de grens zoals vroeger: op 01/01 staat dienst 14 open, net als in het rapport.
+      expect(scherm.days.map((d: any) => [d.date, d.missing])).toEqual([['2027-01-01', ['14']], ['2027-01-02', []], ['2027-01-03', []]]);
     });
 
     it('met de grens op de laatste matrixrij: het gedrag van vroeger', async () => {
@@ -4042,6 +4046,10 @@ describe('verbeterronde 20-08, import-signalen & planning-aanwezigheid', () => {
       { id: 'm-a', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
       { id: 'm-b', source_date: '2030-09-02', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
     ];
+    // Alleen een matrix, geen opgebouwde planning: de grens is dan de laatste
+    // matrixrij (planningGrens.ts). De vaste planning van het harnas (tot
+    // 08/07/2026) hoort bij zijn eigen matrix en legde de grens vóór deze.
+    mem.planning = [];
     mem.coverageExpectations = { school: ['2101', '2114'] };
     const res = await api('GET', '/api/coverage-expectation-check?from=2030-09-01&to=2030-09-30', { token: 'tok-planner' });
     expect(res.status).toBe(200);

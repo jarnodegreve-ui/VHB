@@ -96,6 +96,11 @@ export function CoverageView() {
   const [weekdayPeriods, setWeekdayPeriods] = useState<(CoverageWeekdayPeriod & { _k: number })[]>([]);
   const [overrides, setOverrides] = useState<(CoverageOverride & { _k: number })[]>([]);
   const [gaps, setGaps] = useState<DayGap[]>([]);
+  // Tot wanneer er planning is (24-11), uit hetzelfde antwoord als de gaten:
+  // de server geeft geen dagen na die grens. Het hoort bij de periode van dat
+  // antwoord, zodat na een maandwissel de regel van de vorige maand niet
+  // blijft staan; null = geen grens of nog niet geladen, dan geen regel.
+  const [grensVan, setGrensVan] = useState<{ periode: string; tot: string | null } | null>(null);
   // Verwachtingen-vs-praktijk voor de getoonde maand: structurele afwijkingen
   // tussen de dag-type-lijsten en wat er echt gereden wordt (fantoomgaten).
   const [expCheck, setExpCheck] = useState<VerwachtingAfwijking[]>([]);
@@ -262,7 +267,11 @@ export function CoverageView() {
     const alsActueel = (fn: () => void) => { if (versie === gapsVersieRef.current) fn(); };
     await Promise.all([
       fetchCoverageGaps(van, tot)
-        .then((res) => alsActueel(() => setGaps(Array.isArray(res?.days) ? res.days : []))),
+        .then((res) => alsActueel(() => {
+          setGaps(Array.isArray(res?.days) ? res.days : []);
+          const grens = res?.planningTot;
+          setGrensVan({ periode: `${van}|${tot}`, tot: typeof grens === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(grens) ? grens : null });
+        })),
       // Best-effort naast de gaten: een mislukte check mag het scherm niet raken.
       fetchExpectationCheck(van, tot)
         .then((res) => alsActueel(() => setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : [])))
@@ -640,6 +649,11 @@ export function CoverageView() {
     return { doorAfwezigheid, uitDienst, zonderChauffeur: totalMissing - doorAfwezigheid - uitDienst, namen: [...namen] };
   }, [gaps, totalMissing]);
   const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);
+  const planningTot = grensVan?.periode === `${from}|${to}` ? grensVan.tot : null;
+  // Valt (een deel van) de maand na de grens, dan zegt het scherm dat; een
+  // maand helemaal erna heeft geen dagen en is dus niet "alles ingevuld".
+  const naGrens = !!planningTot && to > planningTot;
+  const heleMaandNaGrens = !!planningTot && from > planningTot;
   const visibleDays = onlyGaps ? gaps.filter((d) => d.missing.length > 0) : gaps;
   // De dag uit het adres in beeld brengen met de focus erop, één keer per
   // dag en pas als zijn rij er staat (zelfde afspraak als `brengRecordInBeeld`,
@@ -674,8 +688,8 @@ export function CoverageView() {
       {/* Zonder ingestelde verwachting zijn er geen gaten te tellen (de lijst
           zegt dan "nog niets ingesteld"); een los cijfer van een afwezige
           sprak dat tegen (O, 24-09). Eén bron: pas tellen als de lijst telt. */}
-      <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : !anyExpectations ? '—' : dagenMetGaten} />
-      <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : !anyExpectations ? '—' : totalMissing} />
+      <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : !anyExpectations || heleMaandNaGrens ? '—' : dagenMetGaten} />
+      <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : !anyExpectations || heleMaandNaGrens ? '—' : totalMissing} />
       <ZijvakRij
         label="Dag-types"
         waarde={!config ? '…' : dayTypeNames.length === 0 ? 'nog niet ingesteld' : dayTypeNames.length}
@@ -1216,7 +1230,7 @@ export function CoverageView() {
           instellingen staat hieronder de lege staat met de uitleg, en een
           rode telling erboven sprak die tegen (P3). Tijdens het laden is de
           telling nog onbekend, geen "alles ingevuld". */}
-      {anyExpectations && !zl.laden && !(zl.fout && zl.laatstGeladen === null) && (
+      {anyExpectations && !zl.laden && !(zl.fout && zl.laatstGeladen === null) && !heleMaandNaGrens && (
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
@@ -1233,12 +1247,13 @@ export function CoverageView() {
               )}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700"><Check size={16} className="text-emerald-700" /> Alle verwachte diensten zijn ingevuld</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700"><Check size={16} className="text-emerald-700" /> {naGrens ? `Alle verwachte diensten t/m ${formatDatumDMJ(planningTot!)} zijn ingevuld` : 'Alle verwachte diensten zijn ingevuld'}</span>
           )}
         </div>
         <FilterChip active={onlyGaps} onClick={() => setOnlyGaps((v) => !v)}>
           Alleen dagen met gaten
         </FilterChip>
+        {naGrens && <p className="w-full text-body-sm text-slate-500">De planning loopt tot en met {formatDatumDMJ(planningTot!)}.</p>}
       </div>
       )}
 
@@ -1253,8 +1268,11 @@ export function CoverageView() {
           title="Nog geen verwachte diensten ingesteld"
           message='Open “Instellen” en kies per dag-type welke diensten horen te draaien, daarna ziet dit scherm elke onbemande dienst.'
         />
+      ) : heleMaandNaGrens ? (
+        <EmptyState title={`Nog geen planning voor ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message={`De planning loopt tot en met ${formatDatumDMJ(planningTot!)}.`} />
       ) : visibleDays.length === 0 ? (
-        <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />
+        // Loopt de maand voorbij de grens, dan zegt "niets open" alleen iets over de dagen tot die dag.
+        <EmptyState variant="klaar" title={`Geen openstaande diensten ${naGrens ? `t/m ${formatDatumDMJ(planningTot!)}` : `in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}`}.`} message={naGrens ? `Alle verwachte diensten t/m ${formatDatumDMJ(planningTot!)} zijn ingevuld.` : 'Alle verwachte diensten zijn ingevuld.'} />
       ) : (
         // Breed: een echte tabel, Dag · Dekking · Openstaande diensten, met
         // de dag als rijkop. Past in haar kader (de laatste kolom breekt af),

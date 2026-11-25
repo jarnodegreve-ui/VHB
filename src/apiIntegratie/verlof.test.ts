@@ -343,6 +343,11 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
       { id: 'm-1', source_date: '2026-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' },
       { id: 'm-2', source_date: '2026-07-16', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
     ];
+    // Alleen een matrix, geen opgebouwde planning: de grens van de planning
+    // is dan de laatste matrixrij (planningGrens.ts). De vaste planning van
+    // het harnas (tot 08/07/2026) hoort bij zijn eigen matrix en legde de
+    // grens vóór de dagen van deze proeven.
+    mem.planning = [];
     mem.leave = [
       { id: 'l-ziek', userId: '3', startDate: '2026-07-15', endDate: '2026-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-07-15T06:00:00Z', decidedAt: '2026-07-15T06:00:00Z' },
     ];
@@ -473,7 +478,13 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     const zonder = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-16', { token: 'tok-planner' });
     mem.planningMatrix = [...mem.planningMatrix, ...buiten];
     const met = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-16', { token: 'tok-planner' });
-    expect(met.json).toEqual(zonder.json);
+    // De dagen zijn dezelfde; alleen de grens van de planning (`planningTot`,
+    // sinds 24-11) schuift mee met de matrixrij erna, want die gaat over de
+    // hele matrix en niet over het venster.
+    const { planningTot: totMet, ...restMet } = met.json;
+    const { planningTot: totZonder, ...restZonder } = zonder.json;
+    expect(restMet).toEqual(restZonder);
+    expect([totZonder, totMet]).toEqual(['2030-07-16', '2030-07-17']);
     expect(met.json.days.map((d: any) => d.date)).toEqual(['2030-07-15', '2030-07-16']);
   });
 

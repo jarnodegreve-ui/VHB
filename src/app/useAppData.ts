@@ -268,7 +268,7 @@ export function useAppData({
     meldingenData.resetMeldingen();
   };
 
-  const { shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays, planningTot,
+  const { shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays, dekkingTot, planningTot,
     fetchPlanning, savePlanning, fetchServices, saveServices, fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory,
     savePlanningCodes, refreshCoverageGaps, fetchMyNotes } = planning;
   const { leaveRequests, lastSeenLeaveDecisionAt, fetchLeave, saveLeave, reportSick, decideLeave, markLeaveDecisionsSeen, feestdagenExtra, zetFeestdagenExtra } = verlof;
@@ -285,14 +285,14 @@ export function useAppData({
   const data = useMemo(() => ({
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie, coverageDays, vervaldata, pendingDevices,
-    isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot,
+    isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot, dekkingTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen, activityLogGeladen, usersGeladen, swapsGeladen, documentenGeladen,
     diversionsGeladen, updatesGeladen, meldingenGeladen,
     collectieStaat: ctx.collectieStaat,
   }), [
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie, coverageDays, vervaldata, pendingDevices,
-    isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot,
+    isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot, dekkingTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen, activityLogGeladen, usersGeladen, swapsGeladen, documentenGeladen,
     diversionsGeladen, updatesGeladen, meldingenGeladen,
     ctx.collectieStaat,
