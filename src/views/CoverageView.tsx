@@ -1271,7 +1271,8 @@ export function CoverageView() {
       ) : heleMaandNaGrens ? (
         <EmptyState title={`Nog geen planning voor ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message={`De planning loopt tot en met ${formatDatumDMJ(planningTot!)}.`} />
       ) : visibleDays.length === 0 ? (
-        <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />
+        // Loopt de maand voorbij de grens, dan zegt "niets open" alleen iets over de dagen tot die dag.
+        <EmptyState variant="klaar" title={`Geen openstaande diensten ${naGrens ? `t/m ${formatDatumDMJ(planningTot!)}` : `in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}`}.`} message={naGrens ? `Alle verwachte diensten t/m ${formatDatumDMJ(planningTot!)} zijn ingevuld.` : 'Alle verwachte diensten zijn ingevuld.'} />
       ) : (
         // Breed: een echte tabel, Dag · Dekking · Openstaande diensten, met
         // de dag als rijkop. Past in haar kader (de laatste kolom breekt af),

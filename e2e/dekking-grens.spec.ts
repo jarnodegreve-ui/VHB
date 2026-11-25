@@ -13,7 +13,8 @@ import { ADMIN, AXE_TAGS, seed } from './helpers';
  * Draait in iPhone 13 (chromium): de naam staat in geen eigen project van
  * playwright.config.ts. De proeven zetten zelf een desktopvenster, want
  * "Deze week" bestaat pas vanaf lg. Elke proef heeft een vaste klok en eigen
- * gegevens (grens 03/01/2027, zoals productie op 24-11): niets hangt af van vandaag.
+ * gegevens (grens 03/01/2027, zoals productie op 24-11): niets hangt af van
+ * vandaag, ook verlof, ruilen en omleidingen niet (`ZONDER_VANDAAG`).
  */
 test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
 
@@ -48,13 +49,26 @@ const CONFIG = {
 /** Een paar diensten tot de grens: het dashboard heeft planning (geen "begin hier"). */
 const PLANNING = dagenTussen('2026-12-28', GRENS).map((date, i) => ({ id: `p${i}`, date, startTime: '06:12', endTime: '14:30', line: '2101', busNumber: '', loopnr: '4500', driverId: '42' }));
 
+/**
+ * Wat de gedeelde testgegevens rond de ECHTE datum van vandaag zetten
+ * (`dayOffset` in scripts/audit-fixtures.mjs, in Node, los van de klok van de
+ * pagina) en wat Vandaag, het dashboard en Openstaande diensten lezen: verlof
+ * (een goedgekeurd verlof van Test Chauffeur, 20 tot 16 dagen terug), de
+ * dienstruil (tegenprestatie over 3 dagen) en de omleidingen. Vast en leeg,
+ * anders viel zo'n record bij een bepaalde echte datum op de dagen van deze
+ * proeven (nakijker 25-11: rood als vandaag tussen 18/01 en 23/01/2027 lag).
+ */
+const ZONDER_VANDAAG: Record<string, unknown[]> = { '/api/leave': [], '/api/swaps': [], '/api/diversions': [] };
+
 type Opties = { nu: string; grens: string | null; header?: boolean; open?: Record<string, string[]>; verwacht?: Record<string, number>; vasthouden?: (van: string) => Promise<void> | undefined };
 
 async function open(page: Page, pad: string, { nu, grens, header = true, open: gaten = {}, verwacht = {}, vasthouden }: Opties) {
   await page.clock.setFixedTime(new Date(nu));
   await seed(page, {
     user: ADMIN,
-    extra: (p) => (p.endsWith('/api/coverage-expectations') ? CONFIG : p.endsWith('/api/coverage-expectation-check') ? { afwijkingen: [] } : undefined),
+    extra: (p) => (p.endsWith('/api/coverage-expectations') ? CONFIG
+      : p.endsWith('/api/coverage-expectation-check') ? { afwijkingen: [] }
+        : Object.entries(ZONDER_VANDAAG).find(([pad]) => p.endsWith(pad))?.[1]),
   });
   // Na de seed gezet, dus eerst aan de beurt.
   await page.route((url) => url.pathname.endsWith('/api/planning'), (route) => route.fulfill({
@@ -197,6 +211,15 @@ test.describe('Openstaande diensten', () => {
     await expect(regel(page)).toBeVisible();
     await expect(page.getByText('1 niet-ingevulde dienst deze maand')).toBeVisible();
     await expect(page.getByText(/Nog geen planning/)).toHaveCount(0);
+  });
+
+  test('januari 2027 zonder open dienst tot de grens: de lege staat spreekt alleen over de dagen t/m 03/01', async ({ page }) => {
+    await open(page, '/openstaande-diensten/2027-01', { nu: NU, grens: GRENS });
+    await expect(titel(page)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Geen openstaande diensten t/m 03/01/2027.')).toBeVisible();
+    await expect(page.getByText('Alle verwachte diensten t/m 03/01/2027 zijn ingevuld.')).toBeVisible();
+    await expect(page.getByText(/Geen openstaande diensten in januari/)).toHaveCount(0);
+    await expect(regel(page)).toBeVisible();
   });
 
   test('februari 2027: geen planning voor die maand, nooit "alle verwachte diensten zijn ingevuld"', async ({ page }) => {

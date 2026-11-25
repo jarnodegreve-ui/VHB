@@ -166,9 +166,10 @@ const redenTekst = (info: { name: string; reason: string } | undefined): string 
  * 24-11) staan er niet in: op een dag zonder dienst (een lege matrixrij, of
  * alleen afwezigheid of andere codes) ontbreekt elke verwachte dienst, maar
  * daar is nog niets ingepland, dus geen dienst staat open. Het
- * bereik zegt al "t/m <grens>". De dekking zelf (berekenDekkingsGaten, het
- * scherm Openstaande diensten, de cockpit en de ochtendmail) telt daar nog
- * wel door; dat is een apart voorstel.
+ * bereik zegt al "t/m <grens>". Sinds 24-11 stopt ook de dekking zelf
+ * (berekenDekkingsGaten, dus het scherm Openstaande diensten, de cockpit en
+ * de ochtendmail) op de grens, met dezelfde regel (`naGrens`); de afkapping
+ * hieronder is daardoor dubbel, maar onschadelijk.
  */
 export function bouwOpenstaandeDiensten(bron: OpenstaandeBron, _filters: RapportFilters, vandaag: string): RapportResultaat {
   const norm = (code: string) => code.trim().toLowerCase();

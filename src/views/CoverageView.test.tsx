@@ -150,12 +150,29 @@ describe('CoverageView, de grens van de planning', () => {
     await sluit();
   });
 
-  it('januari zonder open diensten tot de grens: zoals vroeger, met de regel ernaast', async () => {
+  // Tegenlezing 25-11: "Geen openstaande diensten in januari 2027. Alle
+  // verwachte diensten zijn ingevuld." ging over de hele maand, ook over de
+  // dagen na de grens zonder planning. De lege staat spreekt nu alleen over
+  // de dagen tot en met de grens.
+  it('januari zonder open diensten tot de grens: de lege staat spreekt alleen over de dagen t/m de grens', async () => {
     gaten.mockResolvedValue({ from: '2027-01-01', to: '2027-01-31', days: [dag('2027-01-02', [])], planningTot: GRENS });
     const { container, sluit } = await open('2027-01');
     await wacht();
-    expect(container.textContent).toContain('Geen openstaande diensten in januari 2027.');
+    expect(container.textContent).toContain('Geen openstaande diensten t/m 03/01/2027.');
+    expect(container.textContent).toContain('Alle verwachte diensten t/m 03/01/2027 zijn ingevuld.');
+    expect(container.textContent).not.toContain('Geen openstaande diensten in januari 2027.');
     expect(container.textContent).toContain('De planning loopt tot en met 03/01/2027.');
+    await sluit();
+  });
+
+  it('een maand die precies op de grens eindigt: de lege staat zoals vroeger, geen regel', async () => {
+    gaten.mockResolvedValue({ from: '2027-01-01', to: '2027-01-31', days: [dag('2027-01-02', [])], planningTot: '2027-01-31' });
+    const { container, sluit } = await open('2027-01');
+    await wacht();
+    expect(container.textContent).toContain('Geen openstaande diensten in januari 2027.');
+    expect(container.textContent).toContain('Alle verwachte diensten zijn ingevuld.');
+    expect(container.textContent).not.toContain('t/m 31/01/2027');
+    expect(container.textContent).not.toContain('De planning loopt');
     await sluit();
   });
 

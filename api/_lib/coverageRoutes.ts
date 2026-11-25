@@ -26,6 +26,7 @@ import {
   logActivity,
 } from "./storage.js";
 import { bordCellenVoor } from "./codeDienst.js";
+import { naGrens } from "./dagenTotGrens.js";
 import { vrijOpBord } from "../../shared/bordBezetting.js";
 import { isIsoDag } from "../../shared/rapporten/periode.js";
 
@@ -121,12 +122,10 @@ const leesDekkingsGrens = async (): Promise<string | null> => {
   }
 };
 
-/** De laatste dag die de dekking van [from, to] bekijkt: `to`, of de grens als die vroeger valt. */
-const totGrens = (to: string, grens: string | null) => (grens && grens < to ? grens : to);
-
 /** Dekkingsgaten in [from, to] — gedeeld door GET /api/coverage-gaps en de
  *  dagelijkse digest (proactieve sectie "Openstaande diensten"). Geen dagen
- *  na de grens van de planning (`leesDekkingsGrens`). */
+ *  na de grens van de planning (`leesDekkingsGrens`; welke dag erna valt zegt
+ *  `naGrens`, dezelfde regel als de rapporten en het maandoverzicht). */
 export async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]> {
   return (await berekenDekking(from, to)).days;
 }
@@ -145,7 +144,6 @@ async function berekenDekking(from: string, to: string): Promise<{ days: DayGap[
       getSwapsData(),
       leesDekkingsGrens(),
     ]);
-    const tot = totGrens(to, grens);
     // Dekking op De Lijn-codes (11-10): de naam per dag komt uit
     // dekkingDagtypeVanDag, met dezelfde weekdagen, periodes en
     // uitzonderingen als hier (laadDagtypeKalender leest dezelfde config).
@@ -214,7 +212,7 @@ async function berekenDekking(from: string, to: string): Promise<{ days: DayGap[
     const inRange = rows
       .filter((r: any) => {
         const d = String(r.source_date ?? "");
-        return d >= from && d <= tot;
+        return d >= from && d <= to && !naGrens(d, grens);
       })
       .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
     const days: DayGap[] = inRange.map((r: any) => {
@@ -584,10 +582,9 @@ export function mountCoverageRoutes(app: express.Express) {
       // Zelfde grens als de gaten: lege rijen na de laatste dag met een dienst
       // lieten elke verwachte dienst "nooit gereden" lijken.
       const [alleRijen, grens] = await Promise.all([getPlanningMatrixRows(), leesDekkingsGrens()]);
-      const tot = totGrens(to, grens);
       const rows = alleRijen.filter((r: any) => {
         const d = String(r.source_date ?? "");
-        return d >= from && d <= tot;
+        return d >= from && d <= to && !naGrens(d, grens);
       });
       const afwijkingen = await berekenVerwachtingsCheck(rows as any[]);
       res.json({ from, to, dagen: rows.length, afwijkingen });
