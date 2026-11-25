@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, renderHook } from '@testing-library/react';
 import { AFSTAND, CONTROLE_MS, MARGE, WACHT_MS, geschikt, plaatsTip, startTipLaag, stopTipLaag } from './tipLaag';
+import { useLaag } from './lagen';
 
 /**
  * Tip-laag (ronde 6, punt 10): de title-wissel en het gedrag op een jsdom-DOM,
@@ -423,5 +425,190 @@ describe('tip-laag bij focus', () => {
     a.blur();
     a.focus();
     expect(tip()?.hidden ?? true).toBe(true);
+  });
+});
+
+describe('tip-laag naast een open laag (venster, kiezer, menu)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+    startTipLaag();
+  });
+  afterEach(() => {
+    cleanup();
+    stopTipLaag();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  const knop = (label: string, ouder: Element = document.body) => {
+    const b = document.createElement('button');
+    b.setAttribute('aria-label', label);
+    b.setAttribute('title', label);
+    b.innerHTML = '<svg><path d="M0 0"/></svg>';
+    b.getBoundingClientRect = () => new DOMRect(600, 400, 32, 32);
+    ouder.appendChild(b);
+    return b;
+  };
+  /** Een laag zoals de kalender van DatePicker: `role="dialog"` in een portal in de body. */
+  const laag = (rol = 'dialog') => {
+    const d = document.createElement('div');
+    d.setAttribute('role', rol);
+    document.body.appendChild(d);
+    return d;
+  };
+  /** Een dagcel (geen icoonknop): hier staat de focus, zoals na ArrowDown in het datumveld. */
+  const cel = (ouder: Element) => {
+    const c = document.createElement('button');
+    c.textContent = '24';
+    ouder.appendChild(c);
+    c.focus();
+    return c;
+  };
+  const tip = () => document.querySelector<HTMLElement>('[data-tip-laag]');
+  const tipZichtbaar = () => !!tip() && !tip()!.hidden;
+  const wijzer = (type: string, doel: Element, naar: Element | null = null) => {
+    const e = new MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget: naar });
+    Object.defineProperty(e, 'pointerType', { value: 'mouse' });
+    doel.dispatchEvent(e);
+  };
+  /** Escape op de focus; geeft het event en of de luisteraar van de lagen (window) hem hoorde. */
+  const escape = () => {
+    const lagen = vi.fn((e: KeyboardEvent) => e.defaultPrevented);
+    window.addEventListener('keydown', lagen);
+    try {
+      const e = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      (document.activeElement ?? document.body).dispatchEvent(e);
+      return { e, gehoord: lagen.mock.calls.length > 0 };
+    } finally {
+      window.removeEventListener('keydown', lagen);
+    }
+  };
+
+  it('de tip van een knop buiten de laag waar de focus staat: Escape verbergt de tip en gaat door naar de laag', () => {
+    const kalenderknop = knop('Kalender openen');
+    const kalender = laag();
+    cel(kalender);
+    wijzer('pointerover', kalenderknop);
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+    const { e, gehoord } = escape();
+    expect(e.defaultPrevented, 'niet geslikt').toBe(false);
+    expect(gehoord, 'de lagen horen de Escape').toBe(true);
+    expect(tipZichtbaar()).toBe(false);
+    expect(kalenderknop.getAttribute('title')).toBe('Kalender openen');
+  });
+
+  it('een kiezer boven een venster: de tip van de kalenderknop in het venster slikt de Escape van de kiezer niet', () => {
+    const venster = laag();
+    const kalenderknop = knop('Kalender openen', venster);
+    const kalender = laag();
+    cel(kalender);
+    wijzer('pointerover', kalenderknop);
+    vi.advanceTimersByTime(WACHT_MS);
+    const { e, gehoord } = escape();
+    expect(e.defaultPrevented).toBe(false);
+    expect(gehoord).toBe(true);
+    expect(tipZichtbaar()).toBe(false);
+  });
+
+  it('het inline DetailPaneel (`data-laag`, geen dialoog): focus in het paneel, de tip van een knop in de lijst ernaast slikt de Escape niet', () => {
+    const lijstknop = knop('Meer acties voor Bart');
+    const paneel = document.createElement('section');
+    paneel.setAttribute('data-laag', '');
+    document.body.appendChild(paneel);
+    cel(paneel);
+    wijzer('pointerover', lijstknop);
+    vi.advanceTimersByTime(WACHT_MS);
+    const { e, gehoord } = escape();
+    expect(e.defaultPrevented).toBe(false);
+    expect(gehoord).toBe(true);
+    expect(tipZichtbaar()).toBe(false);
+  });
+
+  it('de tip van een knop in de laag waar de focus staat (menu of venster): Escape verbergt alleen de tip, een tweede Escape gaat door', () => {
+    for (const rol of ['dialog', 'menu']) {
+      const l = laag(rol);
+      const vorige = knop('Vorige maand', l);
+      cel(l);
+      wijzer('pointerover', vorige);
+      vi.advanceTimersByTime(WACHT_MS);
+      expect(tipZichtbaar(), rol).toBe(true);
+      const eerste = escape();
+      expect(eerste.e.defaultPrevented, rol).toBe(true);
+      expect(eerste.gehoord, rol).toBe(false);
+      expect(tipZichtbaar()).toBe(false);
+      const tweede = escape();
+      expect(tweede.e.defaultPrevented).toBe(false);
+      expect(tweede.gehoord).toBe(true);
+      wijzer('pointerout', vorige, document.body);
+      l.remove();
+    }
+  });
+
+  it('een laag gaat open terwijl de tip staat of nog wacht: de tip is weg, de title terug', () => {
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit: () => {}, historie: false }), { initialProps: { open: false } });
+    const a = knop('Kalender openen');
+    wijzer('pointerover', a);
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+    act(() => rerender({ open: true }));
+    expect(tipZichtbaar()).toBe(false);
+    expect(a.getAttribute('title')).toBe('Kalender openen');
+    act(() => rerender({ open: false }));
+    wijzer('pointerout', a, document.body);
+
+    // Nog aan het wachten (binnen de 300 ms): de tip komt niet meer.
+    const b = knop('Bewerken');
+    wijzer('pointerover', b);
+    vi.advanceTimersByTime(100);
+    act(() => rerender({ open: true }));
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(false);
+    expect(b.getAttribute('title')).toBe('Bewerken');
+  });
+
+  it('zolang de muis op de knop blijft, komt zijn tip niet terug; eraf en er weer op wel', () => {
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit: () => {}, historie: false }), { initialProps: { open: false } });
+    const a = knop('Kalender openen');
+    const icoon = a.querySelector('svg')!;
+    wijzer('pointerover', a);
+    vi.advanceTimersByTime(WACHT_MS);
+    act(() => rerender({ open: true }));
+    expect(tipZichtbaar()).toBe(false);
+    // Binnen de knop van de rand naar het icoon en terug: nog altijd dezelfde knop.
+    wijzer('pointerout', a, icoon);
+    wijzer('pointerover', icoon);
+    wijzer('pointerout', icoon, a);
+    wijzer('pointerover', a);
+    vi.advanceTimersByTime(WACHT_MS * 2);
+    expect(tipZichtbaar()).toBe(false);
+    expect(a.getAttribute('title')).toBe('Kalender openen');
+    // Eraf en er weer op: de tip mag weer.
+    wijzer('pointerout', a, document.body);
+    wijzer('pointerover', a);
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+  });
+
+  it('een tip na Tab gaat ook weg als er een laag opengaat', () => {
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit: () => {}, historie: false }), { initialProps: { open: false } });
+    const a = knop('Kalender openen');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    a.focus();
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Tab', bubbles: true }));
+    expect(tipZichtbaar()).toBe(true);
+    act(() => rerender({ open: true }));
+    expect(tipZichtbaar()).toBe(false);
+    expect(a.getAttribute('title')).toBe('Kalender openen');
+  });
+
+  it('een laag zonder Escape (de onzichtbare bewaking van een vuil formulier) laat de tip staan', () => {
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit: () => {}, historie: false, escape: false, soort: 'bewaking' }), { initialProps: { open: false } });
+    const a = knop('Bewerken');
+    wijzer('pointerover', a);
+    vi.advanceTimersByTime(WACHT_MS);
+    act(() => rerender({ open: true }));
+    expect(tipZichtbaar()).toBe(true);
   });
 });

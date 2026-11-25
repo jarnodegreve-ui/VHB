@@ -399,6 +399,8 @@ export function DetailPaneel({
         as="section"
         padding="none"
         aria-label={title}
+        // Een laag met Escape (de useLaag hierboven): de tip-laag (src/lib/tipLaag.ts) herkent haar hieraan.
+        data-laag={sluitKnop ? '' : undefined}
         className={cn('flex flex-col overflow-hidden', plakkend && 'lg:max-h-[calc(100dvh_-_5rem)]')}
       >
         <div ref={kopRef} className={cn(
