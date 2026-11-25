@@ -27,15 +27,23 @@ async function open(page: Page, pad: string, view: string) {
   await seed(page, { user: ADMIN, view });
   await page.goto(pad);
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({ timeout: 15_000 });
+  // De h1 staat sinds #843 al in het laadskelet: wacht tot de inhoud er is.
+  await expect(page.getByRole('status', { name: 'Scherm wordt geladen' })).toHaveCount(0, { timeout: 15_000 });
   await page.evaluate(() => document.fonts.ready);
   await wachtOpAnimaties(page);
 }
 
-/** De eerste muisbeweging laadt de laag; ze maakt haar (verborgen) tip in de body. */
+/**
+ * De eerste muisbeweging ná de eerste lading laadt de laag (App.tsx, `isInitialLoad`); ze maakt
+ * haar (verborgen) tip in de body. Op een scherm zonder laadpoort (Designsysteem) zegt het skelet
+ * niet wanneer die lading klaar is: blijf bewegen tot de laag er is.
+ */
 async function laagGeladen(page: Page) {
-  await page.mouse.move(2, 640);
-  await page.mouse.move(4, 642);
-  await expect(page.locator(TIP)).toBeAttached();
+  await expect(async () => {
+    await page.mouse.move(2, 640);
+    await page.mouse.move(4, 642);
+    await expect(page.locator(TIP)).toBeAttached({ timeout: 500 });
+  }).toPass({ timeout: 15_000 });
   await expect(page.locator(TIP)).toBeHidden();
 }
 
@@ -315,14 +323,162 @@ test.describe('Desktop: de tip', () => {
     await expect(venster).toHaveCount(0);
   });
 
+  // De tip van een knop naast een open laag (tip-escape, 25-11): de kalender
+  // opent met ArrowDown terwijl de muis op de kalenderknop staat. Vroeger
+  // bleef de tip staan en slikte hij de Escape (e2e/datumveld.spec.ts:47 was
+  // daardoor wankel); nu is hij weg zodra de laag opent, en een tip die de
+  // muis daarna opnieuw oproept, laat de Escape door naar de kalender.
+  test('kalenderknop: staat zijn tip er als ArrowDown de kalender opent, dan is de tip weg en sluit één Escape de kalender', async ({ page }) => {
+    await open(page, '/beheer/designsysteem', 'designsysteem');
+    await laagGeladen(page);
+    const veld = page.getByLabel('Startdatum', { exact: true });
+    const knop = veld.locator('xpath=following-sibling::button[1]');
+    const kalender = page.getByRole('dialog', { name: 'Datum kiezen' });
+    const tip = page.locator(TIP);
+    await veld.fill('23/09/2026');
+    await veld.press('Enter');
+    await expect(veld).toHaveAttribute('data-datum', '2026-09-23');
+
+    await wijsEnToets(page, knop);
+    await veld.focus();
+    await expect(tip).toBeVisible();
+    await expect(tip).toHaveText('Kalender openen');
+
+    await page.keyboard.press('ArrowDown');
+    await expect(kalender).toBeVisible();
+    await expect(tip, 'de laag gaat open: de tip is weg').toBeHidden();
+    await expect(knop).toHaveAttribute('title', 'Kalender openen');
+    await expect(kalender.getByRole('gridcell', { name: /23 sep 2026/ })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => window.history.state?.vhbOverlay ?? null)).not.toBeNull();
+
+    // De muis blijft op de knop en schuift van het icoon naar de rand: geen nieuwe tip.
+    const vak = (await knop.boundingBox())!;
+    const rand = { x: vak.x + 2, y: vak.y + 2 };
+    expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null, [rand.x, rand.y]), 'onder het punt ligt de kalenderknop').toBe('Kalender openen');
+    await page.mouse.move(rand.x, rand.y);
+    await page.waitForTimeout(450);
+    await expect(tip).toBeHidden();
+
+    await page.keyboard.press('Escape');
+    await expect(kalender).toHaveCount(0);
+    await expect(veld).toBeFocused();
+    await expect(veld).toHaveValue('23/09/2026');
+  });
+
+  test('kiezer open in een venster, de muis komt opnieuw op de kalenderknop: één Escape verbergt de tip en sluit de kiezer, het venster blijft open', async ({ page }) => {
+    await open(page, '/beheer/gebruikers', 'gebruikers');
+    await laagGeladen(page);
+    await page.getByRole('row', { name: /Alex Du Priez/ }).getByRole('button', { name: 'Bewerken', exact: true }).click();
+    const venster = page.getByRole('dialog').filter({ hasText: 'Gebruiker bewerken' });
+    await expect(venster).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.history.state?.vhbOverlay ?? null)).not.toBeNull();
+    await wachtOpAnimaties(page);
+    const knop = venster.getByRole('button', { name: 'Kalender openen' }).first();
+    const veld = knop.locator('xpath=preceding-sibling::input[1]');
+    const tip = page.locator(TIP);
+    await stil(knop);
+    await page.mouse.move(4, 642);
+    const vensterEntry = await page.evaluate(() => window.history.state?.vhbOverlay ?? null);
+
+    await veld.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('dialog')).toHaveCount(2);
+    await expect.poll(() => page.evaluate(() => window.history.state?.vhbOverlay ?? null)).not.toBe(vensterEntry);
+    await wachtOpAnimaties(page);
+    const kiezer = page.getByRole('dialog').filter({ has: page.getByRole('grid') });
+    await expect(kiezer.locator('[role="gridcell"]:focus')).toHaveCount(1);
+
+    await wijsEnToets(page, knop);
+    await page.keyboard.press('Escape');
+    await expect(tip).toBeHidden();
+    await expect(kiezer).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(venster).toBeVisible();
+    await expect(veld).toBeFocused();
+  });
+
+  // Het inline DetailPaneel is geen dialoog: `data-laag` maakt het herkenbaar als laag.
+  test('inline beoordelingspaneel (Verlof): focus in het paneel, de tip van de bel in de topbar, één Escape verbergt de tip en sluit het paneel', async ({ page }) => {
+    await open(page, '/verlof/l1', 'verlof');
+    // De h1 staat al in het laadskelet ("Scherm wordt geladen"); de tip-laag laadt pas bij een
+    // muisbeweging ná de eerste lading. Het paneel bewijst dat die lading er is.
+    const paneel = page.locator('section[aria-label="Alex Du Priez"]');
+    await expect(paneel).toBeVisible();
+    await expect(paneel).toHaveAttribute('data-laag', '');
+    await wachtOpAnimaties(page);
+    await laagGeladen(page);
+    const tip = page.locator(TIP);
+
+    await paneel.getByRole('button', { name: 'Sluiten', exact: true }).focus();
+    const bel = page.locator('button[aria-haspopup="menu"][aria-label="Meldingen"]');
+    await wijsEnToets(page, bel);
+    await expect(paneel.getByRole('button', { name: 'Sluiten', exact: true })).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(tip).toBeHidden();
+    await expect(paneel).toHaveCount(0);
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/verlof');
+  });
+
+  // Hersteltronde (25-11). Het rijmenu "…" opent met een klik, en de druk haalde de tip al weg.
+  // Een kleine beweging binnen de knop roept hem niet terug, eraf en erop wel. Dan liggen knop
+  // en focus allebei in de pagina terwijl het menu open staat: één Escape sluit het menu.
+  test('rijmenu met de muis geopend: geen tip bij een kleine beweging binnen de knop; eraf en erop wel, en één Escape sluit het menu', async ({ page }) => {
+    await open(page, '/beheer/gebruikers', 'gebruikers');
+    await laagGeladen(page);
+    const knop = page.getByRole('row', { name: /Alex Du Priez/ }).getByRole('button', { name: 'Meer acties voor Alex Du Priez' });
+    const menu = page.getByRole('menu', { name: 'Meer acties voor Alex Du Priez' });
+    const tip = page.locator(TIP);
+    await stil(knop);
+    // De klik valt op de rand van de knop, naast het icoon. Zo komt er tijdens het indrukken
+    // geen nieuwe pointerover (op het icoon verschuift de ingedrukte schaal het pad onder de muis).
+    const vak = (await knop.boundingBox())!;
+    const rand = { x: vak.x + 4, y: vak.y + vak.height / 2 };
+    const icoon = { x: vak.x + vak.width / 2, y: vak.y + vak.height / 2 };
+    const onder = ([x, y]: number[]) => {
+      const el = document.elementFromPoint(x, y);
+      return { knop: el?.closest('button')?.getAttribute('aria-label') ?? null, icoon: !!el?.closest('svg') };
+    };
+    expect(await page.evaluate(onder, [rand.x, rand.y]), 'rand: de knop zelf, niet het icoon').toEqual({ knop: 'Meer acties voor Alex Du Priez', icoon: false });
+    expect(await page.evaluate(onder, [icoon.x, icoon.y]), 'midden: het icoon van de knop').toEqual({ knop: 'Meer acties voor Alex Du Priez', icoon: true });
+
+    // Een stille klik: muis op de rand, meteen indrukken en loslaten (de tip had geen tijd).
+    await page.mouse.move(rand.x, rand.y);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(menu).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.history.state?.vhbOverlay ?? null)).not.toBeNull();
+    await wachtOpAnimaties(page);
+
+    // Van de rand naar het icoon: dezelfde knop, geen nieuwe tip.
+    await page.mouse.move(icoon.x, icoon.y);
+    await page.waitForTimeout(450);
+    await expect(tip).toBeHidden();
+    await expect(knop).toHaveAttribute('title', 'Meer acties voor Alex Du Priez');
+
+    // Eraf en er weer op: de tip mag weer, het menu staat nog open.
+    await page.mouse.move(4, 642);
+    await wijsEnToets(page, knop);
+    await expect(menu).toBeVisible();
+    await expect(knop, 'de focus bleef op de knop van het menu, in de pagina').toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(tip).toBeHidden();
+    await expect(menu).toHaveCount(0);
+    await expect(knop).toBeFocused();
+  });
+
   test('laden mislukt: de icoonknop houdt zijn title, geen tip, geen foutscherm en geen herlaadbeurt', async ({ page }) => {
     const afgebroken: string[] = [];
     await page.route(CHUNK, (route) => { afgebroken.push(route.request().url()); return route.abort(); });
     await open(page, '/beheer/designsysteem', 'designsysteem');
     await page.evaluate(() => { (window as unknown as { __zelfdePagina: boolean }).__zelfdePagina = true; });
-    await page.mouse.move(2, 640);
-    await page.mouse.move(4, 642);
-    await expect.poll(() => afgebroken.length).toBeGreaterThan(0);
+    // Zoals in laagGeladen: bewegen tot de lading de laag opvraagt.
+    await expect(async () => {
+      await page.mouse.move(2, 640);
+      await page.mouse.move(4, 642);
+      await expect.poll(() => afgebroken.length, { timeout: 500 }).toBeGreaterThan(0);
+    }).toPass({ timeout: 15_000 });
     const knop = page.getByRole('button', { name: 'Zoeken', exact: true });
     await stil(knop);
     await knop.hover();
