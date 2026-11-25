@@ -389,6 +389,29 @@ test.describe('Desktop: de tip', () => {
     await expect(veld).toBeFocused();
   });
 
+  // Het inline DetailPaneel is geen dialoog: `data-laag` maakt het herkenbaar als laag.
+  test('inline beoordelingspaneel (Verlof): focus in het paneel, de tip van de bel in de topbar, één Escape verbergt de tip en sluit het paneel', async ({ page }) => {
+    await open(page, '/verlof/l1', 'verlof');
+    // De h1 staat al in het laadskelet ("Scherm wordt geladen"); de tip-laag laadt pas bij een
+    // muisbeweging ná de eerste lading. Het paneel bewijst dat die lading er is.
+    const paneel = page.locator('section[aria-label="Alex Du Priez"]');
+    await expect(paneel).toBeVisible();
+    await expect(paneel).toHaveAttribute('data-laag', '');
+    await wachtOpAnimaties(page);
+    await laagGeladen(page);
+    const tip = page.locator(TIP);
+
+    await paneel.getByRole('button', { name: 'Sluiten', exact: true }).focus();
+    const bel = page.locator('button[aria-haspopup="menu"][aria-label="Meldingen"]');
+    await wijsEnToets(page, bel);
+    await expect(paneel.getByRole('button', { name: 'Sluiten', exact: true })).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(tip).toBeHidden();
+    await expect(paneel).toHaveCount(0);
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/verlof');
+  });
+
   test('laden mislukt: de icoonknop houdt zijn title, geen tip, geen foutscherm en geen herlaadbeurt', async ({ page }) => {
     const afgebroken: string[] = [];
     await page.route(CHUNK, (route) => { afgebroken.push(route.request().url()); return route.abort(); });
