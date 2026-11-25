@@ -93,6 +93,16 @@ export function vergeetLaagEntry(id: string) {
 /** Voor tests en diagnose: de soorten van de open lagen, onderaan eerst. */
 export const openLagen = (): string[] => stapel.map((l) => l.soort);
 
+/** Staat er een laag open die op Escape reageert? Voor de tip-laag (src/lib/tipLaag.ts). */
+export const escapeLaagOpen = (): boolean => stapel.some((l) => l.escape);
+
+/** Hoort dat er een laag met Escape opengaat: de tip-laag (src/lib/tipLaag.ts,
+ *  lui geladen) haalt dan de tip van een knop eronder of ernaast weg. */
+let bijOpenen: (() => void) | null = null;
+export function bijLaagOpen(fn: (() => void) | null) {
+  bijOpenen = fn;
+}
+
 /**
  * Voer `fn` uit zodra de historiek na het sluiten van lagen weer schoon is
  * (na de gebundelde `history.go(-n)`), of meteen in de volgende taak als er
@@ -259,6 +269,7 @@ export function useLaag({ open, sluit, historie = true, escape = true, soort = '
     idRef.current = id;
     const laag: Laag = { id, sluit: sluitRef, escape, soort, staat: null };
     stapel.push(laag);
+    if (escape) bijOpenen?.();
     if (historie) {
       const vorige = window.history.state;
       const basis: Record<string, unknown> = vorige && typeof vorige === 'object' ? vorige : {};

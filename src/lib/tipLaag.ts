@@ -23,21 +23,43 @@
  * of meteen als Tab de focus op de knop zet. Focus die een menu, kiezer of
  * venster na Escape aan zijn knop teruggeeft, krijgt geen tip: anders slikte
  * die tip de volgende Escape, die voor de laag eronder bedoeld is. Weg bij:
- * muis eraf, een druk, scroll of wiel, blur, een verborgen tabblad, en als de
- * knop verdwijnt, verschuift of niet meer aan de regel voldoet (controle elke
- * 250 ms zolang de tip staat). Een wissel van title, naam of `disabled` op de
- * knop zelf ziet de laag meteen (MutationObserver): een title die React
- * terugzet staat er dus nooit naast de tip, en de tip volgt een nieuw label.
+ * muis eraf, een druk, scroll of wiel, blur, een verborgen tabblad, een laag
+ * met Escape die opengaat, en als de knop verdwijnt, verschuift of niet meer
+ * aan de regel voldoet (controle elke 250 ms zolang de tip staat). Een
+ * wissel van title, naam of `disabled` op de knop zelf ziet de laag meteen
+ * (MutationObserver): een title die React terugzet staat er dus nooit naast
+ * de tip, en de tip volgt een nieuw label.
  *
  * Eén tip voor de hele app: één element, `position: fixed`, rechtstreeks in
  * de body (geen voorouder die knipt), geplaatst uit het vak van de knop
  * (`plaatsTip`), `pointer-events: none` en `aria-hidden` (de knop draagt de
- * tekst al als naam). Escape verbergt een zichtbare tip en gaat dan niet
- * verder: lagen.ts (luistert op window) laat de open laag staan, een tweede
- * Escape sluit ze.
+ * tekst al als naam).
+ *
+ * Escape en de lagen (tip-escape, 25-11): Escape verbergt een zichtbare tip.
+ * De Escape gaat niet verder (lagen.ts, op window, laat de open laag staan en
+ * een tweede Escape sluit ze) alleen als knop en focus in dezelfde laag
+ * liggen, een icoonknop in een venster, of als ze allebei in de pagina staan
+ * terwijl er geen laag met Escape open is (`escapeLaagOpen` van lagen.ts).
+ * Staat de focus op body (een uitgeschakelde knop verloor ze), dan telt ze
+ * als de laag van de knop. In elk ander geval gaat dezelfde Escape gewoon
+ * door en sluit de laag, zoals zonder tip: de kalenderknop onder een open
+ * kalender, of een knop in de pagina naast een menu dat met de muis openging
+ * en de focus op zijn knop liet. De laag van een element is zijn
+ * dichtstbijzijnde container met `role="dialog"` of `role="menu"`, of met
+ * `data-laag` (het inline DetailPaneel, dat geen dialoog is). Een nieuwe laag
+ * met Escape (useLaag in lagen.ts) zonder een van die twee rollen krijgt
+ * `data-laag` op haar container, anders telt een knop erin als pagina. Gaat er
+ * een laag met Escape open (lagen.ts meldt het via `bijLaagOpen`), dan
+ * verdwijnt de tip, ook een die nog wacht. De knop waar de muis dan op staat,
+ * ook als een klik de tip al weghaalde, krijgt pas weer een tip als de muis
+ * eraf en er opnieuw op gaat.
  */
 
+import { bijLaagOpen, escapeLaagOpen } from './lagen';
+
 const SELECTOR = 'button[aria-label][title]';
+/** De container van een laag: venster, kiezer of menu, of het inline DetailPaneel (`data-laag`). */
+const LAAG = '[role="dialog"], [role="menu"], [data-laag]';
 /** Wachttijd met de muis voor de tip verschijnt. */
 export const WACHT_MS = 300;
 /** Ritme van de controle zolang de tip staat (weg, verschoven, nieuw label). */
@@ -51,9 +73,9 @@ const SPELING = 2;
 
 /** Uiterlijk zoals de vroegere Tooltip.tsx: omgekeerde tegel, in licht donker en in donker licht.
  *  Beweging: alleen opacity, in op `--duration-fast` met de standaardcurve `--ease-standard`
- *  (dezelfde tokens als DUR.fast en EASE in motion.ts, hier als klassen zodat deze module niets
- *  uit de startbundel importeert); reduced motion zet elke transitie in index.css op nul. Weg is
- *  meteen (`hidden`). */
+ *  (dezelfde tokens als DUR.fast en EASE in motion.ts, hier als klassen; uit de startbundel
+ *  importeert deze module alleen `bijLaagOpen` van lagen.ts); reduced motion zet elke transitie
+ *  in index.css op nul. Weg is meteen (`hidden`). */
 const KLASSEN = 'pointer-events-none fixed z-tip w-max rounded-lg bg-slate-900 px-2 py-1 text-xs font-medium text-slate-50 elev-2 transition-opacity duration-fast';
 
 type Vak = { left: number; top: number; width: number; height: number };
@@ -105,6 +127,11 @@ let warmTot = 0;
 /** De focus komt van Tab (tussen keydown en keyup): alleen dan een tip bij focus.
  *  Focus die een menu of kiezer na Escape teruggeeft, toont er geen. */
 let viaTab = false;
+/** De knop waarvan een laag die openging de tip wegnam: zolang de muis erop blijft, geen nieuwe tip. */
+let gedoofd: HTMLButtonElement | null = null;
+
+/** De laag waarin een element ligt, of null voor de pagina. */
+const laagVan = (el: Element | null) => el?.closest(LAAG) ?? null;
 
 const verschoven = (r: DOMRect) => !plek
   || Math.abs(r.left - plek.left) > SPELING || Math.abs(r.top - plek.top) > SPELING
@@ -243,11 +270,14 @@ function opWijzen(e: PointerEvent) {
     if (bron === 'focus') { bron = 'muis'; haalTitelWeg(huidig); }
     return;
   }
+  if (gedoofd?.contains(e.target)) return;
   const knop = e.target.closest(SELECTOR);
   if (geschikt(knop)) begin(knop, 'muis');
 }
 
 function opVerlaten(e: PointerEvent) {
+  if (gedoofd && e.target instanceof Node && gedoofd.contains(e.target)
+    && !(e.relatedTarget instanceof Node && gedoofd.contains(e.relatedTarget))) gedoofd = null;
   if (!huidig || bron !== 'muis' || !(e.target instanceof Node) || !huidig.contains(e.target)) return;
   if (e.relatedTarget instanceof Node && huidig.contains(e.relatedTarget)) return;
   verbergTip('verlaten');
@@ -276,9 +306,29 @@ function opScroll() {
 function opToets(e: KeyboardEvent) {
   viaTab = e.key === 'Tab';
   if (e.key !== 'Escape' || !zichtbaar || e.isComposing) return;
+  // Vóór verbergTip: dat zet `huidig` op null.
+  const laag = laagVan(huidig);
+  const focus = document.activeElement;
+  // Focus op body zegt niets over de laag: ze telt als die van de knop.
+  const zelfde = !focus || focus === document.body || laag === laagVan(focus);
+  // Knop en focus in de pagina terwijl er een laag met Escape open staat: de Escape is voor die laag.
+  const slik = zelfde && (laag !== null || !escapeLaagOpen());
   verbergTip();
+  if (!slik) return;
   e.preventDefault();
   e.stopPropagation();
+}
+
+/** Er gaat een laag met Escape open (lagen.ts): de tip eronder of ernaast gaat weg. */
+function opLaagOpen() {
+  if (huidig) {
+    if (bron === 'muis') gedoofd = huidig;
+    verbergTip();
+    return;
+  }
+  // Een klik opende de laag: de druk haalde de tip al weg, de knop onder de muis blijft gedoofd.
+  const onder = [...document.querySelectorAll(':hover')].at(-1)?.closest(SELECTOR) ?? null;
+  if (geschikt(onder)) gedoofd = onder;
 }
 
 const opToetsLos = (e: KeyboardEvent) => { if (e.key === 'Tab') viaTab = false; };
@@ -306,6 +356,7 @@ export function startTipLaag() {
   tip = maakTip();
   for (const [type, fn, opties] of LUISTERAARS) document.addEventListener(type, fn as EventListener, opties);
   window.addEventListener('blur', weg);
+  bijLaagOpen(opLaagOpen);
   // De muis kan al op een knop staan terwijl de module laadde.
   const onder = [...document.querySelectorAll(':hover')].at(-1);
   const knop = onder?.closest(SELECTOR) ?? null;
@@ -317,9 +368,11 @@ export function stopTipLaag() {
   verbergTip();
   for (const [type, fn, opties] of LUISTERAARS) document.removeEventListener(type, fn as EventListener, opties);
   window.removeEventListener('blur', weg);
+  bijLaagOpen(null);
   tip?.remove();
   tip = null;
   warmTot = 0;
   viaTab = false;
+  gedoofd = null;
   gestart = false;
 }
