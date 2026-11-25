@@ -14,6 +14,7 @@ import type { AuthenticatedRequest } from "./types.js";
 import { isStafRol, authenticate, requireRole } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { berekenCelWaarheid } from "./celWaarheid.js";
+import { dagenTotGrens } from "./dagenTotGrens.js";
 import { heropbouwPlanning, reapplyApprovedSwaps, replayTekst } from "./planningHeropbouw.js";
 import { gewijzigdeDagenPerChauffeur, importPushTekst, roosterDagAfdrukken, verstuurRoosterPushes } from "./roosterMelding.js";
 import { dienstToegewezenTekst } from "./meldingTeksten.js";
@@ -566,8 +567,14 @@ export function mountPlanningRoutes(app: express.Express) {
         if (!isStafRol(req.appUser!.role)) {
           return res.status(403).json({ error: "Onvoldoende rechten." });
         }
-        const overzicht = berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
-        return res.json({ month, dagen: dates.length, ...overzicht });
+        // Alleen de dagen tot en met de grens van de planning tellen
+        // (dagenTotGrens, 24-11): niets op de dagen erna telt, ook geen codes
+        // uit de Excel zelf (verlof, vrij, opleiding, ander werk dat geen
+        // dienstcode is), zoals in het tweede Excel-tabblad en het rapport
+        // Overzicht per chauffeur. `dagen` = het aantal getelde dagen.
+        const geteld = dagenTotGrens(dates, grenzen.laatste);
+        const overzicht = berekenMaandoverzicht(geteld, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
+        return res.json({ month, dagen: geteld.length, ...overzicht });
       }
 
       if (String(req.query.format ?? "") === "xlsx") {
@@ -577,8 +584,10 @@ export function mountPlanningRoutes(app: express.Express) {
         const dayTypeByDate = new Map<string, string>(monthRows.map((r: any) => [String(r.source_date), String(r.day_type ?? "")]));
         // Tweede tabblad "maandoverzicht": per-chauffeur maandtelling (diensten,
         // uren, ziekte, verlof, vrij) op dezelfde cel-waarheid — opstap naar de
-        // loonadministratie zonder aparte export.
-        const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
+        // loonadministratie zonder aparte export. Telt tot en met de grens van
+        // de planning, zoals format=summary (dagenTotGrens, 24-11); het eerste
+        // tabblad (bouwMatrixXlsx) blijft de volledige cel-waarheid van de maand.
+        const overzicht = bouwMaandoverzichtAoa(month, dagenTotGrens(dates, grenzen.laatste), chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
         const buffer = await bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);
@@ -917,13 +926,50 @@ export function mountPlanningRoutes(app: express.Express) {
       // Een import vervangt alléén zijn eigen datumbereik. Leg de bestaande
       // matrix ernaast zodat de preview kan tonen wat vervangen wordt, wat
       // blijft staan en of er een gat tussen beide periodes valt.
-      const bestaandeMatrix = await getPlanningMatrixRows();
+      //
+      // `existingEnd` is sinds 24-11 de grens van de planning: de laatste
+      // matrixdag met minstens één dienst (`getPlanningMatrixGrenzen().laatste`,
+      // dezelfde dag als het Rooster en de Maandplanning; regel in
+      // api/_lib/planningGrens.ts), niet de laatste matrixrij. Lege rijen en
+      // dagen zonder dienst (alleen afwezigheid of andere codes) op het einde
+      // zijn geen planning: met rijen tot 31/01 en diensten tot 03/01
+      // zegt het scherm "Actief: … t/m 03/01" en geeft een bestand vanaf 01/02
+      // het gat van 04/01 tot 31/01. `existingStart` blijft de eerste matrixrij.
+      // `replacedExistingDays` en `retainedDays` blijven matrixrijen tellen: de
+      // import vervangt of houdt ook een lege rij. Kost naast de matrix de
+      // lezing van de grens plus de eerste matrixrij (getPlanningMatrixGrenzen
+      // leest `eerste` mee, hier ongebruikt), geen tweede matrixlezing. Lukt
+      // die lezing niet, of valt de grens buiten de matrix die hier gelezen is,
+      // dan de laatste matrixrij zoals vroeger: het voorbeeld mag hier niet op
+      // stranden, zonder voorbeeld geen import. Buiten de matrix is na de
+      // laatste rij (een import ertussen) of vóór de eerste rij: de planning
+      // loopt achter op de matrix (korter maar niet leeg, bv. een heropbouw
+      // die dagen miste of alleen diensten zonder uren; een lege planning
+      // geeft de laatste matrixrij als grens), en dan zou de badge een einde
+      // vóór het begin tonen. In dat randgeval zegt
+      // het voorbeeld de laatste matrixrij, terwijl Rooster, Maandplanning en
+      // het Maandoverzicht de grens gebruiken.
+      const [bestaandeMatrix, grens] = await Promise.all([
+        getPlanningMatrixRows(),
+        getPlanningMatrixGrenzen().then(
+          (g) => g.laatste,
+          (err) => {
+            console.warn("Import-voorbeeld: de grens van de planning is niet gelezen, het voorbeeld rekent met de laatste matrixrij.", err);
+            return null;
+          },
+        ),
+      ]);
       const bestaandeMatrixDates = bestaandeMatrix
         .map((r) => String(r.source_date))
         .filter(Boolean)
         .sort();
       const existingStart = bestaandeMatrixDates[0] || null;
-      const existingEnd = bestaandeMatrixDates[bestaandeMatrixDates.length - 1] || null;
+      const laatsteMatrixRij = bestaandeMatrixDates[bestaandeMatrixDates.length - 1] || null;
+      const grensInMatrix = Boolean(grens && existingStart && laatsteMatrixRij && grens >= existingStart && grens <= laatsteMatrixRij);
+      if (grens && !grensInMatrix) {
+        console.warn(`Import-voorbeeld: de grens van de planning (${grens}) valt buiten de gelezen matrix (${existingStart ?? "leeg"} t/m ${laatsteMatrixRij ?? "leeg"}), het voorbeeld rekent met de laatste matrixrij.`);
+      }
+      const existingEnd = grensInMatrix ? grens : laatsteMatrixRij;
       const replacedExistingDays = startDate && endDate
         ? bestaandeMatrixDates.filter((d) => d >= startDate && d <= endDate).length
         : 0;
