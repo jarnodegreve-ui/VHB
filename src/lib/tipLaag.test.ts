@@ -611,4 +611,81 @@ describe('tip-laag naast een open laag (venster, kiezer, menu)', () => {
     act(() => rerender({ open: true }));
     expect(tipZichtbaar()).toBe(true);
   });
+
+  // Hersteltronde (25-11): de tegenlezing vond twee gaten.
+  it('een laag met Escape staat open en knop en focus liggen allebei in de pagina (een menu dat met de muis openging): Escape verbergt de tip en sluit de laag', () => {
+    const sluit = vi.fn();
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit, historie: false }), { initialProps: { open: false } });
+    const trigger = knop('Meer acties voor Bart');
+    act(() => rerender({ open: true }));
+    laag('menu');
+    // De focus blijft op de knop van het menu (ActieMenu focust zijn eerste item terwijl het nog verborgen is).
+    trigger.focus();
+    wijzer('pointerover', trigger);
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+    escape();
+    expect(sluit, 'één Escape sluit de laag').toHaveBeenCalledTimes(1);
+    expect(tipZichtbaar()).toBe(false);
+    expect(trigger.getAttribute('title')).toBe('Meer acties voor Bart');
+  });
+
+  it('focus op body (de knop met focus werd uitgeschakeld): in een venster slikt de tip de Escape, in de pagina naast een open laag niet', () => {
+    // De tip van een knop in het venster: zoals in #844, eerst alleen de tip.
+    const venster = laag();
+    const prullenbak = knop('Gebruiker verwijderen', venster);
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    wijzer('pointerover', prullenbak);
+    vi.advanceTimersByTime(WACHT_MS);
+    const eerste = escape();
+    expect(eerste.e.defaultPrevented, 'geslikt').toBe(true);
+    expect(eerste.gehoord).toBe(false);
+    expect(tipZichtbaar()).toBe(false);
+    wijzer('pointerout', prullenbak, document.body);
+    venster.remove();
+
+    // De tip van een knop in de pagina terwijl er een laag met Escape open staat: de Escape is voor die laag.
+    const sluit = vi.fn();
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit, historie: false }), { initialProps: { open: false } });
+    act(() => rerender({ open: true }));
+    const kalenderknop = knop('Kalender openen');
+    wijzer('pointerover', kalenderknop);
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+    expect(document.activeElement).toBe(document.body);
+    escape();
+    expect(sluit).toHaveBeenCalledTimes(1);
+    expect(tipZichtbaar()).toBe(false);
+  });
+
+  it('een laag gaat open na een klik (de druk haalde de tip al weg): de knop onder de muis blijft gedoofd tot de muis eraf gaat', () => {
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit: () => {}, historie: false }), { initialProps: { open: false } });
+    const a = knop('Kalender openen');
+    const icoon = a.querySelector('svg')!;
+    wijzer('pointerover', icoon);
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+    wijzer('pointerdown', icoon);
+    expect(tipZichtbaar()).toBe(false);
+    // jsdom kent geen :hover; de browser geeft de keten tot het icoon onder de muis.
+    const echt = document.querySelectorAll.bind(document);
+    const spion = vi.spyOn(document, 'querySelectorAll').mockImplementation(((s: string) => (s === ':hover' ? [document.documentElement, document.body, a, icoon] : echt(s))) as typeof document.querySelectorAll);
+    try {
+      act(() => rerender({ open: true }));
+    } finally {
+      spion.mockRestore();
+    }
+    // Binnen de knop van het icoon naar de rand: geen nieuwe tip.
+    wijzer('pointerout', icoon, a);
+    wijzer('pointerover', a, icoon);
+    vi.advanceTimersByTime(WACHT_MS * 2);
+    expect(tipZichtbaar()).toBe(false);
+    expect(a.getAttribute('title')).toBe('Kalender openen');
+    // Eraf en er weer op: de tip mag weer.
+    wijzer('pointerout', a, document.body);
+    wijzer('pointerover', a);
+    vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+  });
 });

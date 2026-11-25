@@ -36,25 +36,30 @@
  * tekst al als naam).
  *
  * Escape en de lagen (tip-escape, 25-11): Escape verbergt een zichtbare tip.
- * Ligt de knop in dezelfde laag als de focus (een icoonknop in een venster),
- * of staan ze allebei in de pagina, dan gaat de Escape niet verder: lagen.ts
- * (luistert op window) laat de open laag staan, een tweede Escape sluit ze.
- * Ligt de knop onder of naast de laag van de focus (de kalenderknop onder een
- * open kalender), dan gaat dezelfde Escape gewoon door en sluit die laag,
- * zoals zonder tip. De laag van een element is zijn dichtstbijzijnde
- * container met de rol van een venster, kiezer of menu (Modal, SlideOver,
- * Sheet, DatePicker, MaandInput, ActieMenu, Popover, AnkerPopover), of met
- * `data-laag` (het inline DetailPaneel, dat geen dialoog is). Gaat er een
- * laag met Escape open (lagen.ts meldt het via `bijLaagOpen`), dan verdwijnt
- * de tip, ook een die nog wacht; de knop waar de muis dan op staat, krijgt
- * pas weer een tip als de muis eraf en er opnieuw op gaat.
+ * De Escape gaat niet verder (lagen.ts, op window, laat de open laag staan en
+ * een tweede Escape sluit ze) alleen als knop en focus in dezelfde laag
+ * liggen, een icoonknop in een venster, of als ze allebei in de pagina staan
+ * terwijl er geen laag met Escape open is (`escapeLaagOpen` van lagen.ts).
+ * Staat de focus op body (een uitgeschakelde knop verloor ze), dan telt ze
+ * als de laag van de knop. In elk ander geval gaat dezelfde Escape gewoon
+ * door en sluit de laag, zoals zonder tip: de kalenderknop onder een open
+ * kalender, of een knop in de pagina naast een menu dat met de muis openging
+ * en de focus op zijn knop liet. De laag van een element is zijn
+ * dichtstbijzijnde container met `role="dialog"` of `role="menu"`, of met
+ * `data-laag` (het inline DetailPaneel, dat geen dialoog is). Een nieuwe laag
+ * met Escape (useLaag in lagen.ts) zonder een van die twee rollen krijgt
+ * `data-laag` op haar container, anders telt een knop erin als pagina. Gaat er
+ * een laag met Escape open (lagen.ts meldt het via `bijLaagOpen`), dan
+ * verdwijnt de tip, ook een die nog wacht. De knop waar de muis dan op staat,
+ * ook als een klik de tip al weghaalde, krijgt pas weer een tip als de muis
+ * eraf en er opnieuw op gaat.
  */
 
-import { bijLaagOpen } from './lagen';
+import { bijLaagOpen, escapeLaagOpen } from './lagen';
 
 const SELECTOR = 'button[aria-label][title]';
-/** De container van een laag: venster, kiezer, menu, of het inline DetailPaneel (`data-laag`). */
-const LAAG = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-laag]';
+/** De container van een laag: venster, kiezer of menu, of het inline DetailPaneel (`data-laag`). */
+const LAAG = '[role="dialog"], [role="menu"], [data-laag]';
 /** Wachttijd met de muis voor de tip verschijnt. */
 export const WACHT_MS = 300;
 /** Ritme van de controle zolang de tip staat (weg, verschoven, nieuw label). */
@@ -302,7 +307,12 @@ function opToets(e: KeyboardEvent) {
   viaTab = e.key === 'Tab';
   if (e.key !== 'Escape' || !zichtbaar || e.isComposing) return;
   // Vóór verbergTip: dat zet `huidig` op null.
-  const slik = laagVan(huidig) === laagVan(document.activeElement);
+  const laag = laagVan(huidig);
+  const focus = document.activeElement;
+  // Focus op body zegt niets over de laag: ze telt als die van de knop.
+  const zelfde = !focus || focus === document.body || laag === laagVan(focus);
+  // Knop en focus in de pagina terwijl er een laag met Escape open staat: de Escape is voor die laag.
+  const slik = zelfde && (laag !== null || !escapeLaagOpen());
   verbergTip();
   if (!slik) return;
   e.preventDefault();
@@ -311,9 +321,14 @@ function opToets(e: KeyboardEvent) {
 
 /** Er gaat een laag met Escape open (lagen.ts): de tip eronder of ernaast gaat weg. */
 function opLaagOpen() {
-  if (!huidig) return;
-  if (bron === 'muis') gedoofd = huidig;
-  verbergTip();
+  if (huidig) {
+    if (bron === 'muis') gedoofd = huidig;
+    verbergTip();
+    return;
+  }
+  // Een klik opende de laag: de druk haalde de tip al weg, de knop onder de muis blijft gedoofd.
+  const onder = [...document.querySelectorAll(':hover')].at(-1)?.closest(SELECTOR) ?? null;
+  if (geschikt(onder)) gedoofd = onder;
 }
 
 const opToetsLos = (e: KeyboardEvent) => { if (e.key === 'Tab') viaTab = false; };

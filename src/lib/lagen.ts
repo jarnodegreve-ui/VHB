@@ -93,6 +93,9 @@ export function vergeetLaagEntry(id: string) {
 /** Voor tests en diagnose: de soorten van de open lagen, onderaan eerst. */
 export const openLagen = (): string[] => stapel.map((l) => l.soort);
 
+/** Staat er een laag open die op Escape reageert? Voor de tip-laag (src/lib/tipLaag.ts). */
+export const escapeLaagOpen = (): boolean => stapel.some((l) => l.escape);
+
 /** Hoort dat er een laag met Escape opengaat: de tip-laag (src/lib/tipLaag.ts,
  *  lui geladen) haalt dan de tip van een knop eronder of ernaast weg. */
 let bijOpenen: (() => void) | null = null;
