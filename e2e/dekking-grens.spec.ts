@@ -218,6 +218,8 @@ test.describe('Openstaande diensten', () => {
     await expect(titel(page)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Geen openstaande diensten t/m 03/01/2027.')).toBeVisible();
     await expect(page.getByText('Alle verwachte diensten t/m 03/01/2027 zijn ingevuld.')).toBeVisible();
+    // Ook de kopregel boven de lijst: nergens de onbegrensde zin.
+    await expect(page.getByText('Alle verwachte diensten zijn ingevuld')).toHaveCount(0);
     await expect(page.getByText(/Geen openstaande diensten in januari/)).toHaveCount(0);
     await expect(regel(page)).toBeVisible();
   });

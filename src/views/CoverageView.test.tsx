@@ -160,6 +160,8 @@ describe('CoverageView, de grens van de planning', () => {
     await wacht();
     expect(container.textContent).toContain('Geen openstaande diensten t/m 03/01/2027.');
     expect(container.textContent).toContain('Alle verwachte diensten t/m 03/01/2027 zijn ingevuld.');
+    // Ook de kopregel boven de lijst spreekt alleen over de dagen t/m de grens.
+    expect(container.textContent).not.toContain('Alle verwachte diensten zijn ingevuld');
     expect(container.textContent).not.toContain('Geen openstaande diensten in januari 2027.');
     expect(container.textContent).toContain('De planning loopt tot en met 03/01/2027.');
     await sluit();

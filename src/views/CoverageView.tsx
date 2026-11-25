@@ -1247,7 +1247,7 @@ export function CoverageView() {
               )}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700"><Check size={16} className="text-emerald-700" /> Alle verwachte diensten zijn ingevuld</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700"><Check size={16} className="text-emerald-700" /> {naGrens ? `Alle verwachte diensten t/m ${formatDatumDMJ(planningTot!)} zijn ingevuld` : 'Alle verwachte diensten zijn ingevuld'}</span>
           )}
         </div>
         <FilterChip active={onlyGaps} onClick={() => setOnlyGaps((v) => !v)}>
