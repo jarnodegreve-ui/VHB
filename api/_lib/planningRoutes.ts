@@ -14,7 +14,7 @@ import type { AuthenticatedRequest } from "./types.js";
 import { isStafRol, authenticate, requireRole } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { berekenCelWaarheid } from "./celWaarheid.js";
-import { dagenTotGrens } from "./dagenTotGrens.js";
+import { dagenTotGrens, naGrens } from "./dagenTotGrens.js";
 import { heropbouwPlanning, reapplyApprovedSwaps, replayTekst } from "./planningHeropbouw.js";
 import { gewijzigdeDagenPerChauffeur, importPushTekst, roosterDagAfdrukken, verstuurRoosterPushes } from "./roosterMelding.js";
 import { dienstToegewezenTekst } from "./meldingTeksten.js";
@@ -587,7 +587,11 @@ export function mountPlanningRoutes(app: express.Express) {
         // loonadministratie zonder aparte export. Telt tot en met de grens van
         // de planning, zoals format=summary (dagenTotGrens, 24-11); het eerste
         // tabblad (bouwMatrixXlsx) blijft de volledige cel-waarheid van de maand.
-        const overzicht = bouwMaandoverzichtAoa(month, dagenTotGrens(dates, grenzen.laatste), chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
+        // Valt er door de grens iets weg (een rij na de grens, of een maand
+        // helemaal erna), dan noemt de kop de grens (26-11).
+        const geteld = dagenTotGrens(dates, grenzen.laatste);
+        const gekapt = geteld.length < dates.length || naGrens(`${month}-01`, grenzen.laatste);
+        const overzicht = bouwMaandoverzichtAoa(month, geteld, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[], gekapt ? grenzen.laatste : null);
         const buffer = await bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);

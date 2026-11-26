@@ -365,11 +365,18 @@ export const bouwMaandoverzichtAoa = (
   planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
   dagtypes?: Record<string, string | null>,
   versies?: ReadonlyArray<VersieMetDiensten<MaandoverzichtDienst>> | null,
+  /** De grens van de planning, alleen als de maand erop gekapt is (de route
+   *  beslist: `dagenTotGrens` liet dagen weg, of de maand ligt helemaal na de
+   *  grens). De kop zegt dan tot wanneer er geteld is, "(17 dagen, t/m
+   *  17/01/2027)" (26-11). Zonder: de kop van vroeger. */
+  gekaptOp?: string | null,
 ): unknown[][] => {
   const { rijen, totaal } = berekenMaandoverzicht(dates, chauffeurs, cells, services, planningCodes, dagtypes, versies);
+  // Ook bij één dag "dagen": api/ en shared/ hebben geen helper voor enkelvoud en meervoud.
+  const telling = gekaptOp ? `${dates.length} dagen, t/m ${DAG_DMJ(gekaptOp)}` : `${dates.length} dagen`;
   const aoa: unknown[][] = [
     [`Maandoverzicht ${month}`],
-    [`Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${dates.length} dagen). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`],
+    [`Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${telling}). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`],
     [],
     ["chauffeur", "diensten", "uren diensten", "ander werk", "ziek", "betaalde afwezigheid", "vrij", "overig", "dagen ingepland"],
   ];
