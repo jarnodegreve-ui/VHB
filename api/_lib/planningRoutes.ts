@@ -20,7 +20,7 @@ import { gewijzigdeDagenPerChauffeur, importPushTekst, roosterDagAfdrukken, vers
 import { dienstToegewezenTekst } from "./meldingTeksten.js";
 import { berekenVerwachtingsCheck } from "./coverageRoutes.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, maandGrenzen, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./matrixXlsx.js";
 import { leesMatrixUpload } from "./matrixUpload.js";
@@ -587,10 +587,16 @@ export function mountPlanningRoutes(app: express.Express) {
         // loonadministratie zonder aparte export. Telt tot en met de grens van
         // de planning, zoals format=summary (dagenTotGrens, 24-11); het eerste
         // tabblad (bouwMatrixXlsx) blijft de volledige cel-waarheid van de maand.
-        // Valt er door de grens iets weg (een rij na de grens, of een maand
-        // helemaal erna), dan noemt de kop de grens (26-11).
+        // Loopt de maand voorbij de grens (haar laatste kalenderdag ligt erna),
+        // dan noemt de kop de grens (26-11). Dat volgt de kalender, niet de
+        // matrix: of er na de grens nog lege matrixrijen staan, ziet de
+        // loonadministratie niet, dus dezelfde cijfers geven dezelfde kop. Een
+        // rij na de grens ligt altijd vóór het einde van de maand en valt
+        // eronder. Geen geldige kalendermaand (bv. 2027-13): dan telt alleen
+        // of de grens een rij wegliet.
         const geteld = dagenTotGrens(dates, grenzen.laatste);
-        const gekapt = geteld.length < dates.length || naGrens(`${month}-01`, grenzen.laatste);
+        const einde = maandGrenzen(month)?.tot;
+        const gekapt = einde ? naGrens(einde, grenzen.laatste) : geteld.length < dates.length;
         const overzicht = bouwMaandoverzichtAoa(month, geteld, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[], gekapt ? grenzen.laatste : null);
         const buffer = await bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

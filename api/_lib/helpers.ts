@@ -366,9 +366,9 @@ export const bouwMaandoverzichtAoa = (
   dagtypes?: Record<string, string | null>,
   versies?: ReadonlyArray<VersieMetDiensten<MaandoverzichtDienst>> | null,
   /** De grens van de planning, alleen als de maand erop gekapt is (de route
-   *  beslist: `dagenTotGrens` liet dagen weg, of de maand ligt helemaal na de
-   *  grens). De kop zegt dan tot wanneer er geteld is, "(17 dagen, t/m
-   *  17/01/2027)" (26-11). Zonder: de kop van vroeger. */
+   *  beslist: haar laatste kalenderdag ligt na de grens, ook als de matrix
+   *  zelf op de grens stopt). De kop zegt dan tot wanneer er geteld is,
+   *  "(17 dagen, t/m 17/01/2027)" (26-11). Zonder: de kop van vroeger. */
   gekaptOp?: string | null,
 ): unknown[][] => {
   const { rijen, totaal } = berekenMaandoverzicht(dates, chauffeurs, cells, services, planningCodes, dagtypes, versies);
