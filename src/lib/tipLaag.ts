@@ -51,8 +51,21 @@
  * `data-laag` op haar container, anders telt een knop erin als pagina. Gaat er
  * een laag met Escape open (lagen.ts meldt het via `bijLaagOpen`), dan
  * verdwijnt de tip, ook een die nog wacht. De knop waar de muis dan op staat,
- * ook als een klik de tip al weghaalde, krijgt pas weer een tip als de muis
- * eraf en er opnieuw op gaat.
+ * ook als een klik de tip al weghaalde, is gedoofd: hij krijgt pas weer een
+ * tip als de muis echt bewoog, eraf en er opnieuw op.
+ *
+ * Gedoofd onder een venster (tip-geschiedenis, 26-11): schuift de achtergrond
+ * van een venster over de knop, dan stuurt de browser dezelfde pointerout als
+ * bij een muis die weggaat, en bij het sluiten een pointerover op de knop,
+ * allebei op de plek van de muis. Het weggaan beslist dus niets: de pointerout
+ * onthoudt alleen de plek (`uitPlek`). Een pointerover op exact die plek = de
+ * muis bewoog niet, de knop blijft gedoofd (anders slikte zijn tip de Escape
+ * voor het paneel eronder). Een pointerover op een andere plek, of een
+ * pointermove elders terwijl de muis niet op de knop staat (een effen
+ * achtergrond geeft geen pointerover of pointerout), en de knop is niet meer
+ * gedoofd. Een echte muis gaat nooit op dezelfde plek eraf en erop, ook niet
+ * langs een afgeronde hoek. Meldt een browser het anders, dan is het zoals
+ * vroeger, nooit een knop zonder tip. Alleen de muis telt (`pointerType`).
  */
 
 import { bijLaagOpen, escapeLaagOpen } from './lagen';
@@ -129,6 +142,12 @@ let warmTot = 0;
 let viaTab = false;
 /** De knop waarvan een laag die openging de tip wegnam: zolang de muis erop blijft, geen nieuwe tip. */
 let gedoofd: HTMLButtonElement | null = null;
+/** Waar de muis was bij de laatste pointerout van de gedoofde knop; null zolang ze erop staat.
+ *  Dezelfde plek bij het terugkomen = de muis bewoog niet (zie de kop). */
+let uitPlek: { x: number; y: number } | null = null;
+
+const zetGedoofd = (knop: HTMLButtonElement | null) => { gedoofd = knop; uitPlek = null; };
+const opUitPlek = (e: PointerEvent) => !!uitPlek && e.clientX === uitPlek.x && e.clientY === uitPlek.y;
 
 /** De laag waarin een element ligt, of null voor de pagina. */
 const laagVan = (el: Element | null) => el?.closest(LAAG) ?? null;
@@ -270,17 +289,28 @@ function opWijzen(e: PointerEvent) {
     if (bron === 'focus') { bron = 'muis'; haalTitelWeg(huidig); }
     return;
   }
-  if (gedoofd?.contains(e.target)) return;
+  if (gedoofd?.contains(e.target)) {
+    // Terug op de gedoofde knop: nooit weg geweest, of op exact de plek van
+    // het weggaan (een laag verdween onder een stille muis), dan blijft hij gedoofd.
+    if (!uitPlek || opUitPlek(e)) { uitPlek = null; return; }
+    zetGedoofd(null);
+  }
   const knop = e.target.closest(SELECTOR);
   if (geschikt(knop)) begin(knop, 'muis');
 }
 
 function opVerlaten(e: PointerEvent) {
-  if (gedoofd && e.target instanceof Node && gedoofd.contains(e.target)
-    && !(e.relatedTarget instanceof Node && gedoofd.contains(e.relatedTarget))) gedoofd = null;
+  // Van de gedoofde knop weg (of een laag schoof eronder): alleen de plek onthouden, het terugkomen beslist.
+  if (gedoofd && e.pointerType === 'mouse' && e.target instanceof Node && gedoofd.contains(e.target)
+    && !(e.relatedTarget instanceof Node && gedoofd.contains(e.relatedTarget))) uitPlek = { x: e.clientX, y: e.clientY };
   if (!huidig || bron !== 'muis' || !(e.target instanceof Node) || !huidig.contains(e.target)) return;
   if (e.relatedTarget instanceof Node && huidig.contains(e.relatedTarget)) return;
   verbergTip('verlaten');
+}
+
+/** De muis bewoog terwijl ze niet op de gedoofde knop stond: die knop is niet meer gedoofd. */
+function opBewegen(e: PointerEvent) {
+  if (uitPlek && e.pointerType === 'mouse' && !opUitPlek(e)) zetGedoofd(null);
 }
 
 function opFocus(e: FocusEvent) {
@@ -322,13 +352,13 @@ function opToets(e: KeyboardEvent) {
 /** Er gaat een laag met Escape open (lagen.ts): de tip eronder of ernaast gaat weg. */
 function opLaagOpen() {
   if (huidig) {
-    if (bron === 'muis') gedoofd = huidig;
+    if (bron === 'muis') zetGedoofd(huidig);
     verbergTip();
     return;
   }
   // Een klik opende de laag: de druk haalde de tip al weg, de knop onder de muis blijft gedoofd.
   const onder = [...document.querySelectorAll(':hover')].at(-1)?.closest(SELECTOR) ?? null;
-  if (geschikt(onder)) gedoofd = onder;
+  if (geschikt(onder)) zetGedoofd(onder);
 }
 
 const opToetsLos = (e: KeyboardEvent) => { if (e.key === 'Tab') viaTab = false; };
@@ -339,6 +369,7 @@ const vangst = { capture: true, passive: true } as const;
 const LUISTERAARS = [
   ['pointerover', opWijzen, vangst],
   ['pointerout', opVerlaten, vangst],
+  ['pointermove', opBewegen, vangst],
   ['pointerdown', opDruk, vangst],
   ['wheel', weg, vangst],
   ['scroll', opScroll, vangst],
@@ -373,6 +404,6 @@ export function stopTipLaag() {
   tip = null;
   warmTot = 0;
   viaTab = false;
-  gedoofd = null;
+  zetGedoofd(null);
   gestart = false;
 }
