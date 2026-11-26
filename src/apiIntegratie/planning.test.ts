@@ -935,9 +935,10 @@ describe('de grens van de planning in het import-voorbeeld, het Maandoverzicht e
       // `dagen` = de getelde dagen van de maand.
       expect(summary.dagen).toBe(3);
 
-      // Tweede tabblad: dezelfde cijfers, en de kop zegt over hoeveel dagen.
+      // Tweede tabblad: dezelfde cijfers, en de kop zegt over hoeveel dagen en
+      // sinds 26-11 ook tot wanneer (de maand is op de grens gekapt).
       const { praktijk, overzicht } = await xlsx();
-      expect(String(overzicht[1][0])).toContain('(3 dagen)');
+      expect(overzicht[1][0]).toBe('Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (3 dagen, t/m 03/01/2027). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.');
       const kop = (overzicht[3] as any[]).map(String);
       const kolom = (naam: string) => kop.indexOf(naam);
       for (const naam of ['Chauffeur A', 'Chauffeur B']) {
@@ -1001,7 +1002,7 @@ describe('de grens van de planning in het import-voorbeeld, het Maandoverzicht e
       expect(perNaam['Chauffeur B']).toMatchObject({ diensten: 2, betaald: 0, vrij: 1, dagen: 3 });
       expect(summary.totaal).toMatchObject({ diensten: 5, anderWerk: 0, betaald: 0, vrij: 1, dagen: 6 });
       expect(summary.dagen).toBe(3);
-      expect(String(overzicht[1][0])).toContain('(3 dagen)');
+      expect(String(overzicht[1][0])).toContain('(3 dagen, t/m 03/01/2027)');
       const kop = (overzicht[3] as any[]).map(String);
       const kolom = (naam: string) => kop.indexOf(naam);
       for (const naam of ['Chauffeur A', 'Chauffeur B']) {
@@ -1054,6 +1055,65 @@ describe('de grens van de planning in het import-voorbeeld, het Maandoverzicht e
       mem.planningMatrix = [];
       const leeg = (await api('GET', '/api/month-planning?month=2027-01&format=summary', { token: 'tok-planner' })).json;
       expect(leeg).toMatchObject({ dagen: 0, totaal: { dagen: 0 } });
+    });
+
+    it('de kop van het tweede tabblad noemt de grens zodra de maand erover loopt, ook als de matrix op de grens stopt (26-11)', async () => {
+      const KOP = (telling: string) => `Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${telling}). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`;
+      const tabbladen = async (maand: string) => {
+        const raw = await fetch(`${baseUrl}/api/month-planning?month=${maand}&format=xlsx`, { headers: { Authorization: 'Bearer tok-planner', 'X-Device-Token': 'dev-ok' } });
+        expect(raw.status).toBe(200);
+        const XLSX = await import('xlsx');
+        const wb = XLSX.read(Buffer.from(await raw.arrayBuffer()), { type: 'buffer' });
+        return {
+          praktijk: XLSX.utils.sheet_to_json<any[]>(wb.Sheets['praktijk'], { header: 1, raw: true }),
+          overzicht: XLSX.utils.sheet_to_json<any[]>(wb.Sheets['maandoverzicht'], { header: 1, raw: true }),
+        };
+      };
+      const december = Array.from({ length: 31 }, (_, i) => rij(`2026-12-${String(i + 1).padStart(2, '0')}`, { 'Chauffeur A': '12' }));
+      mem.planningMatrix = [...december, ...mem.planningMatrix, rij('2027-02-01', {}), rij('2027-02-02', {})];
+      // Eerst: de grens blijft 03/01, anders bewijst de rest niets.
+      expect((await api('GET', '/api/month-planning?month=2027-01', { token: 'tok-planner' })).json.geimporteerd.laatste).toBe('2027-01-03');
+
+      // Een maand helemaal vóór de grens: de kop van vroeger, byte voor byte.
+      expect((await tabbladen('2026-12')).overzicht[1][0]).toBe(KOP('31 dagen'));
+      // Een maand helemaal na de grens: met lege rijen (02/2027) en zonder rijen (03/2027).
+      expect((await tabbladen('2027-02')).overzicht[1][0]).toBe(KOP('0 dagen, t/m 03/01/2027'));
+      expect((await tabbladen('2027-03')).overzicht[1][0]).toBe(KOP('0 dagen, t/m 03/01/2027'));
+      // Alleen de kop wijzigt: de rest van het tabblad is de telling van de dagen tot de grens.
+      const jan = await tabbladen('2027-01');
+      expect(jan.overzicht[1][0]).toBe(KOP('3 dagen, t/m 03/01/2027'));
+      const summary = (await api('GET', '/api/month-planning?month=2027-01&format=summary', { token: 'tok-planner' })).json;
+      const kop = (jan.overzicht[3] as any[]).map(String);
+      const totaalRij = jan.overzicht[jan.overzicht.length - 1] as any[];
+      expect(totaalRij[0]).toBe('totaal');
+      expect(totaalRij[kop.indexOf('dagen ingepland')]).toBe(summary.totaal.dagen);
+      expect(totaalRij[kop.indexOf('diensten')]).toBe(summary.totaal.diensten);
+
+      // Stopt de matrix zelf op de grens, dan noemt de kop de grens toch: januari
+      // loopt erover, en of er na de grens nog lege rijen staan ziet de
+      // loonadministratie niet (tegenlezing 26-11). Dezelfde cijfers geven
+      // hetzelfde tabblad; het eerste tabblad toont alleen die drie dagen.
+      mem.planningMatrix = mem.planningMatrix.filter((r: any) => r.source_date <= '2027-01-03');
+      const kort = await tabbladen('2027-01');
+      expect(kort.overzicht[1][0]).toBe(KOP('3 dagen, t/m 03/01/2027'));
+      expect(kort.overzicht).toEqual(jan.overzicht);
+      expect(kort.praktijk).toHaveLength(4);
+    });
+
+    it('valt de grens op de laatste dag van de maand, dan loopt de maand er niet over: de kop van vroeger (26-11)', async () => {
+      const januari = Array.from({ length: 31 }, (_, i) => `2027-01-${String(i + 1).padStart(2, '0')}`);
+      mem.planningMatrix = januari.map((d) => rij(d, { 'Chauffeur A': '12' }));
+      mem.planning = januari.map((d) => dienst(d, '3', '12'));
+      const grens = async () => (await api('GET', '/api/month-planning?month=2027-01', { token: 'tok-planner' })).json.geimporteerd.laatste;
+      const kop = async () => String((await xlsx()).overzicht[1][0]);
+      expect(await grens()).toBe('2027-01-31');
+      expect(await kop()).toContain('afwezigheden (31 dagen). Uren');
+
+      // Een dag eerder, en de matrix stopt ook daar: januari loopt één dag over de grens.
+      mem.planningMatrix = mem.planningMatrix.filter((r: any) => r.source_date < '2027-01-31');
+      mem.planning = mem.planning.filter((p: any) => p.date < '2027-01-31');
+      expect(await grens()).toBe('2027-01-30');
+      expect(await kop()).toContain('afwezigheden (30 dagen, t/m 30/01/2027). Uren');
     });
   });
 
