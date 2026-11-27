@@ -153,16 +153,95 @@ test('gewone iPhone vanaf het beginscherm: de statusbalk blijft meekleuren', asy
 });
 
 // Playwright emuleert scherm en viewport, maar levert geen veilige iOS-zones.
-// Vervang uitsluitend de twee CSS-omgevingswaarden in het gebouwde stylesheet.
-async function metZijInsets(page: Page, links: number, rechts: number) {
+// Vervang alleen de opgegeven omgevingswaarden, ook als de CSS een fallback heeft.
+async function metInsets(page: Page, waarden: { left?: string; right?: string; top?: string }) {
   await page.route('**/assets/index-*.css', async (route) => {
     const response = await route.fetch();
-    const css = (await response.text())
-      .replaceAll('env(safe-area-inset-left)', `${links}px`)
-      .replaceAll('env(safe-area-inset-right)', `${rechts}px`);
+    let css = await response.text();
+    for (const [kant, waarde] of Object.entries(waarden)) {
+      css = css.replace(new RegExp(`env\\(safe-area-inset-${kant}(?:,[^)]*)?\\)`, 'g'), waarde);
+    }
     await route.fulfill({ response, body: css });
   });
 }
+
+const metZijInsets = (page: Page, links: number, rechts: number) =>
+  metInsets(page, { left: `${links}px`, right: `${rechts}px` });
+
+test.describe('Maandplanning bij draaien van het geopende Duo-binnenscherm', () => {
+  // De geïnstalleerde webapp kan de iOS-zijstrook al buiten het venster hebben.
+  const liggend = { width: 867, height: 669 };
+  const staand = { width: 669, height: 951 };
+  test.use({ viewport: liggend, screen: { width: 466, height: 678 }, reducedMotion: 'reduce' });
+
+  for (const terug of [
+    { naam: 'actuele boveninset', breedte: 867, boven: 0 },
+    { naam: 'achtergebleven boveninset', breedte: 951, boven: 82 },
+  ]) {
+    test(`liggend, staand en terug met ${terug.naam}: de kop, periode en scrollpositie blijven op hun plaats`, async ({ page }) => {
+      await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
+      await page.clock.setFixedTime(new Date('2026-11-02T10:00:00+01:00'));
+      // Beide insets aan de zijkanten waren in deze Web.app-metingen nul.
+      await metInsets(page, { top: 'var(--test-boven, 0px)', left: '0px', right: '0px' });
+      const dates = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
+      const drivers = Array.from({ length: 24 }, (_, i) => ({ id: String(i + 1), name: `Chauffeur ${i + 1}`, section: null }));
+      const cells = Object.fromEntries(drivers.map(({ id }) => [id, {
+        '2026-11-16': { code: '2101', kind: 'service', label: '', segments: ['05:30 - 13:45'] },
+      }]));
+      await seed(page, {
+        user: ADMIN, view: 'bezetting',
+        extra: (pad) => pad.endsWith('/api/month-planning')
+          ? { month: '2026-11', dates, drivers, cells, geimporteerd: { eerste: dates[0], laatste: dates[29] } }
+          : undefined,
+      });
+      await page.goto('/maandplanning');
+      const kop = page.locator('[data-scroll-root] header.topbar');
+      const titel = page.getByRole('heading', { name: 'Maandplanning', level: 1 });
+      const scroll = page.locator('[data-scroll-root]');
+      const raster = page.getByRole('table', { name: 'Maandplanning per chauffeur en dag' });
+      const eersteDag = raster.getByRole('columnheader').nth(1);
+      await expect(eersteDag).toContainText('maandag 2 november');
+      await page.getByRole('button', { name: 'Volgende 2 weken' }).tap();
+      await expect(eersteDag).toContainText('maandag 16 november');
+      await page.evaluate(() => document.fonts.ready);
+      await scroll.evaluate(el => { el.scrollTop = 20; });
+      const scrollY = () => scroll.evaluate(el => el.scrollTop);
+      const kopY = () => kop.evaluate(el => el.getBoundingClientRect().y);
+      const titelY = () => titel.evaluate(el => el.getBoundingClientRect().y);
+      await expect.poll(scrollY).toBe(20);
+      await expect.poll(kopY).toBe(0);
+      const eersteTitelY = await titelY();
+      await scroll.evaluate(el => { el.scrollTop = 0; });
+
+      const draai = async (maat: typeof liggend, boven: number) => {
+        await page.evaluate(px => document.documentElement.style.setProperty('--test-boven', `${px}px`), boven);
+        await page.setViewportSize(maat);
+      };
+      await draai(staand, 82);
+      const strip = page.getByRole('tablist', { name: 'Kies een dag' });
+      await expect(strip.getByRole('tab').nth(15)).toHaveAttribute('aria-selected', 'true');
+      await expect.poll(scrollY).toBe(0);
+      await expect.poll(kopY).toBe(82);
+      const onderKop = await kop.evaluate(el => el.getBoundingClientRect().bottom);
+      await expect.poll(titelY).toBeGreaterThanOrEqual(onderKop);
+      await scroll.evaluate(el => { el.scrollTop = 20; });
+      await expect.poll(scrollY).toBe(20);
+
+      await draai({ width: terug.breedte, height: liggend.height }, terug.boven);
+      await expect(eersteDag).toContainText('maandag 16 november');
+      await expect(raster.getByRole('columnheader').last()).toContainText('zondag 29 november');
+      await expect.poll(scrollY).toBe(20);
+      await expect.poll(kopY).toBe(0);
+      await expect.poll(async () => Math.abs(await titelY() - eersteTitelY)).toBeLessThanOrEqual(1);
+      const account = kop.getByRole('button', { name: /^Accountmenu/ });
+      const menu = page.getByRole('menu', { name: 'Account' });
+      await expect.poll(() => account.evaluate(el => el.getBoundingClientRect().right)).toBeLessThanOrEqual(867 + 0.5);
+      await account.tap();
+      await expect(menu).toBeVisible();
+      await expect.poll(() => menu.evaluate(el => el.getBoundingClientRect().right)).toBeLessThanOrEqual(867 + 0.5);
+    });
+  }
+});
 
 // Xcode 27.2 houdt bij openvouwen soms de fysieke 466×678 aan, terwijl
 // het venster 951×669 wordt. De klok rechts krijgt dan 84 px via de safe-area.

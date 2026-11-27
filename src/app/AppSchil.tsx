@@ -365,7 +365,7 @@ export function AppSchil({
             icoon (goud = nu/live), en weer wit als de vinger terugschuift. */}
         <div
           ref={ptrIndicatorRef}
-          className="group pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-zwevend flex justify-center opacity-0"
+          className="group pointer-events-none absolute inset-x-0 top-[var(--schil-boveninset)] z-zwevend flex justify-center opacity-0"
         >
           <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white elev-2 ring-1 ring-hairline group-data-drempel:bg-oker-500">
             <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500 group-data-drempel:text-slate-950', ptrRefreshing && 'animate-spin')} />
@@ -394,7 +394,7 @@ export function AppSchil({
               notch ~30px vóór de schermrand (de inset is dan ~47px). */}
           {/* Sticky topbar begint onder de statusbalkstrook (die staat buiten de
               scroll-root, zie <main>), zodat overscroll de strook niet meeneemt. */}
-          <div className="sticky top-[env(safe-area-inset-top,0px)] z-topbar mx-gutter-neg md:-mx-7 mb-5">
+          <div className="sticky top-[var(--schil-boveninset)] z-topbar mx-gutter-neg md:-mx-7 mb-5">
             <header className={cn("topbar px-gutter md:px-7", isScrolled && "topbar--scrolled")}>
               {/* Rijhoogte gepind op --topbar-h (index.css, min de haarlijn):
                   StickyThead en Zijvak rekenen daarmee, en het skelet

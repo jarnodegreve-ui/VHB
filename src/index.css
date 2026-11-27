@@ -312,7 +312,8 @@
    --content-max(-breed) = de kolombreedte van schil en PageShell. */
 :root {
   --topbar-h: calc(4rem + 1px);
-  --sticky-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  --schil-boveninset: env(safe-area-inset-top, 0px);
+  --sticky-top: calc(var(--topbar-h) + var(--schil-boveninset));
   --content-max: 1200px;
   --content-max-breed: 1520px;
   /* Schil-maten (ronde 5, F1): stonden als losse arbitrary values in
@@ -1014,7 +1015,7 @@ html.dark {
      topbar nooit meer achter de statusbalk schuift. Buiten standalone is
      de inset 0 en is de strook onzichtbaar. */
   .statusbalk-strook {
-    height: env(safe-area-inset-top, 0px);
+    height: var(--schil-boveninset);
     background: var(--color-ink);
   }
 
@@ -1598,10 +1599,38 @@ html.dark {
    de topbarknoppen. De planning zelf houdt de normale md-paginabreedte. */
 @media (device-width: 466px) and (device-height: 678px), (device-width: 678px) and (device-height: 466px),
        (device-width: 669px) and (device-height: 951px), (device-width: 951px) and (device-height: 669px) {
+  @media (width: 669px) and (orientation: portrait) and (pointer: coarse) {
+    /* Reserveer de statusstrook als eerste blok in de normale inhoud. iOS
+       telt padding op het scrollvak op bij de sticky-offset van de kop. */
+    [data-plannerschil] [data-scroll-root]::before {
+      content: '';
+      display: block;
+      height: var(--schil-boveninset);
+    }
+  }
+
   @media (min-width: 48rem) and (orientation: landscape) and (pointer: coarse) {
+    /* In deze twee gemeten vensters staat de systeemstrook aan de zijkant.
+       Na een draai kan WebKit nog de 82 px bovenruimte van portret melden. */
+    @media (width: 951px) and (height: 669px), (width: 867px) and (height: 669px) {
+      [data-plannerschil], .vhb-plannerstart .opstartschil {
+        --schil-boveninset: 0px;
+        --sticky-top: var(--topbar-h);
+      }
+    }
+
+    @media (width: 951px) and (height: 669px) {
+      /* Bij volle breedte neemt de systeemstrook 84 px in. Zonder bruikbare
+         zijde beschermt de werkbalk beide kanten, ook bij omgekeerd draaien.
+         Op 867 px heeft iOS de strook al van het venster afgetrokken. */
+      [data-plannerschil] .topbar, .vhb-plannerstart .opstartschil .topbar {
+        --duo-zijreserve: max(0px, 84px - max(env(safe-area-inset-left), env(safe-area-inset-right)));
+      }
+    }
+
     [data-plannerschil] .topbar, .vhb-plannerstart .opstartschil .topbar {
-      padding-left: max(1.75rem, env(safe-area-inset-left));
-      padding-right: max(1.75rem, env(safe-area-inset-right));
+      padding-left: max(1.75rem, env(safe-area-inset-left), var(--duo-zijreserve, 0px));
+      padding-right: max(1.75rem, env(safe-area-inset-right), var(--duo-zijreserve, 0px));
     }
   }
 }
