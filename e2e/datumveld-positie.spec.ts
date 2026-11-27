@@ -58,6 +58,22 @@ async function metingen(page: Page, kiezer: Locator) {
 
 const opEind = (p: Plek, eind: { top: number; left: number }) => Math.abs(p.top - eind.top) <= 1 && Math.abs(p.left - eind.left) <= 1;
 
+/** Op mobiele schaal kan afronding aan een rand een fractie van een
+ * CSS-pixel kosten. IntersectionObserver ziet ook wat de kiezer zelf afknipt. */
+async function volledigInBeeld(doel: Locator) {
+  await expect.poll(() => doel.evaluate(el => new Promise<number>(klaar => {
+    const waarnemer = new IntersectionObserver(([meting]) => {
+      waarnemer.disconnect();
+      const vak = meting.boundingClientRect;
+      const zicht = meting.intersectionRect;
+      klaar(meting.isIntersecting && vak.width > 0 && vak.height > 0
+        ? Math.max(zicht.left - vak.left, vak.right - zicht.right, zicht.top - vak.top, vak.bottom - zicht.bottom)
+        : Infinity);
+    });
+    waarnemer.observe(el);
+  })), 'geen rand valt meer dan één CSS-pixel buiten beeld').toBeLessThanOrEqual(1);
+}
+
 test('datumkiezer in een modal (nieuwe werkprestatie): nooit op (0,0), focus pas op de eindplek', async ({ page }) => {
   await volgKiezer(page);
   await seed(page, { user: ADMIN });
@@ -130,17 +146,21 @@ test.describe('een beheerder vouwt een open kiezer op de Duo', () => {
 
       await page.setViewportSize({ width: 594, height: 368 });
       await expect(kiezer).toHaveAttribute('aria-modal', 'true');
-      await expect(kiezer).toBeInViewport({ ratio: 1 });
+      await volledigInBeeld(kiezer);
       await expect(cursor).toHaveAttribute(kenmerk, keuze!);
       // Ook op de korte buitenkant kan de planner van de bovenste knop naar de laatste actie scrollen.
       for (const knop of [kiezer.getByRole('button').first(), kiezer.getByRole('button').last()]) {
         await knop.scrollIntoViewIfNeeded();
-        await expect(knop).toBeInViewport({ ratio: 1 });
+        await volledigInBeeld(knop);
+        await expect.poll(() => knop.evaluate(el => {
+          const vak = el.getBoundingClientRect();
+          return el.contains(document.elementFromPoint(vak.x + vak.width / 2, vak.y + vak.height / 2));
+        }), 'de tik op het midden bereikt de knop').toBe(true);
       }
 
       await page.setViewportSize({ width: 951, height: 585 });
       await expect(kiezer).not.toHaveAttribute('aria-modal', 'true');
-      await expect(kiezer).toBeInViewport({ ratio: 1 });
+      await volledigInBeeld(kiezer);
       await expect(cursor).toHaveAttribute(kenmerk, keuze!);
       expect(await page.evaluate(() => history.state.vhbOverlay)).toBe(stap);
       await page.keyboard.press('Escape');
