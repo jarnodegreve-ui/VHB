@@ -1610,21 +1610,22 @@ html.dark {
   }
 
   @media (min-width: 48rem) and (orientation: landscape) and (pointer: coarse) {
-    /* In deze twee gemeten vensters staat de systeemstrook aan de zijkant.
-       Na een draai kan WebKit nog de 82 px bovenruimte van portret melden. */
-    @media (width: 951px) and (height: 669px), (width: 867px) and (height: 669px) {
+    /* In de geïnstalleerde webapp staat de statusstrook hier aan een
+       zijkant. Bij terugdraaien kan de layout-viewport nog 587 px hoog zijn
+       en 82 px bovenruimte melden, terwijl het venster al 951 × 669 is. */
+    @media (display-mode: standalone) {
       [data-plannerschil], .vhb-plannerstart .opstartschil {
         --schil-boveninset: 0px;
         --sticky-top: var(--topbar-h);
       }
-    }
 
-    @media (width: 951px) and (height: 669px) {
-      /* Bij volle breedte neemt de systeemstrook 84 px in. Zonder bruikbare
-         zijde beschermt de werkbalk beide kanten, ook bij omgekeerd draaien.
-         Op 867 px heeft iOS de strook al van het venster afgetrokken. */
-      [data-plannerschil] .topbar, .vhb-plannerstart .opstartschil .topbar {
-        --duo-zijreserve: max(0px, 84px - max(env(safe-area-inset-left), env(safe-area-inset-right)));
+      /* In het volle binnenscherm (951 px) hoort de systeemstrook 84 px
+         te krijgen. Bij ontbrekende richting blijven beide kanten vrij.
+         In de smallere 867 px heeft iOS deze ruimte zelf al afgetrokken. */
+      @media (min-width: 900px) {
+        [data-plannerschil] .topbar, .vhb-plannerstart .opstartschil .topbar {
+          --duo-zijreserve: max(0px, 84px - max(env(safe-area-inset-left), env(safe-area-inset-right)));
+        }
       }
     }
 

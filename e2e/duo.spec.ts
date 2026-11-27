@@ -154,12 +154,21 @@ test('gewone iPhone vanaf het beginscherm: de statusbalk blijft meekleuren', asy
 
 // Playwright emuleert scherm en viewport, maar levert geen veilige iOS-zones.
 // Vervang alleen de opgegeven omgevingswaarden, ook als de CSS een fallback heeft.
-async function metInsets(page: Page, waarden: { left?: string; right?: string; top?: string }) {
+async function metInsets(page: Page, waarden: { left?: string; right?: string; top?: string }, duoVanafBeginscherm = false) {
   await page.route('**/assets/index-*.css', async (route) => {
     const response = await route.fetch();
     let css = await response.text();
     for (const [kant, waarde] of Object.entries(waarden)) {
       css = css.replace(new RegExp(`env\\(safe-area-inset-${kant}(?:,[^)]*)?\\)`, 'g'), waarde);
+    }
+    if (duoVanafBeginscherm) {
+      // Playwright draait een browsertab. setViewportSize verandert ook het
+      // CSS-deviceformaat; op deze Duo bleef het bij draaien juist 466×678.
+      css = css.replace(/\(display-mode:\s*standalone\)/g, '(min-width:0px)')
+        .replace(/\(device-(width|height):\s*(\d+)px\)/g, (_, as, px) => {
+          const toestelmaat = as === 'width' ? 466 : 678;
+          return Number(px) === toestelmaat ? '(min-width:0px)' : '(max-width:0px)';
+        });
     }
     await route.fulfill({ response, body: css });
   });
@@ -175,14 +184,18 @@ test.describe('Maandplanning bij draaien van het geopende Duo-binnenscherm', () 
   test.use({ viewport: liggend, screen: { width: 466, height: 678 }, reducedMotion: 'reduce' });
 
   for (const terug of [
-    { naam: 'actuele boveninset', breedte: 867, boven: 0 },
-    { naam: 'achtergebleven boveninset', breedte: 951, boven: 82 },
+    { naam: 'actuele boveninset', breedte: 867, hoogte: 669, boven: 0 },
+    { naam: 'achtergebleven boveninset', breedte: 951, hoogte: 669, boven: 82 },
+    { naam: 'achtergebleven boveninset en verkorte CSS-hoogte', breedte: 951, hoogte: 587, boven: 82 },
   ]) {
     test(`liggend, staand en terug met ${terug.naam}: de kop, periode en scrollpositie blijven op hun plaats`, async ({ page }) => {
-      await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'standalone', { value: true });
+        Object.defineProperties(screen, { width: { value: 466 }, height: { value: 678 } });
+      });
       await page.clock.setFixedTime(new Date('2026-11-02T10:00:00+01:00'));
       // Beide insets aan de zijkanten waren in deze Web.app-metingen nul.
-      await metInsets(page, { top: 'var(--test-boven, 0px)', left: '0px', right: '0px' });
+      await metInsets(page, { top: 'var(--test-boven, 0px)', left: '0px', right: '0px' }, true);
       const dates = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
       const drivers = Array.from({ length: 24 }, (_, i) => ({ id: String(i + 1), name: `Chauffeur ${i + 1}`, section: null }));
       const cells = Object.fromEntries(drivers.map(({ id }) => [id, {
@@ -227,7 +240,15 @@ test.describe('Maandplanning bij draaien van het geopende Duo-binnenscherm', () 
       await scroll.evaluate(el => { el.scrollTop = 20; });
       await expect.poll(scrollY).toBe(20);
 
-      await draai({ width: terug.breedte, height: liggend.height }, terug.boven);
+      // Bij de zichtbare terugrotatie mat CSS 587 px terwijl JS nog 669 px zag.
+      if (terug.hoogte !== liggend.height) {
+        await page.evaluate(px => Object.defineProperty(window, 'innerHeight', { value: px }), liggend.height);
+      }
+      await draai({ width: terug.breedte, height: terug.hoogte }, terug.boven);
+      expect(await page.evaluate(px => ({
+        cssHoogteKlopt: matchMedia(`(height: ${px}px)`).matches,
+        vensterhoogte: innerHeight,
+      }), terug.hoogte)).toEqual({ cssHoogteKlopt: true, vensterhoogte: liggend.height });
       await expect(eersteDag).toContainText('maandag 16 november');
       await expect(raster.getByRole('columnheader').last()).toContainText('zondag 29 november');
       await expect.poll(scrollY).toBe(20);
@@ -248,6 +269,7 @@ test.describe('Maandplanning bij draaien van het geopende Duo-binnenscherm', () 
 for (const geval of [
   { naam: 'Duo na openvouwen', screen: { width: 466, height: 678 }, hoogte: 669, rechts: 84, marge: 84 },
   { naam: 'Duo binnen zonder systeemstrook in Safari', screen: { width: 669, height: 951 }, hoogte: 585, rechts: 0, marge: 28 },
+  { naam: 'Duo in Safari bij dezelfde CSS-hoogte als de gedraaide webapp', screen: { width: 466, height: 678 }, hoogte: 587, rechts: 0, marge: 28 },
   { naam: 'andere tablet met dezelfde vensterbreedte', screen: { width: 820, height: 1180 }, hoogte: 669, rechts: 84, marge: 28 },
 ]) {
   test.describe(geval.naam, () => {
