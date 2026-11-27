@@ -119,7 +119,7 @@ const mem = vi.hoisted(() => ({
   // simuleert een niet-gedraaide migratie (probe → null / 42P01).
   clientErrorStatus: [] as any[],
   clientErrorStatusTabel: true,
-  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; text?: string; attachments?: Array<{ filename: string; content: unknown; contentType?: string }> }>,
+  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; soort?: string; text?: string; attachments?: Array<{ filename: string; content: unknown; contentType?: string }> }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
   // De laatst opgeslagen back-up, zoals de restore-proef hem uit de bucket leest.
   laatsteBackup: null as { filename: string; body: string } | null,

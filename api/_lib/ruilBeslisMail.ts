@@ -22,6 +22,13 @@
  *
  * De mail komt ná de beslissing en houdt ze nooit tegen: een fout wordt
  * gelogd, niet doorgegeven.
+ *
+ * Eén bewust verschil met de push: de lijstroute neemt de ontvangers van de
+ * push uit het record van vóór de save, de mail neemt ze uit het record dat
+ * geschreven en doorgevoerd is (hetzelfde als waar de tekst op gebouwd is).
+ * Zet een admin in dezelfde save een andere collega, dan gaat de mail naar
+ * wie nu in de ruil staat, want de feiten in de mail noemen die collega. De
+ * app zelf beslist via PATCH, waar dat verschil niet bestaat.
  */
 import { sendEmail } from "./email.js";
 import { DAG_DMJ, isHandmatigeWissel, normalizeSwapType } from "./helpers.js";
@@ -56,7 +63,10 @@ export const ruilMailFeiten = async (ruil: RuilRecord): Promise<{ dienst: string
 
 /** Welke uitkomst meldt de mail voor deze stap? Null = geen mail. */
 export const ruilUitkomstVoorMail = (van: string, naar: string, doorStaf: boolean): RuilUitkomst | null => {
-  if (!doorStaf) return null;
+  // Een PATCH van staf met dezelfde status schrijft opnieuw (bewust ongewijzigd
+  // in de routes) en stuurt de push nog eens; een mail blijft liggen, dus die
+  // gaat alleen bij een echte overgang (tegenlezing 27-11).
+  if (!doorStaf || van === naar) return null;
   if (naar === "approved") return "goedgekeurd";
   if (naar !== "rejected" && naar !== "cancelled") return null;
   if (van === "approved") return "teruggedraaid";

@@ -2302,14 +2302,27 @@ describe('dienstruil beslist: mail naar de aanvrager en de collega (27-11)', () 
     });
 
     it(`${weg}: de collega accepteert of weigert, de planning besliste niet, dus geen mail`, async () => {
+      const status = () => mem.swaps.find((s: any) => s.id === 's-m')!.status;
       zaai('pending');
       expect((await zet(weg, 'tok-b', 'accepted')).status).toBe(200);
+      expect(status()).toBe('accepted');
       expect(beslisMails()).toEqual([]);
       zaai('pending');
       expect((await zet(weg, 'tok-b', 'rejected')).status).toBe(200);
+      expect(status()).toBe('rejected');
       expect(beslisMails()).toEqual([]);
     });
   }
+
+  it('dezelfde status nog eens opgeven is geen nieuwe beslissing: geen tweede mail', async () => {
+    for (const status of ['approved', 'rejected', 'cancelled']) {
+      mem.emailsSent = [];
+      zaai(status, { decidedAt: '2026-06-13T08:00:00Z' });
+      const res = await zet('PATCH', 'tok-planner', status);
+      expect(res.status, status).toBe(200);
+      expect(beslisMails(), status).toEqual([]);
+    }
+  });
 
   it('de aanvrager trekt zijn aanvraag in: geen mail', async () => {
     zaai('pending');
