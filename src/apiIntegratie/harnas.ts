@@ -119,7 +119,7 @@ const mem = vi.hoisted(() => ({
   // simuleert een niet-gedraaide migratie (probe → null / 42P01).
   clientErrorStatus: [] as any[],
   clientErrorStatusTabel: true,
-  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; text?: string; attachments?: Array<{ filename: string; content: unknown; contentType?: string }> }>,
+  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; soort?: string; text?: string; attachments?: Array<{ filename: string; content: unknown; contentType?: string }> }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
   // De laatst opgeslagen back-up, zoals de restore-proef hem uit de bucket leest.
   laatsteBackup: null as { filename: string; body: string } | null,
@@ -389,7 +389,7 @@ vi.mock('../../api/_lib/email.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
   sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
   sendEmail: vi.fn(async (opts: any) => {
-    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, soort: opts.soort, text: opts.text, attachments: opts.attachments });
     mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
     return { ok: true, mocked: true };
   }),

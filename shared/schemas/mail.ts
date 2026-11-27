@@ -34,6 +34,7 @@ export const MAIL_SOORTEN: readonly MailSoortInfo[] = [
   { soort: 'verlof-beslissing', naam: 'Verlofbeslissing', wanneer: 'Bij goedkeuren, afwijzen of annuleren van verlof, nooit bij ziekte', ontvangers: 'De chauffeur van de aanvraag', push: true },
   { soort: 'ziekmelding', naam: 'Ziekmelding', wanneer: 'Als een planner iemand ziek meldt', ontvangers: 'Admins, elk apart (planners krijgen alleen de push)', push: true },
   { soort: 'ruilaanvraag', naam: 'Dienstruil aangevraagd', wanneer: 'Als een chauffeur een dienstruil of overname aanvraagt', ontvangers: 'Admins, elk apart (de collega krijgt de push)', push: true },
+  { soort: 'ruil-beslissing', naam: 'Dienstruil beslist', wanneer: 'Als de planning een aangevraagde dienstruil of overname goedkeurt, afwijst, annuleert of terugdraait', ontvangers: 'De aanvrager en de collega, elk apart', push: true },
   { soort: 'dringende-update', naam: 'Dringende update', wanneer: 'Bij het publiceren van een dringende update', ontvangers: 'Alle actieve gebruikers met een e-mailadres', push: true },
   { soort: 'vervaldatum', naam: 'Vervaldatum document', wanneer: '90, 30, 7 en 0 dagen vóór het verlopen van Code 95 of medische schifting', ontvangers: 'De chauffeur zelf', push: true },
   { soort: 'weekoverzicht', naam: 'Weekoverzicht', wanneer: 'Elke maandag om 06:00: meldingen, cijfers van de week, vervaldata en openstaande diensten', ontvangers: 'Admins die systeemmail willen (of ALERT_EMAIL)' },

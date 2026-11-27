@@ -1,5 +1,5 @@
 import { bouwUitnodigingMail, bouwVerlofBeslissingMail, bouwVervaldatumMail, bouwWelkomMail, portalUrl, type MailTekst } from "./email.js";
-import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwDringendeUpdateMail, bouwOverzichtMail, bouwRestoreProefMail, bouwRuilaanvraagMail, bouwTestMail, bouwWachtwoordMail, bouwZiekmeldingMail } from "./mailTeksten.js";
+import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwDringendeUpdateMail, bouwOverzichtMail, bouwRestoreProefMail, bouwRuilaanvraagMail, bouwRuilBeslissingMail, bouwTestMail, bouwWachtwoordMail, bouwZiekmeldingMail } from "./mailTeksten.js";
 
 /**
  * Voorbeeld van elke mailsoort voor Beheer › Mails: de échte bouwer van die
@@ -36,6 +36,18 @@ export const voorbeeldMail = (soort: string): MailTekst | null => {
         dienst: "dienst 2101 op 16/10/2026",
         tegenprestatie: "dienst 2306 op 18/10/2026",
         reden: "Trouwfeest van mijn zus.",
+        overname: false,
+        doelPad: "/dienstruil/voorbeeld",
+      });
+    case "ruil-beslissing":
+      return bouwRuilBeslissingMail({
+        uitkomst: "goedgekeurd",
+        ontvanger: "Jan Peeters",
+        zin: "Goedgekeurd: je rijdt dienst 2101 op vr 16 okt, Dirk Maes rijdt dienst 2306 op zo 18 okt.",
+        aanvrager: "Dirk Maes",
+        collega: "Jan Peeters",
+        dienst: "dienst 2101 op 16/10/2026",
+        tegenprestatie: "dienst 2306 op 18/10/2026",
         overname: false,
         doelPad: "/dienstruil/voorbeeld",
       });

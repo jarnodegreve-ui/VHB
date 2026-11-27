@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 import { sendPushToUsers } from "./push.js";
 import { sendEmail } from "./email.js";
 import { bouwRuilaanvraagMail } from "./mailTeksten.js";
+import { mailRuilBeslissing, ruilMailFeiten } from "./ruilBeslisMail.js";
 import type { AuthenticatedRequest } from "./types.js";
 import { isStafRol, authenticate, requireRole } from "./middleware.js";
 import { laatsteUitvoeringPerRuil, uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from "./ruilUitvoeringen.js";
@@ -516,6 +517,14 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
         body: melding.body,
         url: recordUrl("ruil-verzoeken", current.id),
       })));
+      // Besliste de planning, dan krijgen de aanvrager en de collega ook een
+      // mail (27-11, vraag Jarno; soort ruil-beslissing, uit te zetten in
+      // Beheer › Mails). Zelfde gegevens als de push hierboven; de mail houdt
+      // de beslissing nooit tegen.
+      await mailRuilBeslissing({
+        ruil: current, namen: meldingNamen, van: stap.van, naar: stap.naar, doorStaf: staf,
+        planning: i === 0 ? meldingPlanning : null, actorId: selfId, door: userName(selfId), users: usersForLog,
+      });
     }
     // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route).
     if (status === "accepted") {
@@ -1370,6 +1379,12 @@ export function mountRuilRoutes(app: express.Express) {
             body: melding.body,
             url: recordUrl("ruil-verzoeken", next.id),
           })));
+          // De mail bij een beslissing van de planning, zoals in de delta-route
+          // (api/_lib/ruilBeslisMail.ts): zelfde record, namen en stand als de push.
+          await mailRuilBeslissing({
+            ruil: next, namen: meldingNamen, van: stap.van, naar: stap.naar, doorStaf: staf,
+            planning: i === 0 ? planning : null, actorId, door: userName(actorId), users: usersForLog,
+          });
           // Geaccepteerd = er wacht een validatie op de planner, die kreeg
           // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
           // actor zelf, als die toevallig planner/admin is).
@@ -1503,24 +1518,16 @@ export function mountRuilRoutes(app: express.Express) {
         try {
           const admins = usersForLog.filter((u) => u.role === "admin" && u.isActive !== false && u.email).map((u) => u.email as string);
           if (admins.length > 0) {
-            // Datum en dienstnummer staan op het record sinds de shift_info-
-            // migratie; voor een ouder record de planningrij zelf.
-            const shift = next.shiftDate && next.shiftLine ? null : await getShiftById(String(next.shiftId ?? ""));
-            const dienstDatum = String(next.shiftDate ?? shift?.date ?? "");
-            const dienstNummer = String(next.shiftLine ?? shift?.line ?? "").trim() || "?";
-            const terugCode = String(next.returnCode ?? "").trim();
-            const tegenprestatie = isTakeover
-              ? "Geen (overname)"
-              : !terugCode || terugCode.toLowerCase() === "vrij"
-                ? "Vrije dag"
-                : `dienst ${terugCode}${next.returnDate ? ` op ${DAG_DMJ(String(next.returnDate))}` : ""}`;
+            // Dienst en tegenprestatie: dezelfde bron als de mail bij de
+            // beslissing (ruilMailFeiten in api/_lib/ruilBeslisMail.ts).
+            const feiten = await ruilMailFeiten(next);
             const { onderwerp, html, text } = bouwRuilaanvraagMail({
               aanvrager: userName(next.requesterId),
               collega: next.targetDriverId ? userName(String(next.targetDriverId)) : null,
-              dienst: `dienst ${dienstNummer}${dienstDatum ? ` op ${DAG_DMJ(dienstDatum)}` : ""}`,
-              tegenprestatie,
+              dienst: feiten.dienst,
+              tegenprestatie: feiten.tegenprestatie,
               reden: String(next.reason ?? "").trim(),
-              overname: isTakeover,
+              overname: feiten.overname,
               doelPad: recordUrl("ruil-verzoeken", next.id),
             });
             for (const adres of admins) {
