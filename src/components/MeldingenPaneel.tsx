@@ -50,7 +50,7 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
   return (
     // Alleen gemount terwijl het paneel open is (lazy vanuit MeldingenBel),
     // dus `open` staat vast; mobielVol = losgekoppeld van de bel op de telefoon.
-    <Popover open rol="menu" label="Meldingen" laag="menu" breedte="xl" mobielVol>
+    <Popover open rol="menu" label="Meldingen" laag="menu" breedte="xl" mobielVol className="meldingen-menu">
         <PopoverKop
           titel="Meldingen"
           aside={ongelezenMeldingen > 0 && (
@@ -67,61 +67,63 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
           )}
         />
 
-        {zichtbaar.length === 0 ? (
-          <div className="px-3 py-3">
-            <p className="text-sm font-semibold text-slate-800">Geen meldingen</p>
-            <p className="text-xs font-normal text-slate-500">Zodra er iets voor jou is, staat het hier.</p>
-          </div>
-        ) : (
-          zichtbaar.map((m) => {
-            const ongelezen = !m.gelezenOp;
-            return (
-              /* rauw: menurij met een eigen kruisje ernaast — een Button kan
-                 geen tweede knop in zijn raakvlak dragen. */
-              <div key={m.id} className="group/rij flex items-start gap-1 rounded-xl transition-colors duration-fast hover:bg-surface-soft-hover">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => openMelding(m)}
-                  className={cn(
-                    'flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3 py-2.5 text-left',
-                    !m.doel && 'cursor-default',
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
+        <div className="meldingen-lijst">
+          {zichtbaar.length === 0 ? (
+            <div className="px-3 py-3">
+              <p className="text-sm font-semibold text-slate-800">Geen meldingen</p>
+              <p className="text-xs font-normal text-slate-500">Zodra er iets voor jou is, staat het hier.</p>
+            </div>
+          ) : (
+            zichtbaar.map((m) => {
+              const ongelezen = !m.gelezenOp;
+              return (
+                /* rauw: menurij met een eigen kruisje ernaast — een Button kan
+                   geen tweede knop in zijn raakvlak dragen. */
+                <div key={m.id} className="group/rij flex items-start gap-1 rounded-xl transition-colors duration-fast hover:bg-surface-soft-hover">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => openMelding(m)}
                     className={cn(
-                      'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
-                      ongelezen ? 'bg-oker-500/15 text-oker-700' : 'bg-slate-500/12 text-slate-500',
+                      'flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3 py-2.5 text-left',
+                      !m.doel && 'cursor-default',
                     )}
                   >
-                    {ICOON_PER_SOORT[m.soort] ?? ICOON_PER_SOORT.systeem}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className={cn('block truncate text-sm', ongelezen ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
-                      {datumsLeesbaar(m.titel)}
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
+                        ongelezen ? 'bg-oker-500/15 text-oker-700' : 'bg-slate-500/12 text-slate-500',
+                      )}
+                    >
+                      {ICOON_PER_SOORT[m.soort] ?? ICOON_PER_SOORT.systeem}
                     </span>
-                    {m.tekst && (
-                      <span className="mt-0.5 block truncate text-xs font-normal text-slate-500">{datumsLeesbaar(m.tekst)}</span>
-                    )}
-                  </span>
-                  <span className="shrink-0 pt-0.5 text-xs font-medium text-slate-500">{tijdVan(m.createdAt)}</span>
-                </button>
-                {/* Het kruisje verschijnt bij hover of focus; op een
-                    aanraakscherm (geen hover) staat het er altijd. */}
-                <IconButton
-                  label="Melding verwijderen"
-                  variant="ghost"
-                  size="sm"
-                  className="mt-1 mr-1 shrink-0 text-slate-500 opacity-100 hover:text-slate-800 pointer-fine:opacity-0 pointer-fine:group-hover/rij:opacity-100 pointer-fine:focus-visible:opacity-100"
-                  onClick={() => verwijderMeldingMetOngedaan(m.id, verwijderMelding, herstelMelding)}
-                >
-                  <X size={14} />
-                </IconButton>
-              </div>
-            );
-          })
-        )}
+                    <span className="min-w-0 flex-1">
+                      <span className={cn('block truncate text-sm', ongelezen ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
+                        {datumsLeesbaar(m.titel)}
+                      </span>
+                      {m.tekst && (
+                        <span className="mt-0.5 block truncate text-xs font-normal text-slate-500">{datumsLeesbaar(m.tekst)}</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 pt-0.5 text-xs font-medium text-slate-500">{tijdVan(m.createdAt)}</span>
+                  </button>
+                  {/* Het kruisje verschijnt bij hover of focus; op een
+                      aanraakscherm (geen hover) staat het er altijd. */}
+                  <IconButton
+                    label="Melding verwijderen"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 mr-1 shrink-0 text-slate-500 opacity-100 hover:text-slate-800 pointer-fine:opacity-0 pointer-fine:group-hover/rij:opacity-100 pointer-fine:focus-visible:opacity-100"
+                    onClick={() => verwijderMeldingMetOngedaan(m.id, verwijderMelding, herstelMelding)}
+                  >
+                    <X size={14} />
+                  </IconButton>
+                </div>
+              );
+            })
+          )}
+        </div>
 
         <PopoverVoet>
           <MenuItem icon={<Bell size={16} />} iconClassName="text-slate-500" trailing={<ArrowUpRight size={14} />} onClick={() => ga('meldingen')}>

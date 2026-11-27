@@ -185,23 +185,50 @@ describe('lagenstapel', () => {
     expect(openLagen()).toEqual(['dialoog']);
   });
 
-  it('mobielVol-popover op de telefoon: de terugknop sluit eerst het paneel', async () => {
-    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('max-width'), media: q, addEventListener: () => {}, removeEventListener: () => {} }));
+  it.each([
+    { toestel: 'telefoon', scherm: [390, 844], smal: true, touch: true, planner: false, stap: true },
+    { toestel: 'Duo binnen staand', scherm: [669, 951], smal: false, touch: true, planner: true, stap: true },
+    { toestel: 'Duo binnen liggend', scherm: [951, 669], smal: false, touch: true, planner: true, stap: true },
+    { toestel: 'Duo binnen, chauffeursweergave', scherm: [669, 951], smal: false, touch: true, planner: false, stap: false },
+    { toestel: 'tablet met hetzelfde venster', scherm: [820, 1180], smal: false, touch: true, planner: true, stap: false },
+    { toestel: 'desktop met dezelfde schermmaat', scherm: [669, 951], smal: false, touch: false, planner: true, stap: false },
+  ])('$toestel: terug vanuit een mobielVol-menu', async ({ scherm, smal, touch, planner, stap }) => {
+    vi.stubGlobal('screen', { width: scherm[0], height: scherm[1] });
+    let vensterSmal = smal;
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q.includes('max-width') ? vensterSmal : q === '(pointer: coarse)' && touch,
+      media: q, addEventListener: () => {}, removeEventListener: () => {},
+    }));
     function Bel() {
-      const d = useDropdown({ mobielVol: true });
+      const d = useDropdown({ mobielVol: true, terugBijVouwen: planner });
       return (
         <div ref={d.wortel}>
           {/* rauw: testattrap */}
-          <button type="button" onClick={() => d.setOpen(true)}>Meldingen</button>
+          <button type="button" aria-expanded={d.open} onClick={() => d.setOpen(true)}>Meldingen</button>
           {d.open && <p>Meldingenpaneel</p>}
         </div>
       );
     }
-    render(<Bel />);
+    const { rerender } = render(<Bel />);
     fireEvent.click(screen.getByRole('button', { name: 'Meldingen' }));
-    expect(typeof bovenste()).toBe('string');
-    await act(async () => { window.history.back(); });
-    await waitFor(() => expect(screen.queryByText('Meldingenpaneel')).toBeNull());
+    if (stap) {
+      const id = bovenste();
+      expect(typeof id).toBe('string');
+      // Dichtvouwen wisselt het fysieke scherm en de breedte. De open laag
+      // deelt nog steeds dezelfde terugstap met het oorspronkelijke menu.
+      vensterSmal = true;
+      vi.stubGlobal('screen', { width: 678, height: 466 });
+      fireEvent(window, new Event('resize'));
+      rerender(<Bel />);
+      expect(bovenste()).toBe(id);
+      await act(async () => { window.history.back(); });
+      await waitFor(() => expect(screen.queryByText('Meldingenpaneel')).toBeNull());
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Meldingen' }));
+    } else {
+      expect(bovenste()).toBeUndefined();
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByText('Meldingenpaneel')).toBeNull();
+    }
     expect(pad()).toBe('/hier');
     await eenKeerTerugIsVorigePagina();
   });

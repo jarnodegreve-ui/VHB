@@ -29,16 +29,36 @@
     <!-- Warme start vóór de eerste paint (22-09): staat er een opgeslagen
          sessie, dan toont de voorgerenderde schil in #root het skelet van de
          app in plaats van het carbon laadscherm (zie de stijlregels hieronder
-         en scripts/voorrender-schil.tsx). Zelfde sleutel als
-         heeftOpgeslagenSessie() in src/app/AppSkeleton.tsx. -->
+         en scripts/voorrender-schil.mjs). Zelfde sleutel als
+         heeftOpgeslagenSessie() in src/app/AppSkeleton.tsx. Op het staande
+         Duo-buitenscherm kiest de laatste rol ook de marges van het skelet,
+         uitsluitend wanneer de opgeslagen sessie bij diezelfde gebruiker hoort. -->
     <script>
       (function () {
         try {
           var t = localStorage.getItem('vhb-theme') || localStorage.getItem('vhb-theme-effectief');
           if (t === 'dark') document.documentElement.classList.add('dark');
+          var sessieSleutel = null;
           for (var i = 0; i < localStorage.length; i++) {
             var k = localStorage.key(i) || '';
-            if (k.indexOf('sb-') === 0 && k.slice(-11) === '-auth-token') { document.documentElement.classList.add('vhb-warm'); break; }
+            if (k.indexOf('sb-') !== 0 || k.slice(-11) !== '-auth-token') continue;
+            document.documentElement.classList.add('vhb-warm');
+            if (!window.matchMedia('(device-width: 466px) and (device-height: 678px) and (orientation: portrait)').matches) break;
+            if (sessieSleutel) { sessieSleutel = null; break; }
+            sessieSleutel = k;
+          }
+          if (sessieSleutel) {
+            var rol = localStorage.getItem('vhb-last-role');
+            if (rol === 'planner' || rol === 'admin') {
+              var eigenaar = localStorage.getItem('vhb-last-auth-id');
+              var sessie = JSON.parse(localStorage.getItem(sessieSleutel));
+              if (eigenaar && eigenaar !== '-' && sessie && sessie.user && sessie.user.id === eigenaar) {
+                document.documentElement.classList.add('vhb-plannerstart');
+                window.addEventListener('vhb-wis-prive', function () {
+                  document.documentElement.classList.remove('vhb-plannerstart');
+                }, { once: true });
+              }
+            }
           }
         } catch (e) { /* privacy-modus: val terug op licht en op het laadscherm */ }
       })();

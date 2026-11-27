@@ -27,7 +27,7 @@ import { addDaysIso, formatDayMonth, maandNaarParam, mondayOf, monthOf, PLANNING
  * dezelfde toestand en effecten; het gedrag ligt vast in
  * useTweewekenVenster.test.tsx.
  */
-export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaandParam, dagParam, setViewMonth, todayIso }: {
+export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaandParam, dagParam, setViewMonth, todayIso, toonRaster, dagBijUitvouwen, toonRasterDag }: {
   /** De maand uit de URL waarop het scherm opende, of null. */
   startMaand: Date | null;
   monthParam: string;
@@ -36,6 +36,10 @@ export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaa
   dagParam: string | null;
   setViewMonth: (maand: Date) => void;
   todayIso: string;
+  toonRaster: boolean;
+  /** Dag van de plannerdaglijst of haar open cel; null voor de chauffeursweergave. */
+  dagBijUitvouwen: string | null;
+  toonRasterDag: (dag: string) => void;
 }) {
   // Desktop: vast venster van twee volle weken (ma–zo + ma–zo), beginnend op
   // de maandag van de huidige week — ook als er al dagen voorbij zijn (vraag
@@ -75,6 +79,26 @@ export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaa
   // apart geladen zodat de kolommen na de maandgrens niet leeg blijven.
   const windowDates = useMemo(() => Array.from({ length: 14 }, (_, i) => addDaysIso(windowStart, i)), [windowStart]);
 
+  // Draait de planner van raster naar lijst, dan begint de lijst binnen
+  // dezelfde twee weken. Alleen een nieuwe keuze op het smalle scherm mag
+  // het raster daarna verzetten, ook als die periode geen kiesbare dag had.
+  const wasRaster = useRef(toonRaster);
+  const daglijstKoos = useRef(true);
+  const meldDagkeuze = () => { daglijstKoos.current = true; };
+  useLayoutEffect(() => {
+    const wisselt = wasRaster.current !== toonRaster;
+    wasRaster.current = toonRaster;
+    if (!wisselt || !dagBijUitvouwen) return;
+    if (!toonRaster) {
+      daglijstKoos.current = false;
+      const dag = windowDates.includes(dagBijUitvouwen)
+        ? dagBijUitvouwen : windowDates.find(d => monthOf(d) === monthParam);
+      if (dag) toonRasterDag(dag);
+    } else if (daglijstKoos.current && !windowDates.includes(dagBijUitvouwen)) {
+      setWindowStart(mondayOf(dagBijUitvouwen));
+    }
+  }, [toonRaster, dagBijUitvouwen, windowDates, monthParam, toonRasterDag]);
+
   // Venster verschuiven = twee weken op; de hoofdmaand volgt de maand waarin
   // het grootste deel van het venster valt (de tweede maandag), zodat export
   // en overzicht bij "de maand die je bekijkt" horen.
@@ -96,7 +120,7 @@ export function useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaa
 
   const windowLabel = `${weekRangeLabel(windowDates)} · ${formatDayMonth(windowDates[0])} – ${formatDayMonth(windowDates[windowDates.length - 1])} ${windowDates[windowDates.length - 1].slice(0, 4)}`;
 
-  return { windowStart, setWindowStart, windowDates, windowLabel, goPrevWindow, goNextWindow, naarVandaag };
+  return { windowStart, setWindowStart, windowDates, windowLabel, goPrevWindow, goNextWindow, naarVandaag, meldDagkeuze };
 }
 
 /** De sleutel van één maand in het geheugen van de schermen

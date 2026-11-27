@@ -106,3 +106,46 @@ test('maandkiezer op een gescrolde pagina (print per chauffeur): nooit op (0,0),
   expect(focussen.length).toBeGreaterThan(0);
   for (const p of focussen) expect(opEind(p, eind), `focus op ${p.left},${p.top}, eindplek ${eind.left},${eind.top}`).toBe(true);
 });
+
+test.describe('een beheerder vouwt een open kiezer op de Duo', () => {
+  test.use({ viewport: { width: 669, height: 867 }, isMobile: true, hasTouch: true });
+
+  for (const soort of ['werkprestatie', 'printmaand'] as const) {
+    test(soort + ': de hele kiezer blijft bereikbaar en dezelfde keuze blijft actief', async ({ page }) => {
+      const dag = soort === 'werkprestatie';
+      await seed(page, { user: ADMIN });
+      await page.goto(dag ? '/techniek/prestaties' : '/beheer/planning');
+      if (dag) await page.getByRole('button', { name: 'Prestatie registreren' }).first().click();
+      const knop = dag
+        ? page.getByRole('dialog').getByRole('button', { name: 'Kalender openen' })
+        : page.getByRole('button', { name: 'Maand kiezen' });
+      await knop.click();
+      const kiezer = page.getByRole('dialog', { name: dag ? 'Datum kiezen' : 'Maand kiezen', exact: true });
+      const cursor = kiezer.locator('[role="gridcell"]:focus');
+      const kenmerk = dag ? 'data-iso' : 'data-maand';
+      await expect(cursor).toHaveCount(1);
+      const keuze = await cursor.getAttribute(kenmerk);
+      await expect.poll(() => page.evaluate(() => history.state?.vhbOverlay)).toBeTruthy();
+      const stap = await page.evaluate(() => history.state.vhbOverlay);
+
+      await page.setViewportSize({ width: 594, height: 368 });
+      await expect(kiezer).toHaveAttribute('aria-modal', 'true');
+      await expect(kiezer).toBeInViewport({ ratio: 1 });
+      await expect(cursor).toHaveAttribute(kenmerk, keuze!);
+      // Ook op de korte buitenkant kan de planner van de bovenste knop naar de laatste actie scrollen.
+      for (const knop of [kiezer.getByRole('button').first(), kiezer.getByRole('button').last()]) {
+        await knop.scrollIntoViewIfNeeded();
+        await expect(knop).toBeInViewport({ ratio: 1 });
+      }
+
+      await page.setViewportSize({ width: 951, height: 585 });
+      await expect(kiezer).not.toHaveAttribute('aria-modal', 'true');
+      await expect(kiezer).toBeInViewport({ ratio: 1 });
+      await expect(cursor).toHaveAttribute(kenmerk, keuze!);
+      expect(await page.evaluate(() => history.state.vhbOverlay)).toBe(stap);
+      await page.keyboard.press('Escape');
+      await expect(kiezer).toHaveCount(0);
+      await expect(knop).toBeFocused();
+    });
+  }
+});

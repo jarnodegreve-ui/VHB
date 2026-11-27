@@ -37,7 +37,7 @@ export function AppSkeleton() {
   const view = (typeof window !== 'undefined' && routeUitUrl(window.location.href)?.view) || 'dashboard';
   const kolomClass = isBreed(view) ? 'max-w-[var(--content-max-breed)]' : 'max-w-[var(--content-max)]';
   return (
-    <div className="flex h-dvh w-full overflow-hidden" role="status" aria-busy="true" aria-label="Portaal wordt geladen">
+    <div className="opstartschil flex h-dvh w-full overflow-hidden" role="status" aria-busy="true" aria-label="Portaal wordt geladen">
       <aside className="hidden lg:flex w-zijbalk shrink-0 flex-col panel-dark" aria-hidden="true">
         <div className="px-5 pt-4 pb-3 flex justify-center">
           <BrandLogo tone="licht" laden className="w-40 lg:w-44 h-auto select-none block dark:hidden" />

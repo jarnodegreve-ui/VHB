@@ -54,7 +54,7 @@ import { MD_QUERY, useMedia } from '../lib/useMinWidth';
 /** De plaats van de versheidsregel in de kop (zie de uitleg bij de regel). */
 const REGEL_PLAATS = 'absolute top-full left-0 mt-1 sm:left-auto sm:right-0 md:mt-2';
 
-export function CapacityView({ currentUser }: { currentUser: User }) {
+export function CapacityView({ currentUser, volgDagInRaster }: { currentUser: User; volgDagInRaster: boolean }) {
   const ownId = String(currentUser?.id ?? '');
   const [maandParam, zetMaandParam] = useRouteParam(0);
   // Gekozen dag van de mobiele dag-weergave in de URL (segment ná de maand:
@@ -184,7 +184,23 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   // Het tweewekenvenster (desktop) met de maand in de URL, het laden van de
   // twee maanden en de grenzen van de import; in deze volgorde.
-  const venster = useTweewekenVenster({ startMaand, monthParam, maandParam, zetMaandParam, dagParam, setViewMonth, todayIso });
+  // Hetzelfde md-breekpunt als de kop, ook bij een andere standaardletter.
+  // Precies één weergave in de DOM; cel en notitie blijven in de view.
+  const md = useMedia(MD_QUERY);
+  const [mobielDag, setMobielDag] = useState<string | null>(null);
+  // Terwijl een nieuw maandbord laadt kan de dag nog van de vorige maand zijn.
+  const dagInMaand = [mobielDag, todayIso].find(dag => dag && monthOf(dag) === monthParam) ?? monthFrom;
+  const venster = useTweewekenVenster({
+    startMaand, monthParam, maandParam, zetMaandParam, dagParam, setViewMonth, todayIso,
+    toonRaster: md, dagBijUitvouwen: volgDagInRaster ? (selected?.iso ?? dagInMaand) : null,
+    toonRasterDag(dag) {
+      if (selected) return; // De open cel met haar eigen historiek en concept blijft staan.
+      const doel = data?.month === monthParam ? kiesDagBinnenImport(dates, [dag], data.geimporteerd?.laatste) : dag;
+      if (!doel) return;
+      setMobielDag(doel);
+      if (dagParam && dagParam !== doel) zetDagParam(doel);
+    },
+  });
   const zl = useMaandLaden({ monthParam, windowDates: venster.windowDates, reloadTick, setReloadTick, setData, setExtraData, onthoudenOm: onthouden?.om ?? null });
   const { laatsteDag, beginUitleg, maandVoorbij, kanTerug, kanVooruit, kanMaandTerug, kanMaandVooruit } = useImportGrenzen({
     data, extraData, monthParam, year, monthIndex, windowStart: venster.windowStart, setWindowStart: venster.setWindowStart, setViewMonth,
@@ -222,7 +238,6 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // scrollen zonder ooit één dag in z'n geheel te zien. Nu: één gekozen dag,
   // alle chauffeurs in één kolom, gegroepeerd per sectie en gesorteerd op
   // dienstnummer — leest als het bord in het chauffeurslokaal.
-  const [mobielDag, setMobielDag] = useState<string | null>(null);
   const [toonRust, setToonRust] = useState(false);
   useEffect(() => {
     if (dates.length === 0) { setMobielDag(null); return; }
@@ -251,6 +266,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // zetten (replace). De maand moet er dan vóór staan, ook voor de huidige
   // maand die anders een schone URL houdt.
   const kiesDag = (iso: string) => {
+    venster.meldDagkeuze();
     setMobielDag(iso);
     if (!maandParam) zetMaandParam(monthParam);
     zetDagParam(iso);
@@ -323,19 +339,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // niets, zoals vroeger onder het skelet. Een chauffeur schrijft hier niets.
   const onCel: typeof cel.open = (...args) => {
     if (canEditNotes && !(zl.versDitBezoek && cel.notesGeladen)) return;
+    if (!md) venster.meldDagkeuze();
     cel.open(...args);
   };
-
-  // Eén weergave per breedte (ronde 6, punt 22): het raster vanaf md, de
-  // dagweergave daaronder. Tot dan stonden ze er allebei en verborg CSS er
-  // één (`hidden md:block` / `md:hidden`), zodat de telefoon het hele raster
-  // (14 dagen × alle chauffeurs, een titel per cel) opbouwde en verborg, en
-  // desktop de dagweergave. De keuze valt op MD_QUERY, de query van md zoals
-  // de gebouwde CSS haar stelt (in rem): zo valt ze samen met de `md:`-klassen
-  // van de kop, ook bij een andere standaardletter, en volgt ze draaien en
-  // verbreden live. Alle toestand (gekozen dag, zoekterm, open cel) woont
-  // hier, dus een wissel van weergave verliest niets.
-  const md = useMedia(MD_QUERY);
 
   return (
     <PageShell breed>
@@ -479,7 +485,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                De cel-modal met details/notitie/dienstwissel blijft dezelfde. */
             <DagWeergave
               dag={{ dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes: cel.notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht: aandachtDagen.length > 0, dagtypes }}
-              acties={{ kiesDag, springNaarAandacht, setViewMonth, setToonRust, onCel }}
+              acties={{ kiesDag, springNaarAandacht, setViewMonth: maand => { venster.meldDagkeuze(); setViewMonth(maand); }, setToonRust, onCel }}
             />
           )}
 

@@ -321,7 +321,8 @@
   --zijbalk-w: 17.5rem;
   --zijbalk-w-lade: 17rem;
   --dock-h: 4.75rem;
-  --gutter: max(1rem, env(safe-area-inset-left), env(safe-area-inset-right));
+  --gutter-links: max(1rem, env(safe-area-inset-left), env(safe-area-inset-right));
+  --gutter-rechts: var(--gutter-links);
   --overlay-max-h: 88dvh;
 }
 @media (min-width: 640px) and (pointer: fine) {
@@ -1035,6 +1036,43 @@ html.dark {
     box-shadow: var(--schaduw-topbar-scrolled);
   }
 
+  /* Een lang menu van de planner moet ook in een kort liggend venster
+     tot de laatste actie kunnen schuiven. Onder md ligt het dock erboven. */
+  @media (pointer: coarse) and (width < 64rem) {
+    [data-plannerschil] .topbar {
+      --menu-onderruimte: max(0.75rem, env(safe-area-inset-bottom));
+      --menu-links: max(0.75rem, env(safe-area-inset-left));
+      --menu-rechts: max(0.75rem, env(safe-area-inset-right));
+    }
+    [data-plannerschil] .topbar [role="menu"] {
+      max-height: calc(100dvh - var(--sticky-top) - var(--menu-onderruimte) - 0.5rem);
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+    }
+    @media (width < 48rem) {
+      [data-plannerschil] .topbar {
+        --menu-onderruimte: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--dock-h));
+      }
+    }
+    /* Op een laag liggend scherm schuiven alleen de meldingen. De knop
+       naar het volledige overzicht blijft vrij van zowel de lijst als het dock. */
+    @media (orientation: landscape) and (height <= 30rem) {
+      [data-plannerschil] .topbar .meldingen-menu {
+        display: flex;
+        flex-direction: column;
+        overflow: clip;
+      }
+      [data-plannerschil] .meldingen-menu > :not(.meldingen-lijst) {
+        flex: none;
+      }
+      [data-plannerschil] .meldingen-lijst {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+      }
+    }
+  }
+
   /* Trede 1 van de ladder (tokens in :root / html.dark). */
   .surface-card {
     background: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
@@ -1335,14 +1373,17 @@ html.dark {
   .filter-rij::-webkit-scrollbar {
     display: none;
   }
-  /* P4 (23-09): een filterrij die op de telefoon tot de rand doorloopt
-     (TableToolbar `rand`) vervaagt over precies die binnenmarge
-     (--filter-rand), zodat een chip onder de rand door loopt i.p.v. hard
-     af te breken. Aan begin en eind van het schuiven staat elke chip
-     volledig in beeld. */
+  /* Een filterrij die tot de rand doorloopt, vervaagt over de binnenmarge
+     van iedere kant. Kaarten geven hun eigen binnenmarge via --filter-rand. */
   @media (width < 48rem) {
     .filter-rij-rand {
-      mask-image: linear-gradient(to right, transparent, #000 var(--filter-rand), #000 calc(100% - var(--filter-rand)), transparent);
+      mask-image: linear-gradient(
+        to right,
+        transparent,
+        #000 var(--filter-rand, var(--gutter-links)),
+        #000 calc(100% - var(--filter-rand, var(--gutter-rechts))),
+        transparent
+      );
     }
   }
   /* TableShell: zolang er rechts nog kolommen buiten beeld staan, vervaagt
@@ -1469,8 +1510,14 @@ html.dark {
 /* Schil-maten (tokens in :root hierboven). */
 @utility w-zijbalk { width: var(--zijbalk-w); }
 @utility w-zijbalk-lade { width: var(--zijbalk-w-lade); }
-@utility px-gutter { padding-inline: var(--gutter); }
-@utility mx-gutter-neg { margin-inline: calc(-1 * var(--gutter)); }
+@utility px-gutter {
+  padding-left: var(--gutter-links);
+  padding-right: var(--gutter-rechts);
+}
+@utility mx-gutter-neg {
+  margin-left: calc(-1 * var(--gutter-links));
+  margin-right: calc(-1 * var(--gutter-rechts));
+}
 @utility max-h-overlay { max-height: var(--overlay-max-h); }
 @utility bottom-boven-dock { bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--dock-h)); }
 @utility elev-pil { box-shadow: var(--elev-pil); }
@@ -1533,6 +1580,29 @@ html.dark {
 @media (device-width: 466px) and (device-height: 678px), (device-width: 669px) and (device-height: 951px) {
   html {
     background-color: var(--laag-canvas);
+  }
+}
+
+/* De plannerschil houdt op het staande buitenscherm elke gemelde veilige
+   zone aan haar eigen kant. Zo blijft de andere zijde vrij voor de planning. */
+@media (device-width: 466px) and (device-height: 678px) and (orientation: portrait) {
+  [data-plannerschil], .vhb-plannerstart .opstartschil {
+    --gutter-links: max(1rem, env(safe-area-inset-left));
+    --gutter-rechts: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Het open binnenscherm kan na vouwen nog de fysieke maat van het
+   buitenscherm melden. In breedbeeld beschermt iOS de systeemklok met een
+   zij-inset (84 px in Xcode 27.2). Houd beide zijden afzonderlijk vrij voor
+   de topbarknoppen. De planning zelf houdt de normale md-paginabreedte. */
+@media (device-width: 466px) and (device-height: 678px), (device-width: 678px) and (device-height: 466px),
+       (device-width: 669px) and (device-height: 951px), (device-width: 951px) and (device-height: 669px) {
+  @media (min-width: 48rem) and (orientation: landscape) and (pointer: coarse) {
+    [data-plannerschil] .topbar, .vhb-plannerstart .opstartschil .topbar {
+      padding-left: max(1.75rem, env(safe-area-inset-left));
+      padding-right: max(1.75rem, env(safe-area-inset-right));
+    }
   }
 }
 

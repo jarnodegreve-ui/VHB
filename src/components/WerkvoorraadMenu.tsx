@@ -49,7 +49,7 @@ export function WerkvoorraadMenu({
   /** Het scherm dat nu openstaat (zie de rij "te herverdelen"). */
   huidig?: View;
 }) {
-  const { open, setOpen, wortel } = useDropdown({ mobielVol: true });
+  const { open, setOpen, wortel } = useDropdown({ mobielVol: true, terugBijVouwen: true });
 
   const wv = werkvoorraad;
   const enkelvoud = (n: number, ev: string, mv: string) => `${n} ${n === 1 ? ev : mv}`;

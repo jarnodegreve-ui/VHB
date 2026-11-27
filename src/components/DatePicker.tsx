@@ -1,6 +1,6 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { forwardRef, useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING, scrimTransitie } from '../lib/motion';
@@ -12,6 +12,7 @@ import {
 import { useLaag } from '../lib/lagen';
 import { Button, IconButton } from './primitives';
 import { inputClass, invalidClass } from './controlClass';
+import { useKiezerPositie } from './useKiezerPositie';
 
 /**
  * Datumveld in huisstijl (datumtranche PR 1, 23-09): een typbaar tekstveld
@@ -78,25 +79,6 @@ export type DatePickerProps = {
   'aria-describedby'?: string;
 };
 
-const MOBIEL_BREEDTE = 640;
-const RAND = 8;
-const AFSTAND = 6;
-
-/** `gemeten` = de layout-effect heeft de echte maat van de kiezer gebruikt. */
-type Positie = { top: number; left: number; boven: boolean; gemeten: boolean };
-
-/**
- * Voorlopige plek bij het openen, vóór de eerste meting: direct onder het
- * veld (de maat van de kiezer is dan nog onbekend). Nooit (0,0): de kiezer
- * stond daar één render lang en kreeg er zelfs focus, wat las als een sprong
- * naar linksboven (Jarno 30-09: Werkprestaties en de planning-upload).
- */
-const voorlopig = (wortel: HTMLElement | null): Positie | null => {
-  if (!wortel) return null;
-  const r = wortel.getBoundingClientRect();
-  return { top: r.bottom + AFSTAND, left: Math.max(RAND, r.left), boven: false, gemeten: false };
-};
-
 export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function DatePicker({
   value,
   onChange,
@@ -126,12 +108,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   const [hersteld, setHersteld] = useState<string | null>(null);
   const [maand, setMaand] = useState(() => maandVan(isIsoDag(value) ? value : vandaagIso()));
   const [cursor, setCursor] = useState(() => (isIsoDag(value) ? value : vandaagIso()));
-  const [mobiel, setMobiel] = useState(false);
-  const [positie, setPositie] = useState<Positie | null>(null);
+  const { wortelRef, dialoogRef, mobiel, positie, bereidPlaatsVoor } = useKiezerPositie(open, maand);
   const veldRef = useRef<HTMLInputElement | null>(null);
-  const wortelRef = useRef<HTMLDivElement | null>(null);
   const knopRef = useRef<HTMLButtonElement | null>(null);
-  const dialoogRef = useRef<HTMLDivElement | null>(null);
   const focusNaarCel = useRef(false);
   const reduceMotion = useReducedMotion();
   const dialoogId = useId();
@@ -222,9 +201,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     const start = klemOpBereik(concept.staat === 'geldig' ? concept.iso : geldig || vandaag, min, max);
     setCursor(start);
     setMaand(maandVan(start));
-    const smal = typeof window !== 'undefined' && window.innerWidth < MOBIEL_BREEDTE;
-    setMobiel(smal);
-    setPositie(smal ? null : voorlopig(wortelRef.current));
+    bereidPlaatsVoor();
     focusNaarCel.current = true;
     setOpen(true);
   };
@@ -254,47 +231,17 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     return () => document.removeEventListener('pointerdown', buiten);
   }, [open]);
 
-  // Positie onder (of boven) het veld, geklemd op de viewport; volgt scroll
-  // en resize zolang de kiezer open is. Op mobiel is het een sheet.
-  useLayoutEffect(() => {
-    if (!open || mobiel) return;
-    const plaats = () => {
-      const t = wortelRef.current;
-      const d = dialoogRef.current;
-      if (!t || !d) return;
-      const r = t.getBoundingClientRect();
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const breedte = d.offsetWidth;
-      const hoogte = d.offsetHeight;
-      const left = Math.max(RAND, Math.min(r.left, vw - breedte - RAND));
-      let top = r.bottom + AFSTAND;
-      let boven = false;
-      if (top + hoogte > vh - RAND && r.top - AFSTAND - hoogte >= RAND) {
-        top = r.top - AFSTAND - hoogte;
-        boven = true;
-      }
-      setPositie((p) => (p?.gemeten && p.top === top && p.left === left && p.boven === boven ? p : { top, left, boven, gemeten: true }));
-    };
-    plaats();
-    window.addEventListener('resize', plaats);
-    window.addEventListener('scroll', plaats, true);
-    return () => {
-      window.removeEventListener('resize', plaats);
-      window.removeEventListener('scroll', plaats, true);
-    };
-  }, [open, mobiel, maand]);
-
   // Focus de cursor-cel bij openen en na elke toetsenbord-verplaatsing, pas
   // als de kiezer gemeten op zijn plek staat (zoals AnkerPopover): de focus
   // liep vroeger in dezelfde tik als de eerste render, vóór de nieuwe plek
-  // gerenderd was. preventScroll: de kiezer is fixed, een reveal kan alleen
-  // iets erachter verschuiven.
+  // gerenderd was.
   const geplaatst = mobiel || positie?.gemeten === true;
   useEffect(() => {
     if (!open || !geplaatst || !focusNaarCel.current) return;
     focusNaarCel.current = false;
-    dialoogRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${cursor}"]`)?.focus({ preventScroll: true });
+    const d = dialoogRef.current;
+    // Op een laag scherm mag de kiezer zelf naar de nieuwe cursor scrollen.
+    d?.querySelector<HTMLButtonElement>(`[data-iso="${cursor}"]`)?.focus({ preventScroll: d.scrollHeight <= d.clientHeight });
   }, [open, cursor, maand, geplaatst]);
 
   // Maandknoppen: cursor mee naar dezelfde dag in de nieuwe maand, zodat een
@@ -386,11 +333,11 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       exit={{ ...(reduceMotion ? { opacity: 0 } : mobiel ? { opacity: 0, y: 24 } : { opacity: 0, scale: 0.96 }), transition: reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
       style={stijlDialoog}
       className={cn(
-        'fixed z-kiezer bg-paper ring-1 ring-hairline elev-2 outline-none',
+        'fixed z-kiezer overflow-y-auto overscroll-contain bg-paper ring-1 ring-hairline elev-2 outline-none',
         mobiel
-          ? 'inset-x-0 bottom-0 rounded-t-2xl border-t border-rim p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
+          ? 'inset-x-0 bottom-0 max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top)))] rounded-t-2xl border-t border-rim p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
           // Op touch (tablet/landscape ≥640) zijn de cellen 44 px: 7 × 44 + p-3 past niet in 19.5rem.
-          : 'w-[19.5rem] pointer-coarse:w-[21rem] rounded-2xl border border-rim p-3',
+          : 'max-h-[calc(100dvh-16px)] w-[19.5rem] pointer-coarse:w-[21rem] rounded-2xl border border-rim p-3',
       )}
     >
       <div className="flex items-center justify-between gap-2">

@@ -69,9 +69,9 @@ const metBord = (pad: string, request: Request) => (
     : undefined
 );
 
-async function open(page: Page, user: Record<string, unknown>, breedte: number) {
+async function open(page: Page, user: Record<string, unknown>, breedte: number, hoogte = 900) {
   await seed(page, { user, view: 'bezetting', thema: 'light', extra: metBord });
-  await page.setViewportSize({ width: breedte, height: 900 });
+  await page.setViewportSize({ width: breedte, height: hoogte });
   await page.goto('/maandplanning');
   await expect(page.getByRole('heading', { name: 'Maandplanning', level: 1 })).toBeVisible({ timeout: 15_000 });
 }
@@ -286,6 +286,81 @@ test('toetssteen 3: van 767 naar 768 px en terug blijven de gekozen dag, de zoek
   // De dag staat in het adres en de strip brengt hem na het terugkomen weer in beeld.
   expect(new URL(page.url()).pathname).toBe(`/maandplanning/${maand}/${dag}`);
   await expect(strip.getByRole('tab', { selected: true })).toBeInViewport();
+});
+
+test('planner op de Duo: een gekozen rasterperiode over de jaargrens blijft staan tot de planner een andere dag kiest', async ({ page }, info) => {
+  alleenIn(info, IPHONE_CHROMIUM, IPHONE_WEBKIT);
+  await page.clock.setFixedTime(new Date('2026-12-07T10:00:00+01:00'));
+  const breed = { width: 951, height: 669 };
+  const smal = { width: 669, height: 951 };
+  await open(page, { ...ADMIN, role: 'planner' }, breed.width, breed.height);
+  const koppen = page.locator(RASTER).getByRole('columnheader').filter({ hasNotText: 'Chauffeur' });
+  await expect(koppen.first()).toContainText('maandag 7 december');
+
+  const schrijf = schrijfacties(page);
+  await page.getByRole('button', { name: 'Volgende 2 weken' }).tap();
+  await expect(koppen.first()).toContainText('maandag 21 december');
+  await expect(koppen.last()).toContainText('zondag 3 januari');
+  await page.setViewportSize(smal);
+  await preciesEen(page, false);
+  await expect(page.locator(STRIP).getByRole('tab').nth(20)).toHaveAttribute('aria-selected', 'true');
+  await page.setViewportSize(breed);
+  await preciesEen(page, true);
+  await expect(koppen.first()).toContainText('maandag 21 december');
+  await expect(koppen.last()).toContainText('zondag 3 januari');
+
+  // Een bewuste keuze buiten die twee weken heeft wel voorrang bij uitvouwen.
+  await page.setViewportSize(smal);
+  const vijftiende = page.locator(STRIP).getByRole('tab').nth(14);
+  await vijftiende.tap();
+  await expect(vijftiende).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText(dagkop('2026-12-15'), { exact: true })).toBeVisible();
+  await page.setViewportSize(breed);
+  await preciesEen(page, true);
+  await expect(koppen.first()).toContainText('maandag 14 december');
+  await expect(koppen.last()).toContainText('zondag 27 december');
+  expect(schrijf).toEqual([]);
+});
+
+test('planner op de Duo: uitvouwen toont de gekozen dag in het raster en bewaart de conceptnotitie', async ({ page }, info) => {
+  alleenIn(info, IPHONE_CHROMIUM, IPHONE_WEBKIT);
+  await page.clock.setFixedTime(new Date('2026-11-03T10:00:00+01:00'));
+  await open(page, { ...ADMIN, role: 'planner' }, 382);
+  await page.setViewportSize({ width: 382, height: 580 });
+
+  // 23 november valt buiten het oorspronkelijke raster van 2 tot en met 15 november.
+  const dag = '2026-11-23';
+  const rijder = RIJDERS[5];
+  const notitie = 'Neem de reservesleutel mee.';
+  const opgeslagen: unknown[] = [];
+  await page.route('**/api/planning-notes', async route => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    opgeslagen.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  const strip = page.locator(STRIP);
+  await strip.getByRole('tab').nth(22).tap();
+  await page.getByRole('searchbox', { name: 'Zoek chauffeur of dienst' }).fill(rijder.name);
+  await page.getByRole('button', { name: new RegExp(rijder.name) }).tap();
+  const detail = celdetail(page, rijder.name);
+  const veld = detail.getByRole('textbox', { name: 'Notitie voor de chauffeur' });
+  await veld.fill(notitie);
+
+  await page.setViewportSize({ width: 951, height: 585 });
+  await preciesEen(page, true);
+  await expect(page.locator(RASTER).locator('thead')).toContainText('maandag 23 november');
+  await expect(veld).toHaveValue(notitie);
+  await page.setViewportSize({ width: 385, height: 571 });
+  await preciesEen(page, false);
+  await expect(veld).toHaveValue(notitie);
+  expect(opgeslagen).toEqual([]);
+
+  await detail.getByRole('button', { name: 'Notitie opslaan' }).tap();
+  await expect(detail).toHaveCount(0);
+  expect(opgeslagen).toEqual([{ driverId: rijder.id, date: dag, note: notitie }]);
+  await expect(strip.getByRole('tab').nth(22)).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/\/maandplanning\/2026-11\/2026-11-23$/);
 });
 
 test.describe('toetssteen 4: klik en tik openen het celdetail zoals vandaag, en onder de klik verandert niets', () => {

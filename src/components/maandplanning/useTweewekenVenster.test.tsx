@@ -34,7 +34,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('useTweewekenVenster', () => {
-  const basis = { monthParam: '2026-10', maandParam: null as string | null, dagParam: null as string | null, todayIso: '2026-10-14' };
+  const basis = { monthParam: '2026-10', maandParam: null as string | null, dagParam: null as string | null, todayIso: '2026-10-14', toonRaster: false, dagBijUitvouwen: null as string | null, toonRasterDag: vi.fn() };
   const opzet = (extra: Partial<Parameters<typeof useTweewekenVenster>[0]> = {}) => {
     const zetMaandParam = vi.fn();
     const setViewMonth = vi.fn();
@@ -43,6 +43,63 @@ describe('useTweewekenVenster', () => {
     });
     return { ...hook, zetMaandParam, setViewMonth, nu: () => hook.result.current };
   };
+
+  it('neemt de dag uit de daglijst alleen bij het uitvouwen mee en laat daarna vrij bladeren', () => {
+    const a = opzet();
+    const render = (toonRaster: boolean, dagBijUitvouwen: string | null) =>
+      a.rerender({ ...basis, startMaand: null, zetMaandParam: a.zetMaandParam, setViewMonth: a.setViewMonth, toonRaster, dagBijUitvouwen });
+
+    render(false, '2026-10-31');
+    expect(a.nu().windowStart).toBe('2026-10-12');
+    render(true, '2026-10-31');
+    expect(a.nu().windowStart).toBe('2026-10-26');
+    act(() => { a.nu().goPrevWindow(); });
+    expect(a.nu().windowStart).toBe('2026-10-12');
+    render(false, '2026-10-30');
+    render(true, null); // Geen dag meegegeven in de chauffeursweergave.
+    expect(a.nu().windowStart).toBe('2026-10-12');
+    render(false, '2026-10-25');
+    render(true, '2026-10-25'); // De dag staat al in het venster.
+    expect(a.nu().windowStart).toBe('2026-10-12');
+  });
+
+  it('houdt na een rasterpijl de twee gekozen weken bij een rondrit zonder tik, ook als de lijst een andere dag toont', () => {
+    // 12–25 oktober → vorige periode 28 september–11 oktober.
+    const toonRasterDag = vi.fn();
+    const a = opzet({ toonRaster: true, toonRasterDag });
+    const draai = (toonRaster: boolean, dagBijUitvouwen: string) => a.rerender({
+      ...basis, startMaand: null, zetMaandParam: a.zetMaandParam, setViewMonth: a.setViewMonth,
+      toonRaster, dagBijUitvouwen, toonRasterDag,
+    });
+    act(() => { a.nu().goPrevWindow(); });
+    draai(false, '2026-10-14');
+    // De strip tekent oktober; de eerste vier dagen van het raster zijn september.
+    expect(toonRasterDag).toHaveBeenCalledExactlyOnceWith('2026-10-01');
+    draai(true, '2026-10-14'); // Ook als de lijst het nieuwe bord nog laadt.
+    expect(a.nu().windowDates).toEqual(dagen('2026-09-28'));
+    draai(false, '2026-10-06');
+    expect(toonRasterDag).toHaveBeenLastCalledWith('2026-10-06');
+    draai(true, '2026-10-06');
+    expect(a.nu().windowDates).toEqual(dagen('2026-09-28'));
+
+    draai(false, '2026-10-06');
+    act(() => { a.nu().meldDagkeuze(); });
+    draai(true, '2026-10-29');
+    expect(a.nu().windowDates).toEqual(dagen('2026-10-26'));
+  });
+
+  it('een bewust gekozen andere maand in de daglijst bepaalt bij uitvouwen weer de rasterperiode', () => {
+    const a = opzet({ toonRaster: true });
+    const draai = (toonRaster: boolean, monthParam: string, dagBijUitvouwen: string) => a.rerender({
+      ...basis, startMaand: null, zetMaandParam: a.zetMaandParam, setViewMonth: a.setViewMonth,
+      toonRaster, monthParam, maandParam: monthParam, dagBijUitvouwen,
+    });
+    draai(false, '2026-10', '2026-10-14');
+    act(() => { a.nu().meldDagkeuze(); });
+    draai(false, '2026-11', '2026-11-01');
+    draai(true, '2026-11', '2026-11-01');
+    expect(a.nu().windowDates).toEqual(dagen('2026-10-26'));
+  });
 
   it('begint op de maandag van deze week, ook met de huidige maand in de URL; een andere maand begint op de maandag van of vóór de eerste', () => {
     expect(opzet().nu().windowStart).toBe('2026-10-12');
