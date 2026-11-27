@@ -28,9 +28,13 @@ const laadMeldingenPaneel = () => import('./MeldingenPaneel');
 const LazyMeldingenPaneel = lazyWithRetry(() => laadMeldingenPaneel().then((m) => ({ default: m.MeldingenPaneel })));
 const laadVooruit = () => { void laadMeldingenPaneel().catch(() => {}); };
 
-export function MeldingenBel({ onNavigate, actief = false }: { onNavigate: (view: View) => void; actief?: boolean }) {
+export function MeldingenBel({ onNavigate, actief = false, plannerweergave = false }: {
+  onNavigate: (view: View) => void;
+  actief?: boolean;
+  plannerweergave?: boolean;
+}) {
   const { ongelezenMeldingen } = useAppDataContext();
-  const { open, setOpen, wortel } = useDropdown({ mobielVol: true });
+  const { open, setOpen, wortel } = useDropdown({ mobielVol: true, terugBijVouwen: plannerweergave });
 
   return (
     <div ref={wortel} className="relative">

@@ -259,7 +259,7 @@ export function AppSchil({
       >
         Naar de inhoud
       </a>
-      <div className="flex h-dvh w-full bg-transparent text-slate-900 font-sans overflow-hidden">
+      <div data-plannerschil={isPlanner || undefined} className="flex h-dvh w-full bg-transparent text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -494,7 +494,7 @@ export function AppSchil({
                   {/* Bel = meldingencentrum (06-09): eigen meldingen met
                       ongelezen-teller; de werkvoorraad-knop hiernaast blijft
                       de open taken van staf tellen. */}
-                  <MeldingenBel onNavigate={setCurrentView} actief={resolvedCurrentView === 'meldingen'} />
+                  <MeldingenBel plannerweergave={isPlanner} onNavigate={setCurrentView} actief={resolvedCurrentView === 'meldingen'} />
                   {isPlanner && <Suspense fallback={null}><LazyAanwezigheidStack /></Suspense>}
                   {/* Wikkel zonder eigen doos (contents): bij hover/focus op
                       het avatar-menu de lazy account-overlays alvast ophalen. */}

@@ -112,7 +112,7 @@ export function Popover({
             BREEDTE[breedte],
             padding === 'menu' ? 'p-1.5' : 'p-3.5',
             laag === 'menu' ? 'z-menu' : 'z-zwevend',
-            mobielVol && 'max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto',
+            mobielVol && 'max-sm:fixed max-sm:left-[var(--menu-links,0.75rem)] max-sm:right-[var(--menu-rechts,0.75rem)] max-sm:top-auto max-sm:w-auto',
             className,
           )}
         >

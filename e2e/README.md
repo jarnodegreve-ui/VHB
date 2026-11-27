@@ -18,6 +18,66 @@ De config (`playwright.config.ts`) bouwt de app met dummy-Supabase-env zodat het
 loginscherm rendert i.p.v. de "configuratie ontbreekt"-melding, en serveert de
 dist via `vite preview` op poort 4173.
 
+## iPhone Duo voor planner en beheerder
+
+De volgende reeks test de Safari-venstermaten, het vouwen met een open
+formulier, de Maandplanning en de bediening van de bovenbalk. Ze gebruikt de
+gebouwde app met testgegevens. De tests voor het buitenscherm geven de veilige
+zone links of rechts expliciet mee.
+
+```sh
+npx playwright test e2e/duo.spec.ts e2e/datumveld-positie.spec.ts e2e/maandplanning-weergave.spec.ts e2e/mobiele-navigatie.spec.ts
+```
+
+Controleer in Xcode Device Hub dezelfde handelingen in Safari op een testversie
+met een planneraccount. Herhaal het vouwen ook vanuit de geïnstalleerde webapp
+om de systeemstroken en de terugknop te beoordelen.
+
+| Begin | Handeling | Verwacht |
+|---|---|---|
+| Maandplanning, buitenscherm | Kies een dag buiten de getoonde twee weken, open een cel en typ een notitie. Vouw open, draai naar liggend en vouw opnieuw dicht. | Het raster bevat de gekozen dag. Dezelfde cel en conceptnotitie blijven open. Alleen ‘Notitie opslaan’ schrijft. |
+| Maandplanning, volledig open binnenscherm | Blader liggend naar twee andere weken. Draai naar staand en terug. Herhaal met een open dienst en een conceptnotitie. | De daglijst start binnen de gekozen periode. Liggend keren dezelfde veertien dagen terug. De dienst en het concept blijven open. |
+| Beheer planning of Werkprestaties, binnenscherm | Open de maand- of dagkiezer en wissel naar het liggende buitenscherm. | De actieve keuze blijft behouden en de bovenste en onderste bediening zijn bereikbaar. |
+| Vandaag, binnenscherm | Open een gevulde meldingenlijst en vouw dicht. Probeer Terug. Open de lijst opnieuw en kies ‘Alle meldingen’. | Terug sluit de lijst op Vandaag. De laatste actie is boven het dock aantikbaar. |
+| Dashboard, staand buitenscherm | Heropen als beheerder, kies ‘Bekijk als chauffeur’ en schakel terug. | De planner benut de vrije kant van het scherm. De chauffeursweergave volgt haar bestaande marges. |
+| Maandplanning, liggend binnenscherm | Tik op het midden van de accountknop, naast de iOS-klok. | Het accountmenu opent. Alle veertien dagkolommen blijven beschikbaar voor de planning. |
+
+### Metingen op de Xcode iPhone Duo met iOS 27.2 · 27 november 2026
+
+De interactieve meting gebruikte lokaal gebouwde portaalschermen in een
+WKWebView met fictieve accounts en diensten. In de maandplanning bleef de
+onopgeslagen notitie bij dienst 2106 op 6 oktober behouden tijdens halfopen
+vouwen, volledig openen, draaien en sluiten. De gesloten daglijst, het brede
+raster en de teruggekeerde daglijst hadden elk 0 px horizontale overloop.
+
+Met de Duo volledig open bleef ook de handmatig gekozen periode van 9 tot
+en met 22 november behouden. Staand opende de daglijst op maandag 9 november.
+Na terugdraaien waren alle veertien dagkolommen weer zichtbaar. Bij dezelfde
+rotatie bleef de conceptnotitie bij dienst 2109 intact. Het aparte venster
+‘Maandoverzicht’ behield november, de 60 chauffeurs en de aflopende naamsortering.
+
+Met 60 chauffeurs toonde het brede scherm alle 14 dagkolommen van 23 november
+tot en met 6 december. Op het buitenscherm leverde zoeken naar chauffeur 60
+één dienst op. Na openvouwen bleef die chauffeur als enige rij in het raster.
+Op het liggende buitenscherm was de knop ‘Alle meldingen’ direct aantikbaar,
+31 px boven de navigatie. Een tik opende het volledige meldingenscherm.
+
+Op het brede scherm mat WebKit rechts een systeemzone van 84 px. De
+accountknop van de beheerder eindigde op de grens bij x=867 en opende bij
+aantikken het accountmenu. Op het staande buitenscherm had de beheerder
+16 px links en 84 px rechts. Bij ‘Bekijk als chauffeur’ was dat 84 px aan
+beide kanten. Terugschakelen herstelde de beheerderindeling.
+
+In één vouwcyclus met 60 chauffeurs verstreken na het laatste resize-event
+151 ms bij sluiten en 197 ms bij openen tot twee opeenvolgende animatieframes
+de verwachte lijst of het raster toonden. Dit meet de lay-outwissel in de
+simulator op deze Mac. De fysieke vouwanimatie en de beeldsnelheid op een
+toestel zijn afzonderlijke metingen.
+
+Een afzonderlijke meetpagina in de Safari-app gaf 382 × 580 px op het staande
+buitenscherm en 951 × 537 px bij een open binnenscherm met zichtbare tabbladen.
+Een eindcontrole van de geïnstalleerde webapp met een echte testsessie staat nog open.
+
 ## Projecten
 
 | Project | Viewport | Specs |
