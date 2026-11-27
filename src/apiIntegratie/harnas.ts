@@ -389,7 +389,7 @@ vi.mock('../../api/_lib/email.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
   sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
   sendEmail: vi.fn(async (opts: any) => {
-    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, soort: opts.soort, text: opts.text, attachments: opts.attachments });
     mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
     return { ok: true, mocked: true };
   }),

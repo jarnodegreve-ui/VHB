@@ -9,6 +9,7 @@ import {
 } from './harnas';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dienstUrenOpBord } from '../lib/bordUren';
+import { HANDMATIGE_WISSEL_PREFIX } from '../../shared/schemas/constanten';
 
 describe('dienstruil: autorisatieregels', () => {
   it('weigert force-approve (pending → approved) door een planner, staat het toe voor admin', async () => {
@@ -2194,6 +2195,166 @@ describe('dienstruil aangevraagd: mail naar de admins (13-10)', () => {
     expect(mails).toHaveLength(1);
     expect(mails[0].text).toContain('vraagt een overname aan');
     expect(mails[0].text).toContain('Geen (overname)');
+  });
+});
+
+describe('dienstruil beslist: mail naar de aanvrager en de collega (27-11)', () => {
+  // Vraag Jarno 27-11: "enkel en alleen wanneer de planning beslist", naar de
+  // aanvrager en de collega. Kern in api/_lib/ruilBeslisMail.ts, aangeroepen
+  // door PATCH /api/swaps/:id en door de lijstroute, naast de push.
+  const DAG = '2026-07-08';
+  // A (3) geeft dienst 12 van 08/07 (sh-c) aan B (4), zonder tegenprestatie.
+  const zaai = (status: string, extra: Record<string, unknown> = {}) => {
+    mem.swaps = [{
+      id: 's-m', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status, reason: '',
+      createdAt: '2026-06-12T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '12', ...extra,
+    }];
+    // Een goedgekeurde ruil staat al in de planning: de dienst bij de collega.
+    if (status === 'approved') mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: String(extra.targetDriverId ?? '4') } : p));
+  };
+  const zet = (weg: 'PATCH' | 'POST', token: string, status: string) => {
+    const nu = mem.swaps.find((s: any) => s.id === 's-m')!;
+    return weg === 'PATCH'
+      ? api('PATCH', '/api/swaps/s-m', { token, body: { status, ifStatus: nu.status } })
+      : api('POST', '/api/swaps', { token, body: mem.swaps.map((s: any) => (s.id === 's-m' ? { ...s, status } : s)) });
+  };
+  const beslisMails = () => mem.emailsSent.filter((m: any) => m.soort === 'ruil-beslissing');
+  const mailAan = (adres: string) => beslisMails().filter((m: any) => m.to.includes(adres));
+
+  beforeEach(() => {
+    mem.emailsSent = [];
+    mem.pushesSent = [];
+  });
+
+  for (const weg of ['PATCH', 'POST'] as const) {
+    it(`${weg}: de planner keurt goed, de aanvrager en de collega krijgen elk hun eigen mail`, async () => {
+      zaai('accepted');
+      const res = await zet(weg, 'tok-planner', 'approved');
+      expect(res.status).toBe(200);
+      const mails = beslisMails();
+      expect(mails.map((m: any) => m.to).sort()).toEqual([['a@vhb.be'], ['b@vhb.be']]);
+      for (const m of mails) {
+        expect(m.subject).toBe('Overname goedgekeurd, dienst 12 op 08/07/2026');
+        expect(m.context).toBe('swap:s-m');
+        expect(m.text).toContain('De overname is goedgekeurd');
+        expect(m.text).toContain('Chauffeur A');
+        expect(m.text).toContain('Chauffeur B');
+        expect(m.text).toContain('Geen (overname)');
+        expect(m.text).toContain('/dienstruil/s-m');
+        expect(m.text).not.toContain(' — ');
+      }
+      // Elk de zin van zijn eigen pushmelding: één bron voor push en mail.
+      const pushVoor = (id: string) => mem.pushesSent.find((p: any) => p.payload.title === 'Dienstruil goedgekeurd' && p.userIds.includes(id))!.payload.body;
+      expect(mailAan('a@vhb.be')[0].text).toContain('Hallo Chauffeur A,');
+      expect(mailAan('a@vhb.be')[0].text).toContain(pushVoor('3'));
+      expect(mailAan('b@vhb.be')[0].text).toContain('Hallo Chauffeur B,');
+      expect(mailAan('b@vhb.be')[0].text).toContain(pushVoor('4'));
+      expect(pushVoor('4')).toContain('je rijdt dienst 12');
+      expect(pushVoor('3')).toContain('Chauffeur B rijdt dienst 12');
+      // Niemand anders krijgt deze mail.
+      expect(mem.emailsSent.some((m: any) => m.to.includes('planner@vhb.be') || m.to.includes('admin@vhb.be'))).toBe(false);
+    });
+
+    it(`${weg}: de planner wijst af, allebei een mail "afgewezen"`, async () => {
+      zaai('accepted');
+      const res = await zet(weg, 'tok-planner', 'rejected');
+      expect(res.status).toBe(200);
+      const mails = beslisMails();
+      expect(mails.map((m: any) => m.to).sort()).toEqual([['a@vhb.be'], ['b@vhb.be']]);
+      for (const m of mails) {
+        expect(m.subject).toBe('Overname afgewezen, dienst 12 op 08/07/2026');
+        expect(m.text).toContain('De overname is afgewezen');
+        expect(m.text).toContain('De planning wees');
+      }
+    });
+
+    it(`${weg}: de planning annuleert een open aanvraag, allebei een mail "geannuleerd"`, async () => {
+      zaai('accepted');
+      const res = await zet(weg, 'tok-planner', 'cancelled');
+      expect(res.status).toBe(200);
+      expect(beslisMails().map((m: any) => m.subject)).toEqual(Array(2).fill('Overname geannuleerd, dienst 12 op 08/07/2026'));
+    });
+
+    it(`${weg}: de planning draait een goedgekeurde ruil terug, de mail zegt "teruggedraaid"`, async () => {
+      zaai('approved', { decidedAt: '2026-06-13T08:00:00Z' });
+      const res = await zet(weg, 'tok-planner', 'rejected');
+      expect(res.status).toBe(200);
+      const mails = beslisMails();
+      expect(mails).toHaveLength(2);
+      for (const m of mails) {
+        expect(m.subject).toBe('Overname teruggedraaid, dienst 12 op 08/07/2026');
+        expect(m.text).toContain('draaide');
+      }
+    });
+
+    it(`${weg}: een admin handelt een open ruil rechtstreeks af, één mail per chauffeur (de goedkeuring), geen tweede voor de afhandeling`, async () => {
+      zaai('pending');
+      const res = await zet(weg, 'tok-admin', 'completed');
+      expect(res.status).toBe(200);
+      expect(beslisMails().map((m: any) => m.subject)).toEqual(Array(2).fill('Overname goedgekeurd, dienst 12 op 08/07/2026'));
+    });
+
+    it(`${weg}: afhandelen van een goedgekeurde ruil is boekhouding, geen mail`, async () => {
+      zaai('approved', { decidedAt: '2026-06-13T08:00:00Z' });
+      const res = await zet(weg, 'tok-planner', 'completed');
+      expect(res.status).toBe(200);
+      expect(beslisMails()).toEqual([]);
+    });
+
+    it(`${weg}: de collega accepteert of weigert, de planning besliste niet, dus geen mail`, async () => {
+      zaai('pending');
+      expect((await zet(weg, 'tok-b', 'accepted')).status).toBe(200);
+      expect(beslisMails()).toEqual([]);
+      zaai('pending');
+      expect((await zet(weg, 'tok-b', 'rejected')).status).toBe(200);
+      expect(beslisMails()).toEqual([]);
+    });
+  }
+
+  it('de aanvrager trekt zijn aanvraag in: geen mail', async () => {
+    zaai('pending');
+    expect((await zet('PATCH', 'tok-a', 'cancelled')).status).toBe(200);
+    expect(beslisMails()).toEqual([]);
+  });
+
+  it('wie uit dienst is of geen adres heeft krijgt geen mail, de ander wel', async () => {
+    zaai('accepted');
+    mem.users = mem.users.map((u: any) => (u.id === '3' ? { ...u, email: '' } : u));
+    invalidateUsersCache();
+    expect((await zet('PATCH', 'tok-planner', 'rejected')).status).toBe(200);
+    expect(beslisMails().map((m: any) => m.to)).toEqual([['b@vhb.be']]);
+
+    mem.emailsSent = [];
+    zaai('accepted');
+    mem.users = mem.users.map((u: any) => (u.id === '3' ? { ...u, email: 'a@vhb.be' } : u.id === '4' ? { ...u, isActive: false } : u));
+    invalidateUsersCache();
+    expect((await zet('PATCH', 'tok-planner', 'rejected')).status).toBe(200);
+    expect(beslisMails().map((m: any) => m.to)).toEqual([['a@vhb.be']]);
+  });
+
+  it('een planner die zelf de collega is en beslist, krijgt geen mail; de aanvrager wel', async () => {
+    zaai('accepted', { targetDriverId: '2' });
+    expect((await zet('PATCH', 'tok-planner', 'rejected')).status).toBe(200);
+    expect(beslisMails().map((m: any) => m.to)).toEqual([['a@vhb.be']]);
+  });
+
+  it('een handmatige wissel van de planning terugdraaien geeft geen mail: daar vroeg geen chauffeur iets aan', async () => {
+    zaai('approved', { decidedAt: '2026-06-13T08:00:00Z', reason: `${HANDMATIGE_WISSEL_PREFIX} ziekte` });
+    const res = await zet('PATCH', 'tok-planner', 'rejected');
+    expect(res.status).toBe(200);
+    expect(beslisMails()).toEqual([]);
+  });
+
+  it('een mailfout houdt de beslissing niet tegen', async () => {
+    zaai('accepted');
+    const { sendEmail } = await import('../../api/_lib/email.js');
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error('smtp plat')).mockRejectedValueOnce(new Error('smtp plat'));
+    const fout = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await zet('PATCH', 'tok-planner', 'approved');
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-m')!.status).toBe('approved');
+    expect(fout.mock.calls.some((c) => String(c[0]).includes('Mail over de beslissing van een dienstruil'))).toBe(true);
+    fout.mockRestore();
   });
 });
 
