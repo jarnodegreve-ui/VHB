@@ -468,6 +468,129 @@ test.describe('Desktop: de tip', () => {
     await expect(knop).toBeFocused();
   });
 
+  // Tip-geschiedenis (26-11). De knop Wijzigingsgeschiedenis in het paneel van een dienst opent
+  // een venster, en de achtergrond van dat venster schuift over de knop. Chromium stuurt dan een
+  // pointerout van de knop naar die achtergrond, en bij het sluiten een pointerover op de knop,
+  // allebei op de plek van de muis. Bewoog de muis niet, dan komt er geen tip: vroeger kwam hij na
+  // 300 ms en slikte hij de Escape voor het paneel (e2e/lagen.spec.ts, "Escape: eerst de
+  // geschiedenis, dan het paneel", was daardoor wankel). Bewoog ze wel, dan krijgt de knop zijn tip.
+  test.describe('na het venster van de geschiedenis', () => {
+    type Rand = { type: string; x: number; y: number; soort: string };
+    const onderPunt = ([x, y]: number[]) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null;
+    const entry = (page: Page) => page.evaluate(() => window.history.state?.vhbOverlay ?? null);
+    /** De pointerover en pointerout over de rand van de knop (van of naar buiten de knop). */
+    const rand = (page: Page) => page.evaluate(() => (window as unknown as { __rand: Rand[] }).__rand);
+    const tipZicht = (page: Page) => page.evaluate(() => (window as unknown as { __tipZicht: number }).__tipZicht);
+
+    /**
+     * Dienstoverzicht, paneel van dienst 2515 open, de tip-laag geladen, de knop stil in beeld.
+     * Telt vanaf hier elke pointerover en pointerout over de rand van de knop, elke pointerover of
+     * pointerout waar ook (`__grens`, tijdstippen), en elke keer dat de tip zichtbaar wordt.
+     */
+    async function paneelOpen(page: Page) {
+      await open(page, '/beheer/dienstoverzicht', 'dienstoverzicht');
+      await laagGeladen(page);
+      await page.getByRole('button', { name: 'Dienst 2515 openen' }).filter({ visible: true }).click();
+      const paneel = page.getByRole('dialog', { name: 'Dienst 2515', exact: true });
+      await expect(paneel).toBeVisible();
+      await expect.poll(() => entry(page)).not.toBeNull();
+      await wachtOpAnimaties(page);
+      const paneelEntry = await entry(page);
+      const knop = paneel.getByRole('button', { name: 'Wijzigingsgeschiedenis' });
+      await stil(knop);
+      const vak = (await knop.boundingBox())!;
+      const plek = { x: vak.x + vak.width / 2, y: vak.y + vak.height / 2 };
+      expect(await page.evaluate(onderPunt, [plek.x, plek.y]), 'onder het punt ligt de knop').toBe('Wijzigingsgeschiedenis');
+      await knop.evaluate((el) => {
+        const w = window as unknown as { __rand: Rand[]; __grens: number[]; __tipZicht: number };
+        w.__rand = [];
+        w.__grens = [];
+        w.__tipZicht = 0;
+        const binnen = (n: EventTarget | null) => n instanceof Node && el.contains(n);
+        for (const type of ['pointerover', 'pointerout']) {
+          window.addEventListener(type, (e) => {
+            const p = e as PointerEvent;
+            w.__grens.push(performance.now());
+            if (binnen(p.target) && !binnen(p.relatedTarget)) w.__rand.push({ type, x: p.clientX, y: p.clientY, soort: p.pointerType });
+          }, true);
+        }
+        const tip = document.querySelector<HTMLElement>('[data-tip-laag]')!;
+        new MutationObserver(() => { if (!tip.hidden) w.__tipZicht++; }).observe(tip, { attributes: true, attributeFilter: ['hidden'] });
+      });
+      return { paneel, paneelEntry, knop, plek, venster: page.getByRole('dialog', { name: 'Wijzigingsgeschiedenis' }) };
+    }
+
+    /** Klik op de knop: het venster staat in de stapel en zijn achtergrond ligt over de knop (de pointerout kwam). */
+    async function geschiedenisOpen(page: Page, { paneelEntry, plek, venster }: Awaited<ReturnType<typeof paneelOpen>>) {
+      await page.mouse.click(plek.x, plek.y);
+      await expect(venster).toBeVisible();
+      await expect.poll(() => entry(page)).not.toBe(paneelEntry);
+      await expect.poll(async () => (await rand(page)).map((r) => r.type), { message: 'de achtergrond kwam over de knop' }).toEqual(['pointerover', 'pointerout']);
+      const [over, uit] = await rand(page);
+      expect({ x: uit.x, y: uit.y, soort: uit.soort }, 'de pointerout valt op de plek van de klik').toEqual({ x: over.x, y: over.y, soort: 'mouse' });
+    }
+
+    test('de muis staat stil: na Escape geen tip, ook niet na 300 ms, en de volgende Escape sluit het paneel', async ({ page }) => {
+      const s = await paneelOpen(page);
+      const tip = page.locator(TIP);
+      await geschiedenisOpen(page, s);
+      await page.keyboard.press('Escape');
+      await expect(s.venster).toHaveCount(0);
+      await expect(s.paneel).toBeVisible();
+      await expect(s.knop).toBeFocused();
+      // De achtergrond is weg: de pointerover op de knop, op exact de plek van het weggaan.
+      await expect.poll(async () => (await rand(page)).length, { message: 'de pointerover na het sluiten' }).toBe(3);
+      const [, uit, terug] = await rand(page);
+      expect(terug, 'de muis bewoog niet').toEqual({ ...uit, type: 'pointerover' });
+      // 300 ms plus ruime marge.
+      await page.waitForTimeout(1000);
+      expect(await tipZicht(page), 'geen tip onder de stille muis').toBe(0);
+      await expect(tip).toBeHidden();
+      await expect(s.knop).toHaveAttribute('title', 'Wijzigingsgeschiedenis');
+      await expect.poll(() => entry(page)).toBe(s.paneelEntry);
+      await page.keyboard.press('Escape');
+      await expect(s.paneel).toHaveCount(0);
+      expect(await tipZicht(page)).toBe(0);
+    });
+
+    test('de muis gaat weg over de effen achtergrond en komt na Escape terug op exact de plek van de klik: de tip komt na 300 ms en slikt zoals altijd de eerste Escape', async ({ page }) => {
+      const s = await paneelOpen(page);
+      const tip = page.locator(TIP);
+      await geschiedenisOpen(page, s);
+      // Daar en op de knop ligt dezelfde achtergrond, buiten het venster zelf.
+      const weg = { x: 4, y: 642 };
+      expect(await page.evaluate(([x1, y1, x2, y2]) => {
+        const a = document.elementFromPoint(x1, y1);
+        return !!a && a === document.elementFromPoint(x2, y2) && !a.closest('[role="dialog"]');
+      }, [s.plek.x, s.plek.y, weg.x, weg.y]), 'één effen achtergrond').toBe(true);
+      const voor = await page.evaluate(() => performance.now());
+      await page.mouse.move(weg.x, weg.y);
+      expect(await page.evaluate((t) => (window as unknown as { __grens: number[] }).__grens.filter((x) => x > t).length, voor), 'geen pointerover of pointerout onderweg').toBe(0);
+      await page.keyboard.press('Escape');
+      await expect(s.venster).toHaveCount(0);
+      await expect(s.knop).toBeFocused();
+      await expect.poll(() => entry(page)).toBe(s.paneelEntry);
+      expect((await rand(page)).length, 'de knop zag de muis niet terugkomen').toBe(2);
+
+      expect(await page.evaluate(onderPunt, [s.plek.x, s.plek.y]), 'onder het punt ligt de knop').toBe('Wijzigingsgeschiedenis');
+      const meting = await meetTip(page, s.knop);
+      await page.mouse.move(s.plek.x, s.plek.y);
+      await tipKlopt(page, 'Wijzigingsgeschiedenis');
+      const m = await meting();
+      expect(m.zicht[0] - m.over[0], 'de tip wacht minstens 300 ms').toBeGreaterThanOrEqual(299);
+      const [eerst, , terug] = await rand(page);
+      expect({ x: terug.x, y: terug.y }, 'terug op de plek van de klik').toEqual({ x: eerst.x, y: eerst.y });
+
+      // Knop en focus in het paneel: zoals sinds #844 is de eerste Escape voor de tip. Sloot ze het
+      // paneel, dan stond het adres al op de lijst (sluiten vervangt het in dezelfde toets).
+      await page.keyboard.press('Escape');
+      await expect(tip).toBeHidden();
+      expect(await page.evaluate(() => location.pathname), 'het paneel bleef open').toBe('/beheer/dienstoverzicht/3');
+      expect(await page.evaluate(() => document.body.dataset.scrollLocks ?? '')).toBe('slideover');
+      await expect(s.paneel).toBeVisible();
+    });
+  });
+
   test('laden mislukt: de icoonknop houdt zijn title, geen tip, geen foutscherm en geen herlaadbeurt', async ({ page }) => {
     const afgebroken: string[] = [];
     await page.route(CHUNK, (route) => { afgebroken.push(route.request().url()); return route.abort(); });

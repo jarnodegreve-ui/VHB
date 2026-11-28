@@ -467,10 +467,31 @@ describe('tip-laag naast een open laag (venster, kiezer, menu)', () => {
   };
   const tip = () => document.querySelector<HTMLElement>('[data-tip-laag]');
   const tipZichtbaar = () => !!tip() && !tip()!.hidden;
-  const wijzer = (type: string, doel: Element, naar: Element | null = null) => {
-    const e = new MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget: naar });
+  type Plek = { x: number; y: number };
+  /** Zonder plek op (0, 0), zoals een MouseEvent zonder coördinaten. */
+  const wijzer = (type: string, doel: Element, naar: Element | null = null, plek?: Plek) => {
+    const e = new MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget: naar, clientX: plek?.x, clientY: plek?.y });
     Object.defineProperty(e, 'pointerType', { value: 'mouse' });
     doel.dispatchEvent(e);
+  };
+  // Plekken van de muis rond de knoppen van dit blok (vak 600, 400, 32 × 32). Een echte muis die
+  // eraf en er weer op gaat, doet dat nooit op dezelfde plek: de pointerout valt naast de knop
+  // (of in een afgeronde hoek), de pointerover erop. Dezelfde plek = de muis bewoog niet.
+  const MIDDEN: Plek = { x: 616, y: 416 };
+  const ERNAAST: Plek = { x: 596, y: 416 };
+  /** Binnen het vak van de knop, buiten zijn afgeronde hoek linksboven. */
+  const HOEK: Plek = { x: 601, y: 401 };
+  /** Ver weg, op de effen achtergrond van een venster. */
+  const WEG: Plek = { x: 4, y: 642 };
+  /** jsdom kent geen :hover; de browser geeft de keten tot het element onder de muis. */
+  const metHover = (keten: Element[], fn: () => void) => {
+    const echt = document.querySelectorAll.bind(document);
+    const spion = vi.spyOn(document, 'querySelectorAll').mockImplementation(((s: string) => (s === ':hover' ? [document.documentElement, document.body, ...keten] : echt(s))) as typeof document.querySelectorAll);
+    try {
+      fn();
+    } finally {
+      spion.mockRestore();
+    }
   };
   /** Escape op de focus; geeft het event en of de luisteraar van de lagen (window) hem hoorde. */
   const escape = () => {
@@ -585,8 +606,8 @@ describe('tip-laag naast een open laag (venster, kiezer, menu)', () => {
     expect(tipZichtbaar()).toBe(false);
     expect(a.getAttribute('title')).toBe('Kalender openen');
     // Eraf en er weer op: de tip mag weer.
-    wijzer('pointerout', a, document.body);
-    wijzer('pointerover', a);
+    wijzer('pointerout', a, document.body, ERNAAST);
+    wijzer('pointerover', a, null, MIDDEN);
     vi.advanceTimersByTime(WACHT_MS);
     expect(tipZichtbaar()).toBe(true);
   });
@@ -683,9 +704,120 @@ describe('tip-laag naast een open laag (venster, kiezer, menu)', () => {
     expect(tipZichtbaar()).toBe(false);
     expect(a.getAttribute('title')).toBe('Kalender openen');
     // Eraf en er weer op: de tip mag weer.
-    wijzer('pointerout', a, document.body);
-    wijzer('pointerover', a);
+    wijzer('pointerout', a, document.body, ERNAAST);
+    wijzer('pointerover', a, null, MIDDEN);
     vi.advanceTimersByTime(WACHT_MS);
+    expect(tipZichtbaar()).toBe(true);
+  });
+
+  // Tip-geschiedenis (26-11): de volgorde van de meting op het Dienstoverzicht (e2e/lagen.spec.ts,
+  // "Escape: eerst de geschiedenis, dan het paneel"). Het paneel van de dienst (een dialoog) staat
+  // open, de muis klikt op de icoonknop Wijzigingsgeschiedenis erin, het venster opent, en zijn
+  // achtergrond schuift over de knop: de browser stuurt een pointerout van de knop naar die
+  // achtergrond, op de plek van de muis.
+  function geschiedenisOpen() {
+    const sluitPaneel = vi.fn();
+    renderHook(() => useLaag({ open: true, sluit: sluitPaneel, historie: false }));
+    const paneel = laag();
+    const geschiedenis = knop('Wijzigingsgeschiedenis', paneel);
+    const icoon = geschiedenis.querySelector('svg')!;
+    const venster = renderHook(({ open }) => useLaag({ open, sluit: () => {}, historie: false }), { initialProps: { open: false } });
+    // De klik: de muis komt op de knop, de druk haalt de wachtende tip weg, de knop krijgt de focus.
+    wijzer('pointerover', icoon, null, MIDDEN);
+    wijzer('pointerdown', icoon, null, MIDDEN);
+    geschiedenis.focus();
+    // Het venster opent (lagen.ts meldt het via bijLaagOpen): de knop onder de muis is gedoofd.
+    metHover([paneel, geschiedenis, icoon], () => act(() => venster.rerender({ open: true })));
+    // De achtergrond van het venster komt over de knop, op dezelfde plek.
+    const achtergrond = document.createElement('div');
+    document.body.appendChild(achtergrond);
+    wijzer('pointerout', icoon, achtergrond, MIDDEN);
+    wijzer('pointerover', achtergrond, icoon, MIDDEN);
+    /** Escape sluit het venster: zijn achtergrond verdwijnt, de focus staat weer op de knop (Modal). */
+    const sluitVenster = () => {
+      act(() => venster.rerender({ open: false }));
+      achtergrond.remove();
+      geschiedenis.focus();
+    };
+    return { knop: geschiedenis, icoon, achtergrond, sluitVenster, sluitPaneel };
+  }
+
+  it('geval 1, de muis staat stil: het venster sluit, de pointerover op de knop valt op exact dezelfde plek; geen tip, ook niet na WACHT_MS, de volgende Escape sluit het paneel, en eraf en er weer op komt de tip zoals altijd', () => {
+    const g = geschiedenisOpen();
+    g.sluitVenster();
+    wijzer('pointerover', g.icoon, g.achtergrond, MIDDEN);
+    vi.advanceTimersByTime(WACHT_MS * 3);
+    expect(tipZichtbaar(), 'geen tip onder de stille muis').toBe(false);
+    expect(g.knop.getAttribute('title')).toBe('Wijzigingsgeschiedenis');
+    expect(document.activeElement).toBe(g.knop);
+    const { e, gehoord } = escape();
+    expect(gehoord, 'de lagen horen de Escape').toBe(true);
+    expect(e.defaultPrevented, 'en sluiten er een mee').toBe(true);
+    expect(g.sluitPaneel, 'de Escape is voor het paneel').toHaveBeenCalledTimes(1);
+    // Geen dode knop: echt eraf en er weer op, dan de tip na WACHT_MS.
+    wijzer('pointerout', g.icoon, document.body, ERNAAST);
+    wijzer('pointerover', g.icoon, document.body, MIDDEN);
+    vi.advanceTimersByTime(WACHT_MS - 1);
+    expect(tipZichtbaar()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(tipZichtbaar()).toBe(true);
+  });
+
+  it('een pointermove op dezelfde plek (een browser die bij een wissel van de laag een beweging nabootst) is geen beweging: de knop blijft gedoofd', () => {
+    const g = geschiedenisOpen();
+    wijzer('pointermove', g.achtergrond, null, MIDDEN);
+    g.sluitVenster();
+    wijzer('pointerover', g.icoon, g.achtergrond, MIDDEN);
+    wijzer('pointermove', g.icoon, null, MIDDEN);
+    vi.advanceTimersByTime(WACHT_MS * 3);
+    expect(tipZichtbaar()).toBe(false);
+  });
+
+  it('geval 2, de muis gaat weg onder de achtergrond (alleen pointermove, geen pointerover of pointerout) en komt na het sluiten terug op exact de plek van de klik: de tip komt na WACHT_MS', () => {
+    const g = geschiedenisOpen();
+    wijzer('pointermove', g.achtergrond, null, WEG);
+    g.sluitVenster();
+    wijzer('pointerover', g.icoon, document.body, MIDDEN);
+    vi.advanceTimersByTime(WACHT_MS - 1);
+    expect(tipZichtbaar()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(tipZichtbaar()).toBe(true);
+    expect(tip()!.textContent).toBe('Wijzigingsgeschiedenis');
+  });
+
+  it('geval 2, zonder één gebeurtenis ertussen (de muis verliet het venster van de browser) en terug op een andere plek van de knop: de tip komt na WACHT_MS', () => {
+    const g = geschiedenisOpen();
+    g.sluitVenster();
+    wijzer('pointerover', g.knop, null, { x: 630, y: 416 });
+    vi.advanceTimersByTime(WACHT_MS - 1);
+    expect(tipZichtbaar()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(tipZichtbaar()).toBe(true);
+  });
+
+  it('geval 3, echt weg langs een afgeronde hoek: de pointerout valt nog binnen het vak van de knop, de pointerover op een andere plek: de tip komt', () => {
+    // Een menu dat met een klik openging en de knop vrijlaat, zoals het rijmenu "…".
+    const { rerender } = renderHook(({ open }) => useLaag({ open, sluit: () => {}, historie: false }), { initialProps: { open: false } });
+    const a = knop('Meer acties voor Bart');
+    const icoon = a.querySelector('svg')!;
+    wijzer('pointerover', icoon, null, MIDDEN);
+    wijzer('pointerdown', icoon, null, MIDDEN);
+    metHover([a, icoon], () => act(() => rerender({ open: true })));
+    laag('menu');
+    const vak = a.getBoundingClientRect();
+    expect(HOEK.x > vak.left && HOEK.x < vak.right && HOEK.y > vak.top && HOEK.y < vak.bottom, 'de hoek ligt in het vak').toBe(true);
+    // Van het icoon naar de rand (binnen de knop), dan eraf door de afgeronde hoek.
+    wijzer('pointerout', icoon, a, { x: 606, y: 406 });
+    wijzer('pointerover', a, icoon, { x: 606, y: 406 });
+    wijzer('pointerout', a, document.body, HOEK);
+    wijzer('pointermove', document.body, null, HOEK);
+    vi.advanceTimersByTime(WACHT_MS * 2);
+    expect(tipZichtbaar()).toBe(false);
+    // Terug op de knop, net binnen de ronding.
+    wijzer('pointerover', a, document.body, { x: 605, y: 407 });
+    vi.advanceTimersByTime(WACHT_MS - 1);
+    expect(tipZichtbaar()).toBe(false);
+    vi.advanceTimersByTime(1);
     expect(tipZichtbaar()).toBe(true);
   });
 });
