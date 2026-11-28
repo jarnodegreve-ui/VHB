@@ -43,6 +43,25 @@ async function schoonEnTerugNaarDashboard(page: Page) {
   await expect(paneel(page)).toHaveCount(0);
 }
 
+/**
+ * De tip-laag (src/lib/tipLaag.ts) laadt lui bij de eerste muisbeweging; in
+ * deze flows is dat de klik die het paneel opent. Komt dat stuk op een trage
+ * machine pas binnen als een venster al open of al weer dicht is, dan hoorde
+ * de laag het openen niet en krijgt de knop onder de stille muis toch een tip,
+ * die de volgende Escape slikt (gemeten 27-11: 13 van 600 onder belasting, in
+ * elk daarvan startte de laag te laat). Een proef die naar Escape per laag
+ * kijkt, wacht daarom eerst tot de tip-laag er is, zoals `laagGeladen` in
+ * tooltip.spec.ts. Voor een gebruiker speelt dit alleen in de eerste
+ * ogenblikken na het laden van de pagina.
+ */
+async function tipLaagGeladen(page: Page) {
+  await expect(async () => {
+    await page.mouse.move(2, 640);
+    await page.mouse.move(4, 642);
+    await expect(page.locator('[data-tip-laag]')).toBeAttached({ timeout: 500 });
+  }).toPass({ timeout: 15_000 });
+}
+
 const maakVuil = (page: Page) => paneel(page).getByLabel('Loopnummer (deel 3)', { exact: true }).fill('9');
 
 const serverAntwoord = (page: Page, status: number, body: unknown) => page.route('**/api/services', (r: Route) => (r.request().method() === 'POST'
@@ -120,6 +139,7 @@ test.describe('verwijderen vanuit het paneel', () => {
 test.describe('één laag tegelijk', () => {
   test('Escape: eerst de geschiedenis, dan het paneel', async ({ page }) => {
     await openVanuitLijst(page);
+    await tipLaagGeladen(page);
     await paneel(page).getByRole('button', { name: 'Wijzigingsgeschiedenis' }).click();
     await expect(page.getByRole('dialog', { name: 'Wijzigingsgeschiedenis' })).toBeVisible();
     await page.keyboard.press('Escape');
