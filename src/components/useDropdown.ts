@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLaag } from '../lib/lagen';
+import { heeftDuoScherm } from '../lib/ui';
 
-/** Is dit een telefoon (onder `sm`), waar een `mobielVol`-paneel het scherm vult? */
-const opTelefoon = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
+// Een open Duo-menu kan na dichtvouwen het scherm vullen. Registreer de
+// terugstap meteen, zodat dezelfde laag haar plaats in de historiek houdt.
+function krijgtMobieleTerugstap(terugBijVouwen: boolean) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(max-width: 639.98px)').matches
+    || (terugBijVouwen && heeftDuoScherm() && window.matchMedia('(pointer: coarse)').matches);
+}
 
 /**
  * Gedeeld gedrag van de topbar-uitklapmenu's (UserMenu, WerkvoorraadMenu):
@@ -15,7 +21,7 @@ const opTelefoon = () => typeof window !== 'undefined' && typeof window.matchMed
  * als overlay met een eigen history-entry, dus de terugknop sluit eerst het
  * paneel voor de pagina wisselt. Een klein vlak op desktop krijgt geen entry.
  */
-export function useDropdown({ mobielVol = false }: { mobielVol?: boolean } = {}) {
+export function useDropdown({ mobielVol = false, terugBijVouwen = false }: { mobielVol?: boolean; terugBijVouwen?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const wortel = useRef<HTMLDivElement>(null);
   /** Het zwevende vlak als het in een portal buiten de wortel staat
@@ -28,7 +34,7 @@ export function useDropdown({ mobielVol = false }: { mobielVol?: boolean } = {})
     wortel.current?.querySelector<HTMLElement>('[aria-expanded="true"]')?.focus({ preventScroll: true });
     setOpen(false);
   };
-  useLaag({ open, sluit: sluitMetFocus, historie: mobielVol && opTelefoon(), soort: 'popover' });
+  useLaag({ open, sluit: sluitMetFocus, historie: open && mobielVol && krijgtMobieleTerugstap(terugBijVouwen), soort: 'popover' });
 
   useEffect(() => {
     if (!open) return;

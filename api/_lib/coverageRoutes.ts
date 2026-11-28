@@ -724,9 +724,14 @@ export function mountCoverageRoutes(app: express.Express) {
       const stored = await getCoverageExpectations();
       const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
       const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
-      const rows = (await getPlanningMatrixRows()).filter((r: any) => {
+      // Zelfde grens als de verwachtingscheck (26-11): de lege rijen na de
+      // laatste dag met een dienst telden als dagen en verdunden de helft, zo
+      // viel een dienst die elke dag tot de grens rijdt uit het voorstel.
+      // Geen grens of een leesfout: niets afgekapt, zoals vroeger.
+      const [alleRijen, grens] = await Promise.all([getPlanningMatrixRows(), leesDekkingsGrens()]);
+      const rows = alleRijen.filter((r: any) => {
         const d = String(r.source_date ?? "");
-        return d >= from && d <= to;
+        return d >= from && d <= to && !naGrens(d, grens);
       });
       const { metNaam } = await dekkingNamen(stored);
       const voorstellen = stelVerwachtingenVoor(

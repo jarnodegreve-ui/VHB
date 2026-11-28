@@ -71,6 +71,53 @@ export const bouwRuilaanvraagMail = (o: {
   return { onderwerp: `Dienstruil aangevraagd, ${o.aanvrager} (${o.dienst})`, html, text };
 };
 
+/** Wat de planning over een aangevraagde ruil besliste, zoals de mail het zegt. */
+export type RuilUitkomst = "goedgekeurd" | "afgewezen" | "geannuleerd" | "teruggedraaid";
+
+const RUIL_UITKOMST: Record<RuilUitkomst, { toon: MailStatusToon; label: string }> = {
+  goedgekeurd: { toon: "goed", label: "Goedgekeurd" },
+  afgewezen: { toon: "fout", label: "Afgewezen" },
+  geannuleerd: { toon: "neutraal", label: "Geannuleerd" },
+  teruggedraaid: { toon: "aandacht", label: "Teruggedraaid" },
+};
+
+/** De planning besliste over een aangevraagde dienstruil of overname (27-11,
+ *  vraag Jarno): de aanvrager en de collega krijgen elk een mail, op het
+ *  sjabloon van de aanvraagmail, uit te zetten in Beheer › Mails. `zin` is
+ *  de tekst van de pushmelding voor deze ontvanger (`ruilBeslisMelding`): wat
+ *  er voor hem verandert, één bron voor push en mail. */
+export const bouwRuilBeslissingMail = (o: {
+  uitkomst: RuilUitkomst;
+  ontvanger: string;
+  zin: string;
+  aanvrager: string;
+  collega: string | null;
+  dienst: string;
+  tegenprestatie: string;
+  overname: boolean;
+  doelPad: string;
+}): MailTekst => {
+  const soort = o.overname ? "overname" : "dienstruil";
+  const u = RUIL_UITKOMST[o.uitkomst];
+  const { html, text } = mailOpbouw({
+    kicker: "Dienstruil",
+    titel: `De ${soort} is ${o.uitkomst}`,
+    status: { label: u.label, toon: u.toon },
+    voorbeeld: o.zin,
+    aanhef: `Hallo ${o.ontvanger},`,
+    alineas: [o.zin],
+    feiten: [
+      { label: "Aanvrager", waarde: o.aanvrager },
+      { label: "Collega", waarde: o.collega ?? "Geen collega" },
+      { label: "Dienst", waarde: o.dienst },
+      { label: "Tegenprestatie", waarde: o.tegenprestatie },
+    ],
+    knop: { tekst: "Open de dienstruil", url: `${portalUrl()}${o.doelPad}` },
+  });
+  const kop = soort.charAt(0).toUpperCase() + soort.slice(1);
+  return { onderwerp: `${kop} ${o.uitkomst}, ${o.dienst}`, html, text };
+};
+
 /** Dringende update aan alle actieve gebruikers; `doelPad` = het bericht zelf
  *  zodra er een id is (begint met een schuine streep). */
 export const bouwDringendeUpdateMail = (o: { titel: string; inhoud: string; doelPad: string }): MailTekst => {

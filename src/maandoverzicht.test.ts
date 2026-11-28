@@ -56,6 +56,43 @@ describe('bouwMaandoverzichtAoa', () => {
   });
 });
 
+/** De kop noemt de grens van de planning als de maand erop gekapt is (26-11).
+ *  Of ze gekapt is, beslist de route (src/apiIntegratie/planning.test.ts). */
+describe('bouwMaandoverzichtAoa: de kop en de grens van de planning (26-11)', () => {
+  const services = [{ serviceNumber: '2101', startTime: '06:00', endTime: '14:00' }];
+  const KOP = (telling: string) => `Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${telling}). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`;
+  const januari = Array.from({ length: 31 }, (_, i) => `2027-01-${String(i + 1).padStart(2, '0')}`);
+  const cells = { c1: Object.fromEntries(januari.map((d) => [d, { code: '2101', kind: 'service' }])) } as Record<string, Record<string, { code: string; kind: string }>>;
+  const chauffeurs = [{ id: 'c1', name: 'Jan Peeters' }];
+  const bouw = (maand: string, dates: string[], gekaptOp?: string | null) =>
+    bouwMaandoverzichtAoa(maand, dates, chauffeurs, cells, services, [], undefined, undefined, gekaptOp);
+
+  it('een gekapte maand: de kop zegt over hoeveel dagen en tot wanneer', () => {
+    const aoa = bouw('2027-01', januari.slice(0, 17), '2027-01-17');
+    expect(aoa[1][0]).toBe(KOP('17 dagen, t/m 17/01/2027'));
+    expect(aoa[4]).toEqual(['Jan Peeters', 17, '136:00', 0, 0, 0, 0, '', 17]);
+    // Alleen de kop wijzigt: elke andere regel is die van dezelfde 17 dagen zonder grens.
+    const zonder = bouw('2027-01', januari.slice(0, 17));
+    expect(aoa.filter((_, i) => i !== 1)).toEqual(zonder.filter((_, i) => i !== 1));
+  });
+
+  it('een maand zonder kap: de kop van vroeger, ook met null of undefined', () => {
+    const vroeger = bouwMaandoverzichtAoa('2027-01', januari, chauffeurs, cells, services, []);
+    expect(vroeger[1][0]).toBe(KOP('31 dagen'));
+    expect(JSON.stringify(bouw('2027-01', januari, null))).toBe(JSON.stringify(vroeger));
+    expect(JSON.stringify(bouw('2027-01', januari, undefined))).toBe(JSON.stringify(vroeger));
+    expect(JSON.stringify(bouw('2027-01', januari, ''))).toBe(JSON.stringify(vroeger));
+  });
+
+  it('een maand helemaal na de grens: 0 dagen, met de grens', () => {
+    const aoa = bouw('2027-02', [], '2027-01-17');
+    expect(aoa[0][0]).toBe('Maandoverzicht 2027-02');
+    expect(aoa[1][0]).toBe(KOP('0 dagen, t/m 17/01/2027'));
+    expect(aoa[4]).toEqual(['Jan Peeters', 0, '0:00', 0, 0, 0, 0, '', 0]);
+    expect(aoa[aoa.length - 1]).toEqual(['totaal', 0, '0:00', 0, 0, 0, 0, 0, 0]);
+  });
+});
+
 describe('berekenMaandoverzicht', () => {
   it('levert dezelfde telling als het xlsx-tabblad, maar als data (voor het Overzicht-venster)', async () => {
     const { berekenMaandoverzicht } = await import('../api/_lib/helpers');

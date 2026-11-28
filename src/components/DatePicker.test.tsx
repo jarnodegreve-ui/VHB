@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { DatePicker } from './DatePicker';
+import { MaandInput } from './MaandInput';
 import { Field, DateInput } from './Field';
 import { Formulier } from './Formulier';
 
@@ -400,5 +401,63 @@ describe('DatePicker in formulieren', () => {
     expect(el.getAttribute('aria-describedby')).toBe('van-fout');
     expect(container.querySelector('#van-fout')!.textContent).toBe('Kies een datum.');
     await act(async () => { root.unmount(); });
+  });
+});
+
+describe('open dag- en maandkiezers bij vouwen', () => {
+  it('houdt de popover binnen een laag venster als hij boven én onder het veld te weinig plaats heeft', async () => {
+    const hoogte = window.innerHeight;
+    const { root, container } = await monteer(<DatePicker value="2026-09-08" onChange={() => {}} />);
+    try {
+      const trigger = kalenderKnop(container);
+      vi.spyOn(trigger.parentElement!, 'getBoundingClientRect').mockReturnValue(new DOMRect(80, 150, 250, 44));
+      await act(async () => { klik(trigger); });
+      const d = dialoog()!;
+      Object.defineProperty(d, 'offsetHeight', { configurable: true, value: 330 });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 368 });
+      await act(async () => { window.dispatchEvent(new Event('resize')); });
+      expect(d.style.top).toBe('30px');
+      expect(d.style.left).toBe('80px');
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: hoogte });
+      await act(async () => { root.unmount(); });
+    }
+  });
+
+  it.each(['dag', 'maand'] as const)('%s houdt de cursor, ongewijzigde waarde en één terugstap', async (soort) => {
+    const breedte = window.innerWidth;
+    function wijzigBreedte(px: number) {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: px });
+      window.dispatchEvent(new Event('resize'));
+    }
+    const kies = vi.fn();
+    const dag = soort === 'dag';
+    const { root, container } = await monteer(dag
+      ? <DatePicker value="2026-09-08" onChange={kies} />
+      : <MaandInput value="2026-09" onChange={kies} />);
+    try {
+      wijzigBreedte(669);
+      await act(async () => { klik(container.querySelector('button')); });
+      const openKiezer = dialoog()!;
+      await act(async () => { toets(openKiezer, 'ArrowRight'); });
+      const cursor = openKiezer.querySelector(dag ? '[data-iso="2026-09-09"]' : '[data-maand="2026-10"]');
+      expect(cursor).toBeTruthy();
+      const terugstap = history.state.vhbOverlay;
+      expect(terugstap).toBeTruthy();
+
+      for (const px of [594, 951]) {
+        await act(async () => { wijzigBreedte(px); });
+        expect(dialoog()).toBe(openKiezer);
+        expect(openKiezer.getAttribute('aria-modal')).toBe(px < 640 ? 'true' : null);
+        expect(document.activeElement).toBe(cursor);
+        expect(history.state.vhbOverlay).toBe(terugstap);
+        expect(kies).not.toHaveBeenCalled();
+      }
+      await act(async () => { klik(cursor); });
+      expect(kies).toHaveBeenCalledExactlyOnceWith(dag ? '2026-09-09' : '2026-10');
+    } finally {
+      await act(async () => { root.unmount(); });
+      wijzigBreedte(breedte);
+    }
   });
 });

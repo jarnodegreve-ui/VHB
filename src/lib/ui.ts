@@ -217,7 +217,7 @@ export async function downloadBlob(filename: string, blob: Blob): Promise<Downlo
   return 'gedownload';
 }
 
-function heeftDuoScherm() {
+export function heeftDuoScherm() {
   const { width, height } = window.screen;
   const kort = Math.min(width, height);
   const lang = Math.max(width, height);

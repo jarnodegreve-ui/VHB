@@ -132,12 +132,18 @@ test('veld en maandveld: de fout zakt in; met minder beweging staat ze er meteen
   // Alleen het demoformulier: elders op de pagina staan voorbeelden met een vaste fout.
   const formulier = page.locator('form').filter({ has: opslaan });
   const fouten = formulier.getByRole('alert');
+  // Het label leest als "Naam*" (het sterretje is aria-hidden), dus niet exact.
+  const naam = formulier.getByLabel('Naam');
   await expect(fouten).toHaveCount(0);
   await zakLogboek(page);
 
-  // Field: leeg indienen geeft een fout bij Naam en E-mailadres.
+  // Field: leeg indienen geeft een fout bij Naam en E-mailadres. Formulier zet
+  // daarna de focus op het eerste foute veld (Naam), in een setTimeout na het
+  // indienen. Pas typen als die focus er is: komt ze midden in `fill`, dan
+  // typt WebKit in Naam (CI 25-11: "13/2026" in Naam). Zo ook na de tweede klik.
   await opslaan.click();
   await expect(fouten).toHaveCount(2);
+  await expect(naam).toBeFocused();
   await expect.poll(async () => (await gezakt(page)).map((r) => r.naam)).toEqual(['vhb-zak-in', 'vhb-zak-in']);
 
   // MaandInput: een onbestaande maand.
@@ -156,6 +162,7 @@ test('veld en maandveld: de fout zakt in; met minder beweging staat ze er meteen
   await expect(fouten).toHaveCount(0);
   await opslaan.click();
   await expect(fouten).toHaveCount(2);
+  await expect(naam).toBeFocused();
   await maand.fill('13/2026');
   await maand.press('Enter');
   await expect(fouten).toHaveCount(3);

@@ -10,6 +10,60 @@ const scrollPositie = (page: Page) => page.locator('[data-scroll-root]').evaluat
   paginaLinks: window.scrollX,
 }));
 
+test('planner kan het laatste menu-item bereiken na het dichtvouwen naar liggende stand', async ({ page }) => {
+  const meldingen = Array.from({ length: 6 }, (_, i) => ({
+    id: String(i + 1), titel: `Planning ${i + 1}`, tekst: 'De dagplanning is bijgewerkt.',
+    soort: 'planning', createdAt: new Date().toISOString(),
+  }));
+  await page.setViewportSize({ width: 669, height: 867 });
+  // De fysieke schermmaat staat los van de beschikbare Safari-viewport.
+  await page.addInitScript(() => {
+    Object.defineProperties(screen, {
+      width: { get: () => innerWidth === 669 ? 669 : 678 },
+      height: { get: () => innerWidth === 669 ? 951 : 466 },
+    });
+  });
+  await seed(page, {
+    user: { ...ADMIN, role: 'planner' }, view: 'vandaag',
+    extra: pad => pad.endsWith('/api/meldingen') ? { meldingen, ongelezen: 6 } : undefined,
+  });
+  await page.goto('/vandaag');
+  const bel = page.getByRole('button', { name: 'Meldingen (6 ongelezen)' });
+  await bel.tap();
+  const menu = page.getByRole('menu', { name: 'Meldingen' });
+  await expect(menu).toBeVisible();
+  await page.setViewportSize({ width: 594, height: 368 });
+  await page.goBack();
+  await expect(menu).toBeHidden();
+  await expect(page).toHaveURL(/\/vandaag$/);
+  await expect(bel).toBeFocused();
+  await bel.tap();
+
+  const dock = page.getByRole('navigation', { name: 'Hoofdnavigatie' });
+  const overzicht = menu.getByRole('menuitem', { name: 'Alle meldingen' });
+  const eersteMelding = menu.getByRole('menuitem', { name: /Planning 1/ });
+  const laatsteMelding = menu.getByRole('menuitem', { name: /Planning 6/ });
+  for (const maat of [{ width: 594, height: 368 }, { width: 678, height: 466 }]) {
+    await page.setViewportSize(maat);
+    await expect.poll(async () => {
+      const vlak = await menu.boundingBox();
+      const balk = await dock.boundingBox();
+      return !!vlak && !!balk && vlak.y + vlak.height <= balk.y;
+    }).toBe(true);
+    await eersteMelding.scrollIntoViewIfNeeded();
+    await expect(overzicht).toBeInViewport({ ratio: 1 });
+    await laatsteMelding.scrollIntoViewIfNeeded();
+    await expect(laatsteMelding).toBeInViewport({ ratio: 1 });
+    await expect.poll(async () => {
+      const rij = await laatsteMelding.boundingBox();
+      const voet = await overzicht.boundingBox();
+      return !!rij && !!voet && rij.y + rij.height <= voet.y;
+    }).toBe(true);
+    await laatsteMelding.tap({ trial: true });
+  }
+  await overzicht.tap();
+  await expect(page.getByRole('heading', { level: 1, name: 'Meldingen' })).toBeVisible();
+});
 
 test('dashboard: een tegel openen en sluiten houdt de pagina en het logo op hun plaats', async ({ page }) => {
   await seed(page, { user: ADMIN, view: 'dashboard', thema: 'dark' });

@@ -1,6 +1,6 @@
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING, scrimTransitie } from '../lib/motion';
@@ -10,6 +10,7 @@ import { isMaand, leesMj, maandBereikFout, maandNaarMj } from '../lib/maand';
 import { useLaag } from '../lib/lagen';
 import { Button, IconButton } from './primitives';
 import { inputClass, invalidClass } from './controlClass';
+import { useKiezerPositie } from './useKiezerPositie';
 
 /**
  * Maandveld (datumtranche PR 4, 23-09): typbaar mm/jjjj met een maandknop
@@ -44,17 +45,6 @@ export type MaandInputProps = {
   'aria-describedby'?: string;
 };
 
-const MOBIEL_BREEDTE = 640;
-const RAND = 8;
-const AFSTAND = 6;
-/** `gemeten` = de layout-effect heeft de echte maat van de kiezer gebruikt. */
-type Positie = { top: number; left: number; gemeten: boolean };
-/** Voorlopige plek vóór de eerste meting: direct onder het veld, nooit (0,0) (zie DatePicker). */
-const voorlopig = (wortel: HTMLElement | null): Positie | null => {
-  if (!wortel) return null;
-  const r = wortel.getBoundingClientRect();
-  return { top: r.bottom + AFSTAND, left: Math.max(RAND, r.left), gemeten: false };
-};
 const huidigeMaand = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -71,18 +61,15 @@ export function MaandInput({
   const [fout, setFout] = useState<string | null>(null);
   const [hersteld, setHersteld] = useState<string | null>(null);
   const [cursor, setCursor] = useState(() => (isMaand(value) ? value : huidigeMaand()));
-  const [mobiel, setMobiel] = useState(false);
-  const [positie, setPositie] = useState<Positie | null>(null);
   const veldRef = useRef<HTMLInputElement | null>(null);
-  const wortelRef = useRef<HTMLDivElement | null>(null);
   const knopRef = useRef<HTMLButtonElement | null>(null);
-  const dialoogRef = useRef<HTMLDivElement | null>(null);
   const focusNaarCel = useRef(false);
   const reduceMotion = useReducedMotion();
   const dialoogId = useId();
   const foutId = useId();
   const geldig = isMaand(value) ? value : '';
   const jaar = cursor.slice(0, 4);
+  const { wortelRef, dialoogRef, mobiel, positie, bereidPlaatsVoor } = useKiezerPositie(open, jaar);
 
   const zetFout = (reden: string | null) => {
     setFout(reden);
@@ -141,9 +128,7 @@ export function MaandInput({
     viaKnopRef.current = viaKnop;
     const concept = leesMj(tekst);
     setCursor(klem(concept.staat === 'geldig' ? concept.maand : geldig || huidigeMaand(), min, max));
-    const smal = typeof window !== 'undefined' && window.innerWidth < MOBIEL_BREEDTE;
-    setMobiel(smal);
-    setPositie(smal ? null : voorlopig(wortelRef.current));
+    bereidPlaatsVoor();
     focusNaarCel.current = true;
     setOpen(true);
   };
@@ -170,33 +155,14 @@ export function MaandInput({
     return () => document.removeEventListener('pointerdown', buiten);
   }, [open]);
 
-  useLayoutEffect(() => {
-    if (!open || mobiel) return;
-    const plaats = () => {
-      const t = wortelRef.current;
-      const d = dialoogRef.current;
-      if (!t || !d) return;
-      const r = t.getBoundingClientRect();
-      const left = Math.max(RAND, Math.min(r.left, window.innerWidth - d.offsetWidth - RAND));
-      let top = r.bottom + AFSTAND;
-      if (top + d.offsetHeight > window.innerHeight - RAND && r.top - AFSTAND - d.offsetHeight >= RAND) top = r.top - AFSTAND - d.offsetHeight;
-      setPositie((p) => (p?.gemeten && p.top === top && p.left === left ? p : { top, left, gemeten: true }));
-    };
-    plaats();
-    window.addEventListener('resize', plaats);
-    window.addEventListener('scroll', plaats, true);
-    return () => {
-      window.removeEventListener('resize', plaats);
-      window.removeEventListener('scroll', plaats, true);
-    };
-  }, [open, mobiel, jaar]);
-
   // Focus pas als de kiezer gemeten op zijn plek staat (zie DatePicker).
   const geplaatst = mobiel || positie?.gemeten === true;
   useEffect(() => {
     if (!open || !geplaatst || !focusNaarCel.current) return;
     focusNaarCel.current = false;
-    dialoogRef.current?.querySelector<HTMLButtonElement>(`[data-maand="${cursor}"]`)?.focus({ preventScroll: true });
+    const d = dialoogRef.current;
+    // Op een laag scherm mag de kiezer zelf naar de nieuwe cursor scrollen.
+    d?.querySelector<HTMLButtonElement>(`[data-maand="${cursor}"]`)?.focus({ preventScroll: d.scrollHeight <= d.clientHeight });
   }, [open, cursor, geplaatst]);
 
   const verplaats = (delta: number) => {
@@ -259,10 +225,10 @@ export function MaandInput({
       exit={{ ...(reduceMotion ? { opacity: 0 } : mobiel ? { opacity: 0, y: 24 } : { opacity: 0, scale: 0.96 }), transition: reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
       style={stijl}
       className={cn(
-        'fixed z-kiezer bg-paper ring-1 ring-hairline elev-2 outline-none',
+        'fixed z-kiezer overflow-y-auto overscroll-contain bg-paper ring-1 ring-hairline elev-2 outline-none',
         mobiel
-          ? 'inset-x-0 bottom-0 rounded-t-2xl border-t border-rim p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
-          : 'w-[17rem] rounded-2xl border border-rim p-3',
+          ? 'inset-x-0 bottom-0 max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top)))] rounded-t-2xl border-t border-rim p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
+          : 'max-h-[calc(100dvh-16px)] w-[17rem] rounded-2xl border border-rim p-3',
       )}
     >
       <div className="flex items-center justify-between gap-2">
