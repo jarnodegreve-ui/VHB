@@ -55,6 +55,8 @@ async function schoonEnTerugNaarDashboard(page: Page) {
  * ogenblikken na het laden van de pagina.
  */
 async function tipLaagGeladen(page: Page) {
+  // Alleen met een muis: op een aanraakscherm laadt App.tsx de tip-laag nooit.
+  if (!(await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches))) return;
   await expect(async () => {
     await page.mouse.move(2, 640);
     await page.mouse.move(4, 642);
